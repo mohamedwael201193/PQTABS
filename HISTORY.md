@@ -105,8 +105,13 @@ Forensic timeline for the production PQTABS build. Times are UTC.
 - Exit gate for the local backend and signer: passed. Render was not deployed in this phase.
 - Git commit `53fe159` contains this phase. Its subject line is the previous gate sentence, because the new message file was not written before `git commit -F` ran. The files in that commit are the staging receipts, the backend, the wasm signer, CI, and these documents.
 
-## Not done after phase 8
+## Phase 9 — Render
 
-- Render service is not up yet.
-- No frontend directory.
-- `pq-keys/` remains gitignored.
+- The free-plan service `pqtabs` (`srv-db2mqpvavr4c73elkt60`) is `https://pqtabs.onrender.com`. Deploy `dep-db2mr5q6f5ic73d58gag` reached `live`.
+- `GET /ready` returned chain id 5042, factory `0x05545F026b75f03aE9Cf1eA8a8373473c94ed323`, and `relayer: true`.
+- `GET /v1/roots/0x846f56a8547Fe5cC3120c189c5640e84DAAB65Cf` returned the rotated verifying key, `openExposure` 0, and 139,998 raw USDC.
+- `GET /v1/tx/0xfade67cbf64d0869dbd33f53bd48844f0b3b4399d2c54b68c36a0b07ba30c916` returned status success, block 24623258, gas 2,016,614.
+- Relayer `0x5C7a54eEaF29310E758Fc6f010eCE827897D183e` was funded with 300,000 raw USDC in `0xccd44474a6f6cfe7d2132b86d1156b65972afeb929242b242e0a5b89acada240`. The key is only in `.env` and on Render.
+- A restart API call returned 200. `/ready` answered again with the same chain id and factory.
+- The free plan sleeps when idle. That limit is written in `docs/DEPLOYMENT.md`.
+- No frontend directory. `pq-keys/` remains gitignored.

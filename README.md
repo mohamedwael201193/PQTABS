@@ -2,7 +2,7 @@
 
 Post-quantum roots for bounded USDC spending on Arc. Each user gets their own SLH-DSA root. An agent can spend only from the Barkeep tab that root opened for it.
 
-This repository is the protocol, signer, backend, and tests. There is no frontend in this repository. The production factory on Arc mainnet is `0x05545F026b75f03aE9Cf1eA8a8373473c94ed323`. Receipts, balances, and the two disposable staging roots are in `deployments/mainnet.json`.
+This repository is the protocol, signer, backend, and tests. There is no frontend in this repository. The production factory on Arc mainnet is `0x05545F026b75f03aE9Cf1eA8a8373473c94ed323`. Receipts, balances, and the two disposable staging roots are in `deployments/mainnet.json`. The backend is `https://pqtabs.onrender.com`.
 
 ## What is verified
 

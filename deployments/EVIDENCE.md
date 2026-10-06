@@ -38,6 +38,10 @@ Root A rotated its verifying key in `0x184edd6aedb3a58e4db90645e7b110bb387ee4c39
 
 This factory is the production factory. It has no admin, so deploying another one would split users rather than promote this one. The two roots above are disposable. Their signing keys are not in git.
 
+## Render, VERIFIED
+
+`https://pqtabs.onrender.com/ready` returned chain id 5042, factory `0x05545F026b75f03aE9Cf1eA8a8373473c94ed323`, and `relayer: true` after deploy `dep-db2mr5q6f5ic73d58gag` was live. The root A read from that service matched the rotated verifying key and the final balance 139,998. The deployment receipt read from `GET /v1/tx/0xfade67cbf64d0869dbd33f53bd48844f0b3b4399d2c54b68c36a0b07ba30c916` was status success, block 24623258, gas 2,016,614. The service is a free Render plan. It sleeps when idle. Details are in `docs/DEPLOYMENT.md`.
+
 ## Not a claim
 
 No third-party audit. Render had not been deployed at the time these receipts were recorded. The Forge mock is not the verifier that accepted the mainnet signatures. The precompile accepted them inside the successful `execute` transactions.
