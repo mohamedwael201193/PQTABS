@@ -55,6 +55,8 @@ There is no `owner`, proxy, upgrade, `delegatecall`, arbitrary `to`/`data` call,
 - Payee lists are capped at 20. The signature length is fixed at 7,856 bytes. The deadline window is at most 7 days.
 - Barkeep and the tab implementation appear as `PUSH20` in the runtime bytecode. The USDC and precompile addresses are sparse and are materialized with shifts; the Forge tests etch those exact addresses, and the phase 2 `eth_call` used the precompile address directly.
 
+CI later ran Slither on the whole Foundry tree, including forge-std, and `--fail-high` exited 255 because high findings in that tree were counted. The command is now `slither . --filter-paths "lib/|test/|scripts/" --exclude incorrect-equality,reentrancy-no-eth --fail-high`. On the production contracts that leaves `reentrancy-benign` and `reentrancy-events` on `createRoot`: `initialize` is called on the clone this factory just deployed, and the registry write happens after. That clone's code is `PQRoot`, which does not call back into the factory. Timestamp, assembly, cyclomatic complexity, the precompile `staticcall`, and the Barkeep getter names are informational. A local run of the filtered command exited 0.
+
 ## Exit gate
 
 Passed for a local pre-mainnet review. Phase 6 may deploy a new factory with disposable keys and a tiny USDC amount. This document is not a third-party audit, and it is not a mainnet deployment record.

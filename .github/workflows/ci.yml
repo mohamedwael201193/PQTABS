@@ -58,4 +58,4 @@ jobs:
         with:
           version: 1.8.5
       - run: pipx install slither-analyzer==0.11.6
-      - run: slither . --foundry-compile-all --exclude incorrect-equality,reentrancy-no-eth --fail-high
+      - run: slither . --filter-paths "lib/|test/|scripts/" --exclude incorrect-equality,reentrancy-no-eth --fail-high

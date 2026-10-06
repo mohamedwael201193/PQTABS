@@ -42,12 +42,12 @@ python scripts/phase2_probe.py
 ## Static analysis
 
 ```bash
-slither . --foundry-compile-all --exclude incorrect-equality,reentrancy-no-eth --fail-high
+slither . --filter-paths "lib/|test/|scripts/" --exclude incorrect-equality,reentrancy-no-eth --fail-high
 forge build --sizes
 forge inspect PQRoot storageLayout
 ```
 
-The excluded detectors are the four accepted findings in `docs/PHASE-5.5.md`. A new high finding fails the command.
+The excluded detectors are the four accepted findings in `docs/PHASE-5.5.md`. CI uses the same command and ignores `lib/`, `test/`, and `scripts/`, because those trees are forge-std and the test mock. A new high finding in `PQRoot` or `RootFactory` fails the command.
 
 ## CI
 
