@@ -1,0 +1,38 @@
+# Secrets and local credentials
+.env
+.env.*
+!.env.example
+
+# Post-quantum key material and signing artifacts
+pq-keys/
+*.key
+*.pem
+*.keystore
+keystore/
+signed-actions/
+broadcast/
+cache/
+
+# Local deploy and test outputs that can contain keys
+deployments/local-*.json
+out/
+
+# Rust
+target/
+signer/target/
+
+# Local toolchains
+tools/
+
+# Node
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Foundry
+cache/
+out/
+
+# OS
+.DS_Store
+Thumbs.db

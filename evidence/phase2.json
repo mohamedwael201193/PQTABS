@@ -1,0 +1,46 @@
+{
+  "classification": "VERIFIED",
+  "network": "arc-mainnet",
+  "chain_id": 5042,
+  "precompile": "0x1800000000000000000000000000000000000004",
+  "selector": "0xbf4db8ba",
+  "vector_source": "circlefin/arc-node@6e764023ee6515fe70573e123ed2db912a7207b4 tests/helpers/pq_test_vectors.json",
+  "vector0_message_utf8": "Hello, World!",
+  "vector0_vk": "0x03030303030303030303030303030303d627c8bad26269965d3ad40ca4457a26",
+  "vector0_sig_len": 7856,
+  "vector0_expected_valid": true,
+  "vector0_eth_call": {
+    "ok": true,
+    "valid": true
+  },
+  "vector0_flipped_byte": {
+    "ok": true,
+    "valid": false
+  },
+  "vector0_truncated": {
+    "ok": false,
+    "revert": "execution reverted: Invalid signature length"
+  },
+  "vector2_expected_valid": false,
+  "vector2_eth_call": {
+    "ok": true,
+    "valid": false
+  },
+  "fresh_rc5": {
+    "scheme": "SLH-DSA-SHA2-128s",
+    "crate": "slh-dsa=0.2.0-rc.5",
+    "context": "empty",
+    "message": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "vk": "0xe34dfeb8d563ce243ad898f717697fc1275e786a3fe064f5289b094d2dd06e5b",
+    "sig_len": 7856,
+    "sig_sha256": "bfbdb1640f7e8f2ce22a8eca2045f1e5b9baa52492dbd1e88adeee893f59cb93",
+    "eth_call": {
+      "ok": true,
+      "valid": true
+    },
+    "flipped_byte": {
+      "ok": true,
+      "valid": false
+    }
+  }
+}
