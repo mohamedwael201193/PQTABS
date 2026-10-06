@@ -115,3 +115,5 @@ Forensic timeline for the production PQTABS build. Times are UTC.
 - A restart API call returned 200. `/ready` answered again with the same chain id and factory.
 - The free plan sleeps when idle. That limit is written in `docs/DEPLOYMENT.md`.
 - No frontend directory. `pq-keys/` remains gitignored.
+- `POST /v1/relay/execute` on the live service submitted a 1-unit root A transfer. Receipt `0x205114d24dcb3c894aa82a394d3709f26c07ffb3ea6dcb40a465546a091db33d` is status success, block 24627943. Balance 139,998 to 139,997. Nonce 4 to 5.
+- GitHub Actions run 37537713043 passed: contracts, signer, backend, pins and secret scan, and the filtered Slither job. Two earlier runs failed because Slither was counting forge-std. That scope is fixed in `fa611c9`.

@@ -10,7 +10,19 @@
   "usdc": "0x3600000000000000000000000000000000000000",
   "barkeep_factory": "0xccebC58DD1F5937B36D5f9F89f0754424f4D443c",
   "barkeep_tab_implementation": "0x89B63f2E43dea9014750925C01996D34856B01D2",
-  "note": "Phase 6 used disposable keys and tiny caps. The factory has no admin, so this address is the production factory. These two roots are disposable staging roots, not a shared treasury.",
+  "note": "Phase 6 used disposable keys and tiny caps. The factory has no admin, so this address is the production factory. These two roots are disposable staging roots, not a shared treasury. A later relay through the hosted backend moved 1 raw unit from root A, so its balance after that receipt is 139997.",
+  "hosted_relay": {
+    "classification": "VERIFIED",
+    "service": "https://pqtabs.onrender.com",
+    "tx": "0x205114d24dcb3c894aa82a394d3709f26c07ffb3ea6dcb40a465546a091db33d",
+    "status": "success",
+    "block": 24627943,
+    "gas_used": 439075,
+    "root_a_usdc_before": 139998,
+    "root_a_usdc_after": 139997,
+    "nonce_before": 4,
+    "nonce_after": 5
+  },
   "users": {
     "a": {
       "registrar": "0xf76e6B0920e9332fF4410f6dD53F01722AbC71a3",
