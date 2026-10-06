@@ -1,6 +1,6 @@
 # Security
 
-PQTABS is not deployed. This file describes the model under test, not a live treasury.
+The production factory is `0x05545F026b75f03aE9Cf1eA8a8373473c94ed323` on Arc mainnet. It has no owner and no upgrade. The two roots in `deployments/mainnet.json` are disposable staging roots funded with tenths of a USDC. A later user creates a different root. This file is the trust model. It is not a third-party audit.
 
 ## Authority
 
@@ -20,4 +20,4 @@ PQ signing keys and agent keys stay with the user. `pqtabs-sign backup` encrypts
 
 ## What this file does not claim
 
-No third-party audit has been completed. Slither has not been run yet. Mainnet deployment has not happened. The Forge mock verifier must not be cited as a cryptographic proof.
+No third-party audit has been completed. Slither 0.11.6 was run locally; the four accepted findings and the callback test are in `docs/PHASE-5.5.md`. The Forge mock verifier must not be cited as a cryptographic proof. The mainnet proof is the transaction list in `deployments/mainnet.json`.

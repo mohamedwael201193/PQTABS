@@ -2,7 +2,7 @@
 
 Post-quantum roots for bounded USDC spending on Arc. Each user gets their own SLH-DSA root. An agent can spend only from the Barkeep tab that root opened for it.
 
-This repository is the protocol, signer, and tests. There is no frontend here. No `RootFactory` has been broadcast to Arc mainnet yet. The live evidence so far is the precompile probe in `evidence/phase2.json`.
+This repository is the protocol, signer, backend, and tests. There is no frontend in this repository. The production factory on Arc mainnet is `0x05545F026b75f03aE9Cf1eA8a8373473c94ed323`. Receipts, balances, and the two disposable staging roots are in `deployments/mainnet.json`.
 
 ## What is verified
 
@@ -24,10 +24,12 @@ Forge unit tests use a mock verifier. That mock is not SLH-DSA. The cryptographi
 
 ## Tests
 
+The full local set is `scripts/judge.ps1` or `scripts/judge.sh`. The commands are listed in `docs/TESTING.md`.
+
 ```
 forge test
-forge test --match-contract ExposureInvariantTest
 cd signer && cargo test
+cd backend && npm ci && npm test && npm run lint
 python scripts/phase2_probe.py
 ```
 
@@ -36,11 +38,14 @@ python scripts/phase2_probe.py
 ## Layout
 
 - `contracts/` — `PQRoot`, `RootFactory`
-- `signer/` — SLH-DSA CLI and the ABI digest
+- `signer/` — SLH-DSA library, CLI, and `signer/wasm` browser entry points
+- `backend/` — stateless reader and relayer
+- `abi/` — compiler ABIs
 - `test/` — unit, invariant, and test-only mocks
 - `docs/ARCHITECTURE.md` — production model
+- `docs/API.md` — the contract a frontend calls
 - `HISTORY.md` — what was actually run
-- `deployments/EVIDENCE.md` — measured claims
+- `deployments/mainnet.json` — Arc receipts
 
 ## Secrets
 

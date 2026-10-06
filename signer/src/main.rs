@@ -1,4 +1,5 @@
 use pqtabs_sign::digest;
+use pqtabs_sign::pq;
 
 use std::fs;
 use std::path::PathBuf;
@@ -73,13 +74,7 @@ fn run() -> Result<(), String> {
         Cmd::Sign { path, digest_hex } => {
             let digest = decode_32(&digest_hex)?;
             let sk = load_sk(&path)?;
-            let sig = sk
-                .try_sign_with_context(&digest, &[], None)
-                .map_err(|_| "sign failed")?;
-            let bytes = sig.to_bytes();
-            if bytes.len() != 7856 {
-                return Err(format!("unexpected signature length {}", bytes.len()));
-            }
+            let bytes = pq::sign_digest(&sk, &digest)?;
             println!("{}", hex::encode(bytes));
             Ok(())
         }

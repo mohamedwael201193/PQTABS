@@ -1,3 +1,4 @@
-//! PQTABS digest encoding. Signing stays in the `pqtabs-sign` binary so this
-//! library does not need to pull the SLH-DSA crate into every caller.
+//! Digest encoding and SLH-DSA-SHA2-128s signing. The CLI and the wasm package
+//! both call this crate. Neither one is a second cryptography implementation.
 pub mod digest;
+pub mod pq;

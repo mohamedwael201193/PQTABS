@@ -76,8 +76,36 @@ Forensic timeline for the production PQTABS build. Times are UTC.
 - Storage layout, selectors, metadata, and the accepted findings are in `docs/PHASE-5.5.md`.
 - Exit gate: passed for local review. Phase 6 is allowed to use disposable keys and a tiny USDC amount. It has not started.
 
-## Not done
+## Phase 6 — Arc mainnet staging
 
-- No factory broadcast. No USDC movement. No Render service. No CI workflow. No frontend directory.
-- `pq-keys/phase2-disposable.json` is a local disposable signing key with no on-chain balance. It must not be committed.
-- Phase 5.5 has not been run. Slither has not been run. Phase 6 stays blocked.
+- Start: 2026-10-06T21:25:56Z
+- End: 2026-10-06T21:32:13Z
+- Objective: deploy `RootFactory` on Arc mainnet with disposable SLH-DSA keys, two registrars, two agents, tiny USDC caps, and the live Barkeep factory. Stop if any expected success reverts or any expected rejection succeeds.
+- Script: `scripts/stage_mainnet.py`. It reads the deployer key from `.env` and does not print it. New keys were written under `pq-keys/staging/`, which is gitignored. `maxFeePerGas` was 30 gwei and `maxPriorityFeePerGas` was 2 gwei.
+- Preflight: chain id 5042, Barkeep `IMPLEMENTATION()` and `USDC()` matched the constants in `PQRoot`, deployer ERC-20 balance 10.782756 USDC.
+- Factory: `0x05545F026b75f03aE9Cf1eA8a8373473c94ed323` in tx `0xfade67cbf64d0869dbd33f53bd48844f0b3b4399d2c54b68c36a0b07ba30c916`, block 24623258, status 1, gas 2,016,614. `implementation()` reads `0xb147Ec122E0b8F91dC4398dD0746372fdC22A894`.
+- Two registrars. Registrar B `0xB96Aa3d062eF493FC6E9bFcFe181b4bac7e72f33` was a fresh key funded with 0.3 USDC so it could pay gas. Root A `0x846f56a8547Fe5cC3120c189c5640e84DAAB65Cf`. Root B `0x27F441D82d6b364E06eb906889BE8Fc02Df8F762`. Their `registrar()` values differ.
+- Each root received 150,000 raw USDC (0.15). Each opened one tab with cap 100,000, maxPerCall 40,000, expiry `1791322070`. Tab A `0xE3051e8173fDBEC33B826352CB177a306B9d5109` is owned by root A. Tab B `0xD14d151eD5Eb7dE58A3893c7C69e374E37d1184d` is owned by root B. `openExposure` on each root became 100,000.
+- Agent spends used USDC `transferWithAuthorization`. `isValidSignature` returned `0x1626ba7e` before each broadcast. Each tab moved from 100,000 to 90,000. The payee ended at 20,000. A non-payee call returned `0xffffffff` and the broadcast receipt status was 0. An over-max call and an agent-B-on-tab-A call also returned `0xffffffff`.
+- Root A then transferred 1 raw unit under its PQ key. That exact payload replayed on root B reverted. The eth_call data was `InvalidSignature` (`0x8baa579f`). Receipt status 0. Root B's later reclaim still succeeded, so the rejected replay did not consume B's accounting.
+- After the chain timestamp passed the tab expiry, `reclaim` returned 90,000 to each root and set `openExposure` to 0. Tab balances read 0 afterward.
+- Root A rotated its verifying key. A transfer signed by the old key reverted `0x8baa579f` and did not consume the nonce. The new key then transferred 1 raw unit. Final balances: root A 139,998, root B 140,000, both tabs 0, payee 20,000. That matches cap minus spend, plus the two 1-unit root transfers on A only.
+- Evidence: `deployments/mainnet.json` and `deployments/staging.json`. The raw cross-root signature was removed from the JSON and replaced with sha256 `295887443aa91f3e0cfc138d909d42e55c0ecfb2fb71140e597a5e57fe937cab`. The signature is already in the broadcast transaction.
+- Exit gate: passed. Phase 7 does not deploy a second factory. This factory is the production factory because it has no admin and a second factory would split users. The staging roots stay disposable.
+
+## Phase 8 — backend, wasm signer, and judge documents
+
+- Start: 2026-10-06T21:36:06Z
+- End: 2026-10-06T21:47:00Z
+- The backend is a Hono process. It reads Arc and relays only `execute`, `reclaim`, `retrySweep`, and USDC `transferWithAuthorization`. `npm test` passed 6 tests, including a live read that chain id is 5042, the factory has bytecode, and root A `openExposure` is 0.
+- `npm audit` reported four advisories in Hono JWT middleware, `@hono/node-server` static files, and viem's `ws` dependency. This server uses none of those paths. `docs/DEPENDENCIES.md` records that. `npm audit fix --force` was not run.
+- `signer/src/pq.rs` is the shared SLH-DSA path. `signer/wasm` calls it. `browser_digest_matches_the_golden_vector` passed. `cargo build --target wasm32-unknown-unknown --release` for that package finished at 2026-10-06T21:47:00Z. The first wasm build failed because `getrandom` 0.4 rejects `wasm32-unknown-unknown` unless `wasm_js` is enabled, and `getrandom` 0.2 needs its `js` feature. Both features are enabled on the wasm package. The release rebuild then succeeded.
+- Signer tests after the shared path: 4 library tests and 3 binary tests, all passed.
+- Threat model, judge review, recovery, API, and testing documents were written against the mainnet receipts.
+- Exit gate for the local backend and signer: passed. Render was not deployed in this phase.
+
+## Not done after phase 8
+
+- Render service is not up yet.
+- No frontend directory.
+- `pq-keys/` remains gitignored.

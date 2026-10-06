@@ -1,0 +1,12 @@
+export const CHAIN_ID = 5042;
+export const RPC_URL = "https://rpc.mainnet.arc.io";
+export const USDC = "0x3600000000000000000000000000000000000000";
+export const BARKEEP = "0xccebC58DD1F5937B36D5f9F89f0754424f4D443c";
+export const FACTORY = "0x05545F026b75f03aE9Cf1eA8a8373473c94ed323";
+export const EXPLORER = "https://explorer.arc.io";
+export const MAX_BODY_BYTES = 65_536;
+export const SIG_LEN = 7856;
+export const SPEND_BLOB_LEN = 213;
+export const MIN_FEE = 20_000_000_000n;
+export const READS_PER_MINUTE = 60;
+export const RELAYS_PER_MINUTE = 8;

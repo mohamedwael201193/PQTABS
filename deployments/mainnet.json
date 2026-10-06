@@ -1,0 +1,226 @@
+{
+  "network": "arc-mainnet",
+  "chain_id": 5042,
+  "rpc": "https://rpc.mainnet.arc.io",
+  "explorer": "https://explorer.arc.io",
+  "classification": "VERIFIED",
+  "measured_at": "2026-10-06T21:32:13Z",
+  "factory": "0x05545F026b75f03aE9Cf1eA8a8373473c94ed323",
+  "implementation": "0xb147Ec122E0b8F91dC4398dD0746372fdC22A894",
+  "usdc": "0x3600000000000000000000000000000000000000",
+  "barkeep_factory": "0xccebC58DD1F5937B36D5f9F89f0754424f4D443c",
+  "barkeep_tab_implementation": "0x89B63f2E43dea9014750925C01996D34856B01D2",
+  "note": "Phase 6 used disposable keys and tiny caps. The factory has no admin, so this address is the production factory. These two roots are disposable staging roots, not a shared treasury.",
+  "users": {
+    "a": {
+      "registrar": "0xf76e6B0920e9332fF4410f6dD53F01722AbC71a3",
+      "root": "0x846f56a8547Fe5cC3120c189c5640e84DAAB65Cf",
+      "agent": "0xFd059f0a995e6852c2138215177f00858588fAb7",
+      "tab": "0xE3051e8173fDBEC33B826352CB177a306B9d5109",
+      "vk_at_open": "0x0393774e042e4ad273dce217fbb7b5f6cc784b1e1ec638acc7a81defc889ac32",
+      "vk_after_rotation": "0xdbb8245905fe933f16b4ed744b0e0c7050c616f7f2c83207aa72a7a97ed1ef50"
+    },
+    "b": {
+      "registrar": "0xB96Aa3d062eF493FC6E9bFcFe181b4bac7e72f33",
+      "root": "0x27F441D82d6b364E06eb906889BE8Fc02Df8F762",
+      "agent": "0x19c320aF65D9aA2ECB1026bEAb2a3f4EEEbeb988",
+      "tab": "0xD14d151eD5Eb7dE58A3893c7C69e374E37d1184d",
+      "vk": "0xc99c44a7f240cae7c75a92efd59b1ef8dc905fee306d219c099a6bb8698f6e3f"
+    }
+  },
+  "payee": "0xC485B657C140C9677846f3E9ca6a3158e5623044",
+  "amounts_raw_usdc6": {
+    "max_open_exposure": 200000,
+    "root_fund": 150000,
+    "tab_cap": 100000,
+    "max_per_call": 40000,
+    "agent_spend": 10000
+  },
+  "final_balances_raw_usdc6": {
+    "root_a": 139998,
+    "root_b": 140000,
+    "tab_a": 0,
+    "tab_b": 0,
+    "payee": 20000
+  },
+  "transactions": [
+    {
+      "name": "deploy_factory",
+      "hash": "0xfade67cbf64d0869dbd33f53bd48844f0b3b4399d2c54b68c36a0b07ba30c916",
+      "status": 1,
+      "block": 24623258,
+      "gas_used": 2016614,
+      "expected": "RootFactory bytecode is deployed and implementation() is code",
+      "actual": "status 1, factory 0x05545F026b75f03aE9Cf1eA8a8373473c94ed323, implementation 0xb147Ec122E0b8F91dC4398dD0746372fdC22A894",
+      "before": { "deployer_usdc": 10782756 },
+      "after": { "deployer_usdc": 10738390 }
+    },
+    {
+      "name": "fund_registrar_b",
+      "hash": "0x42b5d561fb3e7d561cace329db095a5244a6bfd47d6b56e66786e22eeb6783f4",
+      "status": 1,
+      "block": 24623268,
+      "gas_used": 73950,
+      "expected": "registrar B receives 0.3 USDC so it can pay gas for createRoot",
+      "actual": "status 1"
+    },
+    {
+      "name": "create_root_a",
+      "hash": "0xe79bf837a6faad61607b148640f8f0bcf504eda21319eec5489784d4ec7da6bc",
+      "status": 1,
+      "block": 24623278,
+      "gas_used": 252541,
+      "expected": "registrar A owns root A as an index only",
+      "actual": "root A registrar() is 0xf76e6B0920e9332fF4410f6dD53F01722AbC71a3"
+    },
+    {
+      "name": "create_root_b",
+      "hash": "0xc6e5f879df2c07287a5c9d92eff2fc78ee63791f5592f7320baee3c135389961",
+      "status": 1,
+      "block": 24623290,
+      "gas_used": 252553,
+      "expected": "registrar B is a different wallet and root B is a different contract",
+      "actual": "root B registrar() is 0xB96Aa3d062eF493FC6E9bFcFe181b4bac7e72f33"
+    },
+    {
+      "name": "fund_root_a",
+      "hash": "0x39670438a93de06562cf341a0310f889cded9238556f17b49f1e4936ed8762ae",
+      "status": 1,
+      "block": 24623301,
+      "gas_used": 48950,
+      "before": { "root_a": 0 },
+      "after": { "root_a": 150000 }
+    },
+    {
+      "name": "fund_root_b",
+      "hash": "0xd039b2869218ad4dfc308ef3fb9d443a6b0d933f0fb8e2d02dacf9e1499993aa",
+      "status": 1,
+      "block": 24623312,
+      "gas_used": 48950,
+      "before": { "root_b": 0 },
+      "after": { "root_b": 150000 }
+    },
+    {
+      "name": "open_tab_a",
+      "hash": "0x16236e8683de1d4a6167652f80b7726ccc67a2be21087bc5f0d2484725cd91bb",
+      "status": 1,
+      "block": 24623326,
+      "gas_used": 636897,
+      "expected": "PQ execute opens a Barkeep tab owned by root A, funded with the exact cap, exposure increases by the cap",
+      "actual": "tab owner is root A, tab balance 100000, root balance 150000 to 50000, openExposure 100000",
+      "before": { "root_a": 150000, "exposure": 0 },
+      "after": { "root_a": 50000, "tab_a": 100000, "exposure": 100000 }
+    },
+    {
+      "name": "open_tab_b",
+      "hash": "0xcd11114bb3ff8e713b84c9bf5cfef288bae8dac607a3ff130616795d7a1869d0",
+      "status": 1,
+      "block": 24623339,
+      "gas_used": 636741,
+      "expected": "root B opens its own tab for agent B",
+      "actual": "tab balance 100000, root balance 150000 to 50000, openExposure 100000",
+      "before": { "root_b": 150000 },
+      "after": { "root_b": 50000, "tab_b": 100000, "exposure": 100000 }
+    },
+    {
+      "name": "agent_a_spend",
+      "hash": "0xc0c5213ec038b61eeab905bcece7d015266738f8b470c67832020e6ee8ecfd08",
+      "status": 1,
+      "block": 24623356,
+      "gas_used": 130603,
+      "expected": "allowlisted payee receives 10000 from tab A; tab isValidSignature returns 0x1626ba7e",
+      "actual": "tab 100000 to 90000, payee 10000",
+      "before": { "tab_a": 100000, "payee": 0 },
+      "after": { "tab_a": 90000, "payee": 10000 }
+    },
+    {
+      "name": "agent_b_spend",
+      "hash": "0x6b0dfc18492f957f95a0bc411e6986ca5457848289286081131e0924f61bbdc3",
+      "status": 1,
+      "block": 24623364,
+      "gas_used": 105603,
+      "expected": "agent B spends 10000 from tab B only",
+      "actual": "tab B 100000 to 90000, payee 20000",
+      "before": { "tab_b": 100000, "payee": 10000 },
+      "after": { "tab_b": 90000, "payee": 20000 }
+    },
+    {
+      "name": "forbidden_payee_broadcast",
+      "hash": "0x399e5e89c8d6be28efc394a37a074884768e0a8e63a533b53c6eae1904ee35ca",
+      "status": 0,
+      "block": 24623376,
+      "gas_used": 64243,
+      "expected": "a payee outside the tab list is rejected. eth_call isValidSignature returned 0xffffffff",
+      "actual": "receipt status 0"
+    },
+    {
+      "name": "root_a_transfer_1",
+      "hash": "0x604e24cbad01e1649713e62cb085063841996dd5f31ad91b6e05cabd541b2d20",
+      "status": 1,
+      "block": 24623389,
+      "gas_used": 434587,
+      "expected": "PQ transfer of 1 raw unit from root A succeeds and consumes the nonce",
+      "actual": "status 1. Root A balance before reclaim was 49999, which is 50000 minus this 1 unit"
+    },
+    {
+      "name": "cross_root_replay",
+      "hash": "0x7cf1d0d5e5a7e9029f9961478e1d16ec379dd27c87992ebf62e5acaf71ae1a17",
+      "status": 0,
+      "block": 24623399,
+      "gas_used": 401584,
+      "expected": "the same PQ payload submitted to root B reverts InvalidSignature and does not consume B's nonce",
+      "actual": "receipt status 0. eth_call revert data began with InvalidSignature selector 0x8baa579f. Root B nonce stayed aligned with the pre-replay nonce, and reclaim later succeeded"
+    },
+    {
+      "name": "reclaim_a",
+      "hash": "0x0ab33b8276eb51b9298117d36f7660af0138fdcd8e47e34dac6e7e10bc3922fd",
+      "status": 1,
+      "block": 24623924,
+      "gas_used": 112708,
+      "expected": "after expiry, reclaim returns the remaining tab balance once and openExposure falls by the original cap",
+      "actual": "root 49999 to 139999, tab 90000 to 0, openExposure 0",
+      "before": { "root_a": 49999, "tab_a": 90000 },
+      "after": { "root_a": 139999, "tab_a": 0, "exposure": 0 }
+    },
+    {
+      "name": "reclaim_b",
+      "hash": "0xb6d3e8638487dbf6d29aa88495ec07b7046f1506ad7b01a926dbb013c855befd",
+      "status": 1,
+      "block": 24623934,
+      "gas_used": 112708,
+      "expected": "root B reclaim is independent of root A",
+      "actual": "root 50000 to 140000, tab 90000 to 0, openExposure 0",
+      "before": { "root_b": 50000, "tab_b": 90000 },
+      "after": { "root_b": 140000, "tab_b": 0, "exposure": 0 }
+    },
+    {
+      "name": "rotate_root_a",
+      "hash": "0x184edd6aedb3a58e4db90645e7b110bb387ee4c393a9cd2f65a7965817e5c55c",
+      "status": 1,
+      "block": 24623948,
+      "gas_used": 409077,
+      "expected": "pqVk becomes the new verifying key",
+      "actual": "pqVk read back matched 0xdbb8245905fe933f16b4ed744b0e0c7050c616f7f2c83207aa72a7a97ed1ef50"
+    },
+    {
+      "name": "old_key_rejected",
+      "hash": "0x19338117dd8b56fc01b95db0036e4efd6217f24d855c85c1046d0b2975f437ee",
+      "status": 0,
+      "block": 24623958,
+      "gas_used": 401572,
+      "expected": "a transfer signed by the previous SLH-DSA key reverts InvalidSignature and does not consume the nonce",
+      "actual": "eth_call revert 0x8baa579f, receipt status 0, following transfer with the new key succeeded at the same nonce"
+    },
+    {
+      "name": "new_key_transfer",
+      "hash": "0xcaf1a2e3aa5a4e3b170f33a9add97e603f701b505026a0c5e769e517a936cb3d",
+      "status": 1,
+      "block": 24623972,
+      "gas_used": 434599,
+      "expected": "the replacement SLH-DSA key can move 1 raw unit",
+      "actual": "root A 139999 to 139998",
+      "before": { "root_a": 139999 },
+      "after": { "root_a": 139998 }
+    }
+  ]
+}

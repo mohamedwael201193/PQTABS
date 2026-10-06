@@ -1,0 +1,17 @@
+[package]
+name = "pqtabs-sign-wasm"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+hex = "0.4.3"
+pqtabs-sign = { path = "..", default-features = false }
+slh-dsa = "=0.2.0-rc.5"
+wasm-bindgen = "0.2.100"
+getrandom = { version = "0.4.3", features = ["wasm_js"] }
+getrandom02 = { package = "getrandom", version = "0.2.17", features = ["js"] }

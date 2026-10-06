@@ -1,0 +1,226 @@
+{
+  "network": "arc-mainnet",
+  "chain_id": 5042,
+  "classification": "VERIFIED",
+  "steps": [],
+  "registrar_a": "0xf76e6B0920e9332fF4410f6dD53F01722AbC71a3",
+  "registrar_b": "0xB96Aa3d062eF493FC6E9bFcFe181b4bac7e72f33",
+  "agent_a": "0xFd059f0a995e6852c2138215177f00858588fAb7",
+  "agent_b": "0x19c320aF65D9aA2ECB1026bEAb2a3f4EEEbeb988",
+  "payee": "0xC485B657C140C9677846f3E9ca6a3158e5623044",
+  "vk_a": "0x0393774e042e4ad273dce217fbb7b5f6cc784b1e1ec638acc7a81defc889ac32",
+  "vk_b": "0xc99c44a7f240cae7c75a92efd59b1ef8dc905fee306d219c099a6bb8698f6e3f",
+  "factory": "0x05545F026b75f03aE9Cf1eA8a8373473c94ed323",
+  "deploy": {
+    "hash": "0xfade67cbf64d0869dbd33f53bd48844f0b3b4399d2c54b68c36a0b07ba30c916",
+    "status": 1,
+    "block": 24623258,
+    "gas_used": 2016614,
+    "contract": "0x05545F026b75f03aE9Cf1eA8a8373473c94ed323",
+    "deployer_usdc_before": 10782756,
+    "deployer_usdc_after": 10738390
+  },
+  "fund_registrar_b": {
+    "hash": "0x42b5d561fb3e7d561cace329db095a5244a6bfd47d6b56e66786e22eeb6783f4",
+    "status": 1,
+    "block": 24623268,
+    "gas_used": 73950,
+    "contract": null
+  },
+  "root_a": {
+    "address": "0x846f56a8547Fe5cC3120c189c5640e84DAAB65Cf",
+    "tx": {
+      "hash": "0xe79bf837a6faad61607b148640f8f0bcf504eda21319eec5489784d4ec7da6bc",
+      "status": 1,
+      "block": 24623278,
+      "gas_used": 252541,
+      "contract": null
+    },
+    "usdc_before": 0,
+    "registrar": "0xf76e6B0920e9332fF4410f6dD53F01722AbC71a3"
+  },
+  "root_b": {
+    "address": "0x27F441D82d6b364E06eb906889BE8Fc02Df8F762",
+    "tx": {
+      "hash": "0xc6e5f879df2c07287a5c9d92eff2fc78ee63791f5592f7320baee3c135389961",
+      "status": 1,
+      "block": 24623290,
+      "gas_used": 252553,
+      "contract": null
+    },
+    "usdc_before": 0,
+    "registrar": "0xB96Aa3d062eF493FC6E9bFcFe181b4bac7e72f33"
+  },
+  "fund_root_a": {
+    "tx": {
+      "hash": "0x39670438a93de06562cf341a0310f889cded9238556f17b49f1e4936ed8762ae",
+      "status": 1,
+      "block": 24623301,
+      "gas_used": 48950,
+      "contract": null
+    },
+    "before": 0,
+    "after": 150000
+  },
+  "fund_root_b": {
+    "tx": {
+      "hash": "0xd039b2869218ad4dfc308ef3fb9d443a6b0d933f0fb8e2d02dacf9e1499993aa",
+      "status": 1,
+      "block": 24623312,
+      "gas_used": 48950,
+      "contract": null
+    },
+    "before": 0,
+    "after": 150000
+  },
+  "expiry": 1791322070,
+  "tab_a": {
+    "address": "0xE3051e8173fDBEC33B826352CB177a306B9d5109",
+    "tx": {
+      "hash": "0x16236e8683de1d4a6167652f80b7726ccc67a2be21087bc5f0d2484725cd91bb",
+      "status": 1,
+      "block": 24623326,
+      "gas_used": 636897,
+      "contract": null
+    },
+    "root_before": 150000,
+    "root_after": 50000,
+    "tab_balance": 100000,
+    "exposure": 100000
+  },
+  "tab_b": {
+    "address": "0xD14d151eD5Eb7dE58A3893c7C69e374E37d1184d",
+    "tx": {
+      "hash": "0xcd11114bb3ff8e713b84c9bf5cfef288bae8dac607a3ff130616795d7a1869d0",
+      "status": 1,
+      "block": 24623339,
+      "gas_used": 636741,
+      "contract": null
+    },
+    "root_before": 150000,
+    "root_after": 50000,
+    "tab_balance": 100000,
+    "exposure": 100000
+  },
+  "spend_a": {
+    "tx": {
+      "hash": "0xc0c5213ec038b61eeab905bcece7d015266738f8b470c67832020e6ee8ecfd08",
+      "status": 1,
+      "block": 24623356,
+      "gas_used": 130603,
+      "contract": null
+    },
+    "tab_before": 100000,
+    "tab_after": 90000,
+    "payee_after": 10000,
+    "magic": "0x1626ba7e"
+  },
+  "spend_b": {
+    "tx": {
+      "hash": "0x6b0dfc18492f957f95a0bc411e6986ca5457848289286081131e0924f61bbdc3",
+      "status": 1,
+      "block": 24623364,
+      "gas_used": 105603,
+      "contract": null
+    },
+    "tab_before": 100000,
+    "tab_after": 90000,
+    "payee_after": 20000,
+    "magic": "0x1626ba7e"
+  },
+  "forbidden_payee_call": "0xffffffff",
+  "over_limit_call": "0xffffffff",
+  "agent_b_on_tab_a_call": "0xffffffff",
+  "forbidden_broadcast": {
+    "hash": "0x399e5e89c8d6be28efc394a37a074884768e0a8e63a533b53c6eae1904ee35ca",
+    "status": 0,
+    "block": 24623376,
+    "gas_used": 64243,
+    "contract": null
+  },
+  "cross_root_spent_on_a": {
+    "hash": "0x604e24cbad01e1649713e62cb085063841996dd5f31ad91b6e05cabd541b2d20",
+    "status": 1,
+    "block": 24623389,
+    "gas_used": 434587,
+    "contract": null
+  },
+  "cross_root_payload": {
+    "action": "0000000000000000000000000000000000000000000000000000000000000003000000000000000000000000f76e6b0920e9332ff4410f6dd53f01722abc71a30000000000000000000000000000000000000000000000000000000000000001",
+    "nonce": 1,
+    "deadline": 1791325403,
+    "signature_sha256": "295887443aa91f3e0cfc138d909d42e55c0ecfb2fb71140e597a5e57fe937cab",
+    "signature_note": "raw signature omitted; it is in the broadcast transaction"
+  },
+  "cross_root": {
+    "hash": "0x7cf1d0d5e5a7e9029f9961478e1d16ec379dd27c87992ebf62e5acaf71ae1a17",
+    "status": 0,
+    "block": 24623399,
+    "gas_used": 401584,
+    "contract": null
+  },
+  "reclaim_a": {
+    "tx": {
+      "hash": "0x0ab33b8276eb51b9298117d36f7660af0138fdcd8e47e34dac6e7e10bc3922fd",
+      "status": 1,
+      "block": 24623924,
+      "gas_used": 112708,
+      "contract": null
+    },
+    "root_before": 49999,
+    "root_after": 139999,
+    "tab_before": 90000,
+    "tab_after": 0,
+    "exposure_after": 0
+  },
+  "reclaim_b": {
+    "tx": {
+      "hash": "0xb6d3e8638487dbf6d29aa88495ec07b7046f1506ad7b01a926dbb013c855befd",
+      "status": 1,
+      "block": 24623934,
+      "gas_used": 112708,
+      "contract": null
+    },
+    "root_before": 50000,
+    "root_after": 140000,
+    "tab_before": 90000,
+    "tab_after": 0,
+    "exposure_after": 0
+  },
+  "rotate": {
+    "tx": {
+      "hash": "0x184edd6aedb3a58e4db90645e7b110bb387ee4c393a9cd2f65a7965817e5c55c",
+      "status": 1,
+      "block": 24623948,
+      "gas_used": 409077,
+      "contract": null
+    },
+    "vk": "0xdbb8245905fe933f16b4ed744b0e0c7050c616f7f2c83207aa72a7a97ed1ef50"
+  },
+  "old_key_call": "eth_call failed: execution reverted 0x8baa579f",
+  "old_key_rejected": {
+    "hash": "0x19338117dd8b56fc01b95db0036e4efd6217f24d855c85c1046d0b2975f437ee",
+    "status": 0,
+    "block": 24623958,
+    "gas_used": 401572,
+    "contract": null
+  },
+  "new_key_transfer": {
+    "tx": {
+      "hash": "0xcaf1a2e3aa5a4e3b170f33a9add97e603f701b505026a0c5e769e517a936cb3d",
+      "status": 1,
+      "block": 24623972,
+      "gas_used": 434599,
+      "contract": null
+    },
+    "before": 139999,
+    "after": 139998
+  },
+  "final_balances": {
+    "root_a": 139998,
+    "root_b": 140000,
+    "tab_a": 0,
+    "tab_b": 0,
+    "payee": 20000
+  }
+}
