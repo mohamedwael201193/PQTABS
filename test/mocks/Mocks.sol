@@ -91,6 +91,12 @@ contract MockTab {
 
 contract MockBarkeep {
     address internal constant USDC_ADDR = 0x3600000000000000000000000000000000000000;
+    bytes public attackCalldata;
+    bytes public attackRevert;
+
+    function setAttack(bytes calldata data) external {
+        attackCalldata = data;
+    }
 
     function IMPLEMENTATION() external pure returns (address) {
         return 0x89B63f2E43dea9014750925C01996D34856B01D2;
@@ -114,6 +120,11 @@ contract MockBarkeep {
     {
         require(agent != address(0) && cap > 0 && maxPerCall > 0 && maxPerCall <= cap, "bad");
         require(expiry > block.timestamp, "expiry");
+        if (attackCalldata.length > 0) {
+            (bool ok, bytes memory ret) = msg.sender.call(attackCalldata);
+            require(!ok, "reenter succeeded");
+            attackRevert = ret;
+        }
         tab = _addr(msg.sender, agent, expiry, salt);
         if (tab.code.length == 0) {
             MockTab created = new MockTab{salt: salt}(msg.sender, agent, expiry, USDC_ADDR);

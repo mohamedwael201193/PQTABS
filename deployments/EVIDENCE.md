@@ -14,6 +14,10 @@ A fresh signature from `slh-dsa` 0.2.0-rc.5, empty context, over 32 zero bytes, 
 
 `PQRoot.digestFor` matches `pqtabs-sign digest` for all five action kinds. That is a local FFI test, not a mainnet transaction.
 
+## Local gate, not a deployment
+
+`docs/PHASE-5.5.md` records the Slither run, the 4,096-run fuzz, the invariant, the size report, and a deployment simulation. The simulation was not broadcast. Its address is not on Arc.
+
 ## Not measured yet
 
 No `RootFactory` deployment transaction exists. No production or staging root address exists. No USDC transfer receipt exists. Do not treat any address in the source as a deployed PQTABS contract. The Barkeep and USDC addresses are pinned constants; their code was re-read on chain before this implementation session and is recorded in `docs/ARCHITECTURE.md`.

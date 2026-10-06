@@ -191,6 +191,23 @@ contract PQRootTest is Test {
         assertEq(a.openExposure(), 1_000_000);
     }
 
+    function test_factory_callback_cannot_execute_a_second_action() public {
+        PQRoot a = _root(userA, bytes32(uint256(1)), 5_000_000);
+        MockUSDC(USDC).mint(address(a), 1_000_000);
+        uint64 deadline = uint64(block.timestamp + 1 hours);
+        bytes memory transfer = _actionTransfer(payee, 1);
+        bytes memory attack = abi.encodeCall(PQRoot.execute, (transfer, 1, deadline, _sigFor(a, transfer, 1, deadline)));
+        MockBarkeep(BARKEEP).setAttack(attack);
+
+        address tab = _open(a, agentA, 100_000, 50_000);
+
+        assertEq(a.openExposure(), 100_000);
+        assertEq(a.nextNonce(), 1);
+        assertEq(MockUSDC(USDC).balanceOf(payee), 0);
+        assertEq(MockTab(tab).owner(), address(a));
+        assertEq(bytes4(MockBarkeep(BARKEEP).attackRevert()), PQRoot.Reentered.selector);
+    }
+
     function test_early_reclaim_and_direct_close() public {
         PQRoot a = _root(userA, bytes32(uint256(1)), 5_000_000);
         MockUSDC(USDC).mint(address(a), 1_000_000);

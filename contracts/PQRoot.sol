@@ -158,15 +158,17 @@ contract PQRoot {
             IBarkeepFactory(BARKEEP_ADDR).predictTab(address(this), agent, payees, maxPerCall, expiry, salt);
         if (tabs[predicted].open || tabs[predicted].cap != 0) revert UnexpectedTab();
 
+        // Reserve the cap before the factory call. A revert rolls this back.
+        // The lock below stops the factory from reentering execute, reclaim, or retrySweep.
+        openExposure += cap;
+        tabs[predicted] = TabState(cap, expiry, true, false);
+
         _approveExact(cap);
         address tab = IBarkeepFactory(BARKEEP_ADDR).openTab(agent, payees, maxPerCall, expiry, cap, salt);
         if (tab != predicted || ITab(tab).owner() != address(this) || ITab(tab).expiry() != expiry) {
             revert UnexpectedTab();
         }
         _approveExact(0);
-
-        openExposure += cap;
-        tabs[tab] = TabState(cap, expiry, true, false);
         emit TabOpened(tab, agent, cap, expiry, openExposure);
     }
 
@@ -177,9 +179,13 @@ contract PQRoot {
         uint256 cap = t.cap;
         t.open = false;
         openExposure -= cap;
+        // Assume the sweep failed until the balance proves otherwise. USDC has no transfer fee;
+        // a non-zero balance means Barkeep closed the tab without moving the funds, so retrySweep
+        // must be able to call close() again. This equality is the completion check, not a price.
+        t.needsSweep = true;
         ITab(tab).close();
         bool swept = IUSDC(USDC_ADDR).balanceOf(tab) == 0;
-        if (!swept) t.needsSweep = true;
+        if (swept) t.needsSweep = false;
         emit TabClosed(tab, cap, swept, permissionless);
     }
 
@@ -230,6 +236,9 @@ contract PQRoot {
         if (!initialized || pqVk == bytes32(0)) revert NotInitialized();
     }
 
+    /// `locked` is 0 on a fresh clone, 1 when idle, and 2 while a protected call is running.
+    /// Every state-changing entry except `initialize` uses this. `initialize` can only be called
+    /// by the factory, and only before `locked` becomes 1.
     modifier nonReentrant() {
         if (locked != 1) revert Reentered();
         locked = 2;

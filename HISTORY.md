@@ -67,6 +67,15 @@ Forensic timeline for the production PQTABS build. Times are UTC.
 - The GitHub repository already had `827b0dd` (`README.md` only). Those histories were merged. The README conflict was resolved by keeping the protocol README.
 - Pushed tip `3f26948` to `https://github.com/mohamedwael201193/PQTABS` `main`. `.env` and `pq-keys/` were not in the commit. `git check-ignore` covers both.
 
+## Phase 5.5 — pre-mainnet security gate
+
+- Slither 0.11.6 on the production contracts: 4 results. `balanceOf(tab) == 0` is the sweep-completion check. The remaining reentrancy notes are the `needsSweep` clear after `tab.close()`. Exposure is reserved before `openTab`. `test_factory_callback_cannot_execute_a_second_action` shows a callback `execute` reverts with `Reentered` and does not move funds.
+- `forge test --fuzz-runs 4096`: 17 passed. The exposure fuzz ran 4,096 times. Invariant stayed at 64 runs and 2,048 calls.
+- `forge snapshot` wrote `.gas-snapshot`. `PQRoot` runtime size is 7,321 bytes. `RootFactory` runtime size is 1,384 bytes.
+- `forge script scripts/Deploy.s.sol` simulated a deployment and used 2,082,284 gas. It was not broadcast. The address it printed is local.
+- Storage layout, selectors, metadata, and the accepted findings are in `docs/PHASE-5.5.md`.
+- Exit gate: passed for local review. Phase 6 is allowed to use disposable keys and a tiny USDC amount. It has not started.
+
 ## Not done
 
 - No factory broadcast. No USDC movement. No Render service. No CI workflow. No frontend directory.
