@@ -61,7 +61,14 @@ Forensic timeline for the production PQTABS build. Times are UTC.
 - Unit tests use `MockPQ`. That mock is not SLH-DSA. Cryptographic truth is phase 2, not the mock.
 - Exit gate for local accounting: passed. Mainnet deployment has not started. Phase 5.5 (Slither and the rest of the surface review) is not finished, so phase 6 is blocked.
 
+## Repository
+
+- Commit `9d345eb` records the contracts, signer, tests, and phase-2 evidence.
+- The GitHub repository already had `827b0dd` (`README.md` only). Those histories were merged. The README conflict was resolved by keeping the protocol README.
+- Pushed tip `3f26948` to `https://github.com/mohamedwael201193/PQTABS` `main`. `.env` and `pq-keys/` were not in the commit. `git check-ignore` covers both.
+
 ## Not done
 
 - No factory broadcast. No USDC movement. No Render service. No CI workflow. No frontend directory.
 - `pq-keys/phase2-disposable.json` is a local disposable signing key with no on-chain balance. It must not be committed.
+- Phase 5.5 has not been run. Slither has not been run. Phase 6 stays blocked.
