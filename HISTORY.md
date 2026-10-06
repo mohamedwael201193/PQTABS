@@ -103,6 +103,7 @@ Forensic timeline for the production PQTABS build. Times are UTC.
 - Signer tests after the shared path: 4 library tests and 3 binary tests, all passed.
 - Threat model, judge review, recovery, API, and testing documents were written against the mainnet receipts.
 - Exit gate for the local backend and signer: passed. Render was not deployed in this phase.
+- Git commit `53fe159` contains this phase. Its subject line is the previous gate sentence, because the new message file was not written before `git commit -F` ran. The files in that commit are the staging receipts, the backend, the wasm signer, CI, and these documents.
 
 ## Not done after phase 8
 
