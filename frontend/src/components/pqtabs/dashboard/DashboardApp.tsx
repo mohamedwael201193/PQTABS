@@ -81,8 +81,9 @@ function ConnectGate({ onExit }: { onExit: () => void }) {
       .then(async (address) => {
         if (cancelled || !address) return;
         const chainId = await walletClient().getChainId();
-        if (cancelled || chainId !== 5042) return;
+        if (cancelled) return;
         window.localStorage.removeItem("pqtabs.root");
+        usePqtabsData.getState().setChainId(chainId);
         switchRegistrar(address);
       })
       .catch(() => undefined);
@@ -150,7 +151,7 @@ export default function DashboardApp({ onExit }: { onExit: () => void }) {
         <EmptyState
           icon={<Wallet className="h-5 w-5" strokeWidth={1.75} />}
           title="Wrong network"
-          body="PQTABS settles on Arc mainnet. Switch the wallet before the treasury can load."
+          body={`Wallet ${registrar.slice(0, 6)}…${registrar.slice(-4)} is connected. PQTABS settles on Arc mainnet. Switch before the treasury can load.`}
           action={
             <Button
               onClick={() => {
