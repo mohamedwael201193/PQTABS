@@ -245,14 +245,19 @@ if (entry?.endsWith("/src/server.js")) {
   serve({ fetch: createApp(clients, () => holder.sql).fetch, port }, (info) => {
     log({ route: "listen", result: `port ${info.port}` });
   });
-  openIndex()
-    .then((index) => {
-      holder.sql = index;
-      startIngest(index, clients.public, clients.factory);
-      log({ route: "index", result: "ready" });
-    })
-    .catch((error: unknown) => {
-      const message = error instanceof Error ? `${error.name}: ${error.message}` : "index_open_failed";
-      log({ route: "index", result: "error", error: message.replace(/postgres(?:ql)?:\/\/\S+/gi, "postgres://redacted").slice(0, 180) });
-    });
+  const hostedWithoutDatabase = Boolean(process.env.RENDER_SERVICE_ID) && !process.env.DATABASE_URL;
+  if (hostedWithoutDatabase) {
+    log({ route: "index", result: "skipped", error: "DATABASE_URL is not set" });
+  } else {
+    openIndex()
+      .then((index) => {
+        holder.sql = index;
+        startIngest(index, clients.public, clients.factory);
+        log({ route: "index", result: "ready" });
+      })
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? `${error.name}: ${error.message}` : "index_open_failed";
+        log({ route: "index", result: "error", error: message.replace(/postgres(?:ql)?:\/\/\S+/gi, "postgres://redacted").slice(0, 180) });
+      });
+  }
 }
