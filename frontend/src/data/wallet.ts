@@ -137,9 +137,12 @@ const usdcAbi = [
 ] as const;
 
 /** The connected wallet is the registrar. It creates the root. It is not the PQ authority. */
-export async function createSecurityDomain(vk: Hex, maxOpenExposure: bigint, userSalt: Hex): Promise<Hex> {
+export async function createSecurityDomain(vk: Hex, maxOpenExposure: bigint, userSalt: Hex, registrar: Address): Promise<Hex> {
   const account = await existingAccount();
   if (!account) throw new Error("Connect a wallet before creating a security domain.");
+  if (account.toLowerCase() !== registrar.toLowerCase()) {
+    throw new Error("The wallet changed. The security domain was not created.");
+  }
   const client = walletClient();
   const chainId = await client.getChainId();
   if (chainId !== arc.id) throw new Error("Switch to Arc before creating a security domain.");

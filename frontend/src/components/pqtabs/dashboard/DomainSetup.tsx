@@ -9,7 +9,7 @@ import { rememberRoot } from "@/data/production";
 import { createRootKey, rootUnlocked, verifyingKey } from "@/data/pq-vault";
 import { arc, createSecurityDomain, existingAccount, waitForRoot, walletClient } from "@/data/wallet";
 import { usePqtabsData } from "@/lib/store";
-import { keccak256, toHex } from "viem";
+import { keccak256, toHex, type Hex } from "viem";
 
 function downloadBackup(blob: Blob) {
   const url = URL.createObjectURL(blob);
@@ -30,7 +30,9 @@ export function DomainSetup({ onExit, onReady }: { onExit: () => void; onReady: 
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(() => rootUnlocked(usePqtabsData.getState().registrar));
   const [kept, setKept] = useState(false);
+  const [sent, setSent] = useState(false);
   const lock = useRef(false);
+  const pendingHash = useRef<Hex | null>(null);
 
   async function sameWallet() {
     if (!registrar) throw new Error("Connect a wallet before creating a security domain.");
@@ -73,11 +75,31 @@ export function DomainSetup({ onExit, onReady }: { onExit: () => void; onReady: 
       await sameWallet();
       const vk = verifyingKey(registrar);
       if (!vk) throw new Error("Download the backup file before creating the security domain.");
-      const salt = keccak256(toHex(crypto.getRandomValues(new Uint8Array(32))));
-      const hash = await createSecurityDomain(vk as `0x${string}`, maxOpenExposure, salt);
+      let hash = pendingHash.current;
+      if (!hash) {
+        const salt = keccak256(toHex(crypto.getRandomValues(new Uint8Array(32))));
+        hash = await createSecurityDomain(vk as `0x${string}`, maxOpenExposure, salt, registrar as `0x${string}`);
+        pendingHash.current = hash;
+        setSent(true);
+      }
       setBusy("Waiting for Arc");
-      const root = await waitForRoot(hash);
+      let root: string;
+      try {
+        root = await waitForRoot(hash);
+      } catch (reason: unknown) {
+        const message = reason instanceof Error ? reason.message : "";
+        if (message.includes("rejected")) {
+          pendingHash.current = null;
+          setSent(false);
+        }
+        throw reason;
+      }
+      const live = await existingAccount();
+      if (!live || live.toLowerCase() !== registrar.toLowerCase()) {
+        throw new Error("The wallet changed. The receipt belongs to the previous wallet.");
+      }
       rememberRoot(root);
+      pendingHash.current = null;
       onReady();
     } catch (reason: unknown) {
       setError(reason instanceof Error ? reason.message : "The security domain was not created.");
@@ -140,7 +162,7 @@ export function DomainSetup({ onExit, onReady }: { onExit: () => void; onReady: 
                 disabled={busy !== null || (saved && !kept)}
                 className="bg-gold text-[#171204] hover:bg-[#eec95e]"
               >
-                {busy ?? (saved ? "Create security domain" : "Download backup")}
+                {busy ?? (saved ? (sent ? "Check Arc again" : "Create security domain") : "Download backup")}
               </Button>
               <p className="text-center text-[11px] leading-relaxed text-muted-foreground">
                 The backup file is the only copy of this key. Your wallet cannot recreate it. There is no operator recovery. Save the file before the wallet confirmation.
