@@ -120,12 +120,17 @@ async function readBody(response: Response): Promise<{ error?: string; detail?: 
 }
 
 async function getJson<T>(path: string): Promise<T> {
-  const response = await fetch(`${BACKEND_URL}${path}`);
-  const body = (await readBody(response)) as T & { error?: string; detail?: string };
-  if (!response.ok) {
-    throw new Error(readableError(body.detail || body.error, `read failed (${response.status})`));
+  let pause = 2000;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const response = await fetch(`${BACKEND_URL}${path}`);
+    const body = (await readBody(response)) as T & { error?: string; detail?: string };
+    if (response.ok) return body;
+    const message = readableError(body.detail || body.error, `read failed (${response.status})`);
+    if (!message.includes("rate limit") || attempt === 2) throw new Error(message);
+    await new Promise((resolve) => setTimeout(resolve, pause));
+    pause *= 2;
   }
-  return body;
+  throw new Error("Arc is rate limiting reads. Try again in a moment.");
 }
 
 export async function loadConfig(): Promise<ConfigJson> {
@@ -425,8 +430,12 @@ export async function submitPrepared(registrar: string, prepared: PreparedAction
     deadline: prepared.deadline,
     signature: signed,
   });
-  const snapshot = await loadSnapshot(registrar);
-  return { hash: result.hash, snapshot };
+  try {
+    return { hash: result.hash, snapshot: await loadSnapshot(registrar) };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "the portfolio could not be read";
+    throw new Error(`Arc accepted ${result.hash}. ${message}`);
+  }
 }
 
 export async function submitSpend(input: {

@@ -395,7 +395,9 @@ function CreateFlow() {
       : phase === "confirming"
         ? "Submitting to Arc"
         : phase === "error"
-          ? "Couldn’t create this capability"
+          ? failure.includes("Arc accepted")
+            ? "Arc accepted the signature"
+            : "Couldn’t create this capability"
           : STEP_META[step - 1].title;
   const description = succeeded
     ? "Arc accepted the signature and the tab is in this root's portfolio."
@@ -404,7 +406,9 @@ function CreateFlow() {
       : phase === "confirming"
         ? "Waiting for the transaction receipt."
         : phase === "error"
-          ? "The capability wasn’t opened."
+          ? failure.includes("Arc accepted")
+            ? "The receipt is on Arc. Refresh the portfolio before opening another capability."
+            : "This page did not mark the capability open."
           : STEP_META[step - 1].sub;
 
   return (

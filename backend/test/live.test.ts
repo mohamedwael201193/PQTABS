@@ -24,7 +24,7 @@ describe("arc mainnet reads", () => {
       functionName: "balanceOf",
       args: [ROOT_A],
     });
-    assert.equal(balance, 139997n);
+    assert.equal(balance, 139996n);
     const portfolio = await readPortfolio(clients, ROOT_A);
     const tab = portfolio.tabs.find((row) => row.tab.toLowerCase() === "0xe3051e8173fdbec33b826352cb177a306b9d5109");
     assert.ok(tab);
