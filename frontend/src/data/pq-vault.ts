@@ -30,6 +30,7 @@ function material(json: string, registrar: string): RootMaterial {
 }
 
 let unlocked: RootMaterial | null = null;
+let creating: Promise<{ verifyingKey: string; backup: Blob }> | null = null;
 
 function holds(registrar: string): boolean {
   return Boolean(registrar) && unlocked !== null && unlocked.registrar.toLowerCase() === registrar.toLowerCase();
@@ -59,14 +60,25 @@ export function lockRoot(): void {
   unlocked = null;
 }
 
-export async function createRootKey(registrar: string, passphrase: string): Promise<{ verifyingKey: string; backup: Blob }> {
+export function createRootKey(registrar: string, passphrase: string): Promise<{ verifyingKey: string; backup: Blob }> {
   if (passphrase.length < 8) throw new Error("Use a passphrase of at least 8 characters. It never leaves this device.");
+  if (holds(registrar)) {
+    throw new Error("This browser session already holds this wallet's security key. Use the backup that was just saved.");
+  }
+  if (creating) return creating;
+  creating = mintRootKey(registrar, passphrase).finally(() => {
+    creating = null;
+  });
+  return creating;
+}
+
+async function mintRootKey(registrar: string, passphrase: string): Promise<{ verifyingKey: string; backup: Blob }> {
   const api = await signer();
   const json = api.keygen_json();
   const parsed = material(json, registrar);
-  unlocked = parsed;
   const blobHex = api.backup_encrypt_hex(passphrase, json);
   const bytes = hexToBytes(blobHex);
+  unlocked = parsed;
   return {
     verifyingKey: `0x${parsed.verifyingKeyHex}`,
     backup: new Blob([bytes.slice()], { type: "application/octet-stream" }),

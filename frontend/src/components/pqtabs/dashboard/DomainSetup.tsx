@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/pqtabs/shared";
@@ -30,6 +30,7 @@ export function DomainSetup({ onExit, onReady }: { onExit: () => void; onReady: 
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(() => rootUnlocked(usePqtabsData.getState().registrar));
   const [kept, setKept] = useState(false);
+  const lock = useRef(false);
 
   async function sameWallet() {
     if (!registrar) throw new Error("Connect a wallet before creating a security domain.");
@@ -42,23 +43,29 @@ export function DomainSetup({ onExit, onReady }: { onExit: () => void; onReady: 
   }
 
   async function downloadKey() {
+    if (lock.current) return;
+    lock.current = true;
     setError(null);
+    setBusy("Creating your security key");
     try {
       if (passphrase.length < 8) throw new Error("Choose a passphrase of at least 8 characters.");
       await sameWallet();
-      setBusy("Creating your security key");
       const created = await createRootKey(registrar, passphrase);
       downloadBackup(created.backup);
       setSaved(true);
     } catch (reason: unknown) {
       setError(reason instanceof Error ? reason.message : "The security key was not created.");
     } finally {
+      lock.current = false;
       setBusy(null);
     }
   }
 
   async function protect() {
+    if (lock.current) return;
+    lock.current = true;
     setError(null);
+    setBusy("Confirm in your wallet");
     try {
       const maxOpenExposure = parseUsdcRaw(ceiling);
       if (maxOpenExposure <= BigInt(0)) throw new Error("Set an exposure ceiling above zero.");
@@ -66,7 +73,6 @@ export function DomainSetup({ onExit, onReady }: { onExit: () => void; onReady: 
       await sameWallet();
       const vk = verifyingKey(registrar);
       if (!vk) throw new Error("Download the backup file before creating the security domain.");
-      setBusy("Confirm in your wallet");
       const salt = keccak256(toHex(crypto.getRandomValues(new Uint8Array(32))));
       const hash = await createSecurityDomain(vk as `0x${string}`, maxOpenExposure, salt);
       setBusy("Waiting for Arc");
@@ -76,6 +82,7 @@ export function DomainSetup({ onExit, onReady }: { onExit: () => void; onReady: 
     } catch (reason: unknown) {
       setError(reason instanceof Error ? reason.message : "The security domain was not created.");
     } finally {
+      lock.current = false;
       setBusy(null);
     }
   }
@@ -89,6 +96,12 @@ export function DomainSetup({ onExit, onReady }: { onExit: () => void; onReady: 
           body="This wallet has no security domain yet. Your wallet identifies you. A separate security key authorizes what agents can spend. It is not saved in the browser. After this, you create an agent and give it a capability. The agent never holds this key."
           action={
             <div className="flex w-full flex-col gap-3 text-left">
+              <p className="text-center font-mono text-[11px] text-foreground">
+                Wallet {registrar.slice(0, 6)}…{registrar.slice(-4)}
+              </p>
+              <p className="text-center text-[11px] leading-relaxed text-muted-foreground">
+                This security domain will belong to this wallet only.
+              </p>
               <label className="text-xs text-muted-foreground">
                 Exposure ceiling in USDC
                 <input
