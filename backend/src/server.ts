@@ -17,7 +17,7 @@ function clientIp(header: string | undefined): string {
   return header?.split(",")[0]?.trim() || "unknown";
 }
 
-export function createApp(clients: Clients = loadClients(), index?: Sql | null) {
+export function createApp(clients: Clients = loadClients(), getIndex?: () => Sql | null) {
   const app = new Hono<{ Variables: { requestId: string } }>();
 
   app.use("*", async (c, next) => {
@@ -121,6 +121,7 @@ export function createApp(clients: Clients = loadClients(), index?: Sql | null) 
 
   app.get("/v1/roots/:address/portfolio", async (c) => {
     const root = asAddress(c.req.param("address"), "root");
+    const index = getIndex?.() ?? null;
     const portfolio = index ? await readIndexedPortfolio(index, clients.public, clients.factory, root) : await readPortfolio(clients, root);
     return c.json({ root, ...portfolio });
   });
@@ -240,17 +241,18 @@ const entry = process.argv[1]?.replaceAll("\\", "/");
 if (entry?.endsWith("/src/server.js")) {
   const port = Number(process.env.PORT || 8080);
   const clients = loadClients();
+  const holder: { sql: Sql | null } = { sql: null };
+  serve({ fetch: createApp(clients, () => holder.sql).fetch, port }, (info) => {
+    log({ route: "listen", result: `port ${info.port}` });
+  });
   openIndex()
     .then((index) => {
+      holder.sql = index;
       startIngest(index, clients.public, clients.factory);
-      serve({ fetch: createApp(clients, index).fetch, port }, (info) => {
-        log({ route: "listen", result: `indexed port ${info.port}` });
-      });
+      log({ route: "index", result: "ready" });
     })
-    .catch(() => {
-      log({ route: "index", result: "error", error: "index_open_failed" });
-      serve({ fetch: createApp(clients).fetch, port }, (info) => {
-        log({ route: "listen", result: `port ${info.port}` });
-      });
+    .catch((error: unknown) => {
+      const message = error instanceof Error ? `${error.name}: ${error.message}` : "index_open_failed";
+      log({ route: "index", result: "error", error: message.replace(/postgres(?:ql)?:\/\/\S+/gi, "postgres://redacted").slice(0, 180) });
     });
 }

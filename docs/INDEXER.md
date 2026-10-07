@@ -6,7 +6,7 @@ Arc remains the authority. The database is a replay of logs.
 
 The background loop pages `eth_getLogs` at 2,000 blocks, under the public 9,999-block cap documented at https://docs.arc.io/arc/references/rpc-endpoints. Committed blocks are not rolled back. Ordering is block number, then log index. USDC spends are the ERC-20 `Transfer` from `0x3600…0000` only. The system emitter is not indexed, because that would double-count. The sender of a spend is the token log `from`, which is the capability, not the relayer.
 
-`DATABASE_URL` selects Postgres. Without it, the process uses an embedded Postgres file at `INDEX_PATH` or `.pqtabs-index`. That file is derived. Render's disk does not keep it across a new process, so a restart replays from the factory block once. Set `DATABASE_URL` on Render when a hosted database exists. Do not put that URL in a `NEXT_PUBLIC_` variable.
+`DATABASE_URL` selects Postgres. Without it, the process uses an embedded Postgres file at `INDEX_PATH`, or `/tmp/pqtabs-index` on Render, or `.pqtabs-index` locally. The HTTP server listens before that file opens, so a slow open does not fail the health check. The file is derived. Render's disk does not keep it across a new process, so a restart replays from the factory block once. Set `DATABASE_URL` on Render when a hosted database exists. Do not put that URL in a `NEXT_PUBLIC_` variable.
 
 Wipe and replay:
 

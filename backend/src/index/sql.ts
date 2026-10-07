@@ -35,7 +35,7 @@ export async function openMemory(): Promise<Sql> {
 
 export async function openIndex(env: NodeJS.ProcessEnv = process.env): Promise<Sql> {
   if (env.DATABASE_URL) return openPg(env.DATABASE_URL);
-  const db = new PGlite(env.INDEX_PATH || ".pqtabs-index");
+  const db = new PGlite(env.INDEX_PATH || (env.RENDER_SERVICE_ID ? "/tmp/pqtabs-index" : ".pqtabs-index"));
   await db.exec(SCHEMA);
   return wrapPglite(db);
 }
