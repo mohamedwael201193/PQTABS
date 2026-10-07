@@ -63,7 +63,7 @@ export async function createRootKey(passphrase: string): Promise<{ verifyingKey:
   const bytes = hexToBytes(blobHex);
   return {
     verifyingKey: `0x${parsed.verifyingKeyHex}`,
-    backup: new Blob([bytes], { type: "application/octet-stream" }),
+    backup: new Blob([bytes.slice()], { type: "application/octet-stream" }),
   };
 }
 

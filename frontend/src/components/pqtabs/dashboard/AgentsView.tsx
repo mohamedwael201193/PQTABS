@@ -15,6 +15,7 @@ import { useAgents, useDashboardUi, usePqtabsData, useTabs } from "@/lib/store";
  */
 export default function AgentsView() {
   const portfolioReady = usePqtabsData((state) => state.portfolioReady);
+  const portfolioError = usePqtabsData((state) => state.portfolioError);
   const agents = useAgents();
   const tabs = useTabs();
   const openDrawer = useDashboardUi((s) => s.openDrawer);
@@ -157,8 +158,14 @@ export default function AgentsView() {
       ) : (
         <EmptyState
           icon={<Bot className="h-5 w-5" strokeWidth={1.75} />}
-          title={portfolioReady ? "No agents yet" : "Loading agents"}
-          body={portfolioReady ? "Create an agent to give software controlled spending access. An agent has no treasury access until you give it a capability." : "Agents already on this root appear when Arc finishes the capability read."}
+          title={portfolioReady ? "No agents yet" : portfolioError ? "Couldn't read agents" : "Loading agents"}
+          body={
+            portfolioReady
+              ? "Create an agent to give software controlled spending access. An agent has no treasury access until you give it a capability."
+              : portfolioError
+                ? "Agents already on this root appear when the capability read finishes."
+                : "Agents already on this root appear when Arc finishes the capability read."
+          }
         />
       )}
     </div>

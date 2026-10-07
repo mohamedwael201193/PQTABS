@@ -17,6 +17,7 @@ import { TabCard } from "./shared/TabCard";
  */
 export default function TabsView() {
   const portfolioReady = usePqtabsData((state) => state.portfolioReady);
+  const portfolioError = usePqtabsData((state) => state.portfolioError);
   const tabs = useTabs();
   const agents = useAgents();
   const openDrawer = useDashboardUi((s) => s.openDrawer);
@@ -137,8 +138,14 @@ export default function TabsView() {
         ) : (
           <EmptyState
             icon={<Wallet className="h-5 w-5" strokeWidth={1.75} />}
-            title={portfolioReady ? "No active capabilities" : "Loading capabilities"}
-            body={portfolioReady ? "Open a capability to let an agent spend within bounds." : "The capability list is still being read from Arc."}
+            title={portfolioReady ? "No active capabilities" : portfolioError ? "Couldn't read capabilities" : "Loading capabilities"}
+            body={
+              portfolioReady
+                ? "Open a capability to let an agent spend within bounds."
+                : portfolioError
+                  ? "The capability list did not finish. The treasury balance is still the onchain USDC balance."
+                  : "The capability list is still being read from Arc."
+            }
             action={
               <Button
                 onClick={() => setCreateOpen(true)}

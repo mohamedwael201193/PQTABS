@@ -18,6 +18,9 @@ export const arc = defineChain({
   name: "Arc",
   nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
   rpcUrls: { default: { http: [RPC_URL] } },
+  contracts: {
+    multicall3: { address: "0xcA11bde05977b3631167028862bE2a173976CA11" },
+  },
 });
 
 const rootAbi = [
@@ -195,16 +198,40 @@ export async function withRpcRetry<T>(read: () => Promise<T>): Promise<T> {
   throw new RequestError(429, "rate_limited", "Arc is rate limiting reads. Try again in a moment.");
 }
 
-async function chunked<T>(client: PublicClient, read: (from: bigint, to: bigint) => Promise<readonly T[]>): Promise<T[]> {
-  const latest = await client.getBlockNumber();
-  const span = 4_000n;
+function errorText(error: unknown): string {
+  if (!error || typeof error !== "object") return String(error);
+  const record = error as { message?: string; details?: string; shortMessage?: string; cause?: { message?: string } };
+  return [record.message, record.shortMessage, record.details, record.cause?.message].filter(Boolean).join(" ");
+}
+
+function isRangeError(error: unknown): boolean {
+  if (error instanceof RequestError) return false;
+  return /range too large|block range|too many|exceed|query returned more|10000|50000|response size/i.test(errorText(error));
+}
+
+async function windows<T>(
+  latest: bigint,
+  span: bigint,
+  read: (from: bigint, to: bigint) => Promise<readonly T[]>,
+): Promise<T[]> {
   const rows: T[] = [];
   for (let from = FACTORY_BLOCK; from <= latest; from += span) {
     const to = from + span - 1n > latest ? latest : from + span - 1n;
     rows.push(...(await withRpcRetry(() => read(from, to))));
-    await sleep(150);
   }
   return rows;
+}
+
+async function ranged<T>(
+  latest: bigint,
+  read: (from: bigint, to: bigint) => Promise<readonly T[]>,
+): Promise<T[]> {
+  try {
+    return await windows(latest, 10_000n, read);
+  } catch (error) {
+    if (!isRangeError(error)) throw error;
+    return windows(latest, 4_000n, read);
+  }
 }
 
 async function blockTime(client: PublicClient, blockNumber: bigint, cache: Map<string, string>): Promise<string> {
@@ -217,31 +244,73 @@ async function blockTime(client: PublicClient, blockNumber: bigint, cache: Map<s
   return stamp;
 }
 
-export async function readPortfolio(clients: Clients, root: Address): Promise<{ tabs: PortfolioTab[]; activity: PortfolioEvent[] }> {
+type CallResult = { status: "success"; result: unknown } | { status: "failure"; error: Error };
+
+const portfolioInflight = new Map<string, Promise<{ tabs: PortfolioTab[]; activity: PortfolioEvent[] }>>();
+
+function callValue(results: readonly CallResult[], index: number, label: string): unknown {
+  const row = results[index];
+  if (!row || row.status === "failure") {
+    throw row && row.status === "failure" ? row.error : new Error(`${label} missing`);
+  }
+  return row.result;
+}
+
+function payeeList(results: readonly CallResult[], index: number): Address[] {
+  const row = results[index];
+  if (!row || row.status === "failure") return [];
+  return [...(row.result as readonly Address[])];
+}
+
+export function readPortfolio(clients: Clients, root: Address): Promise<{ tabs: PortfolioTab[]; activity: PortfolioEvent[] }> {
+  const key = `${clients.factory.toLowerCase()}:${root.toLowerCase()}`;
+  const existing = portfolioInflight.get(key);
+  if (existing) return existing;
+  const pending = readPortfolioOnce(clients, root).finally(() => {
+    portfolioInflight.delete(key);
+  });
+  portfolioInflight.set(key, pending);
+  return pending;
+}
+
+async function readPortfolioOnce(clients: Clients, root: Address): Promise<{ tabs: PortfolioTab[]; activity: PortfolioEvent[] }> {
   await assertOurRoot(clients, root);
   const client = clients.public;
-  const opened = await chunked(client, (from, to) =>
+  const latest = await withRpcRetry(() => client.getBlockNumber());
+  const opened = await ranged(latest, (from, to) =>
     client.getLogs({ address: root, event: openedEvent, fromBlock: from, toBlock: to }),
   );
   const times = new Map<string, string>();
+  const openedRows = opened.filter((log) => log.args.tab && log.args.agent);
+  const calls: {
+    address: Address;
+    abi: typeof rootAbi | typeof tabAbi | typeof usdcAbi;
+    functionName: string;
+    args?: readonly [Address];
+  }[] = openedRows.flatMap((log) => {
+    const tab = log.args.tab as Address;
+    return [
+      { address: root, abi: rootAbi, functionName: "tabs", args: [tab] as const },
+      { address: tab, abi: tabAbi, functionName: "owner" },
+      { address: tab, abi: tabAbi, functionName: "agent" },
+      { address: tab, abi: tabAbi, functionName: "maxPerCall" },
+      { address: tab, abi: tabAbi, functionName: "expiry" },
+      { address: USDC as Address, abi: usdcAbi, functionName: "balanceOf", args: [tab] as const },
+      { address: tab, abi: tabAbi, functionName: "payees" },
+    ];
+  });
+  const details = calls.length === 0 ? [] : await withRpcRetry(() => client.multicall({ contracts: calls, allowFailure: true }));
   const tabs: PortfolioTab[] = [];
-  for (const log of opened) {
-    const tab = log.args.tab;
-    const agent = log.args.agent;
-    if (!tab || !agent) continue;
-    const state = await withRpcRetry(() => client.readContract({ address: root, abi: rootAbi, functionName: "tabs", args: [tab] }));
-    const owner = await withRpcRetry(() => client.readContract({ address: tab, abi: tabAbi, functionName: "owner" }));
-    const onchainAgent = await withRpcRetry(() => client.readContract({ address: tab, abi: tabAbi, functionName: "agent" }));
-    const maxPerCall = await withRpcRetry(() => client.readContract({ address: tab, abi: tabAbi, functionName: "maxPerCall" }));
-    const expiry = await withRpcRetry(() => client.readContract({ address: tab, abi: tabAbi, functionName: "expiry" }));
-    const balance = await withRpcRetry(() => client.readContract({ address: USDC, abi: usdcAbi, functionName: "balanceOf", args: [tab] }));
-    const payees = await withRpcRetry(() =>
-      client.readContract({ address: tab, abi: tabAbi, functionName: "payees" }).catch((error: unknown) => {
-        const message = error instanceof Error ? error.message : String(error);
-        if (message.includes("429") || message.includes("rate limit")) throw error;
-        return [] as Address[];
-      }),
-    );
+  for (let index = 0; index < openedRows.length; index++) {
+    const log = openedRows[index];
+    const tab = log.args.tab as Address;
+    const base = index * 7;
+    const state = callValue(details as readonly CallResult[], base, "tabs") as readonly [bigint, bigint, boolean, boolean];
+    const owner = callValue(details as readonly CallResult[], base + 1, "owner") as Address;
+    const onchainAgent = callValue(details as readonly CallResult[], base + 2, "agent") as Address;
+    const maxPerCall = callValue(details as readonly CallResult[], base + 3, "maxPerCall") as bigint;
+    const expiry = callValue(details as readonly CallResult[], base + 4, "expiry") as bigint;
+    const balance = callValue(details as readonly CallResult[], base + 5, "balance") as bigint;
     tabs.push({
       tab,
       agent: onchainAgent,
@@ -252,25 +321,28 @@ export async function readPortfolio(clients: Clients, root: Address): Promise<{ 
       owner,
       maxPerCall: maxPerCall.toString(),
       usdc: balance.toString(),
-      payees: [...payees],
+      payees: payeeList(details as readonly CallResult[], base + 6),
       openedTx: log.transactionHash,
       openedBlock: log.blockNumber.toString(),
       openedAt: await blockTime(client, log.blockNumber, times),
     });
-    void agent;
   }
 
-  const closed = await chunked(client, (from, to) => client.getLogs({ address: root, event: closedEvent, fromBlock: from, toBlock: to }));
-  const moved = await chunked(client, (from, to) => client.getLogs({ address: root, event: movedEvent, fromBlock: from, toBlock: to }));
-  const rotated = await chunked(client, (from, to) => client.getLogs({ address: root, event: rotatedEvent, fromBlock: from, toBlock: to }));
-  const spends = [];
-  for (const tab of tabs) {
-    spends.push(
-      ...(await chunked(client, (from, to) =>
-        client.getLogs({ address: USDC, event: spentEvent, args: { from: tab.tab }, fromBlock: from, toBlock: to }),
-      )),
-    );
-  }
+  const closed = await ranged(latest, (from, to) => client.getLogs({ address: root, event: closedEvent, fromBlock: from, toBlock: to }));
+  const moved = await ranged(latest, (from, to) => client.getLogs({ address: root, event: movedEvent, fromBlock: from, toBlock: to }));
+  const rotated = await ranged(latest, (from, to) => client.getLogs({ address: root, event: rotatedEvent, fromBlock: from, toBlock: to }));
+  const spends =
+    tabs.length === 0
+      ? []
+      : await ranged(latest, (from, to) =>
+          client.getLogs({
+            address: USDC,
+            event: spentEvent,
+            args: { from: tabs.map((row) => row.tab) },
+            fromBlock: from,
+            toBlock: to,
+          }),
+        );
 
   const activity: PortfolioEvent[] = [];
   for (const log of opened) {

@@ -20,6 +20,7 @@ export function useAccountData(): {
   const setRegistrar = usePqtabsData((state) => state.setRegistrar);
   const setChainId = usePqtabsData((state) => state.setChainId);
   const setPortfolioReady = usePqtabsData((state) => state.setPortfolioReady);
+  const setPortfolioError = usePqtabsData((state) => state.setPortfolioError);
   const replaceSnapshot = usePqtabsData((state) => state.replaceSnapshot);
   const [snapshot, setSnapshot] = useState<AccountSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
@@ -96,6 +97,7 @@ export function useAccountData(): {
     setError(null);
     setSnapshot(null);
     setPortfolioReady(false);
+    setPortfolioError(null);
     loadAccount(registrar, (treasury) => {
       if (cancelled) return;
       treasuryShown = true;
@@ -108,19 +110,22 @@ export function useAccountData(): {
         replaceSnapshot(data);
         setSnapshot(data);
         setPortfolioReady(true);
+        setPortfolioError(null);
         setLoading(false);
         setError(null);
       })
       .catch((reason: unknown) => {
         if (cancelled) return;
-        setError(reason instanceof Error ? reason.message : "Couldn't load your treasury.");
+        const message = reason instanceof Error ? reason.message : "Couldn't load your treasury.";
+        setError(message);
         setLoading(false);
+        if (treasuryShown) setPortfolioError(message);
         if (!treasuryShown) setSnapshot(null);
       });
     return () => {
       cancelled = true;
     };
-  }, [attempt, hydrated, registrar, replaceSnapshot, setPortfolioReady]);
+  }, [attempt, hydrated, registrar, replaceSnapshot, setPortfolioError, setPortfolioReady]);
 
   const retry = () => {
     setError(null);

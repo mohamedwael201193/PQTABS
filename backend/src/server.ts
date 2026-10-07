@@ -113,7 +113,6 @@ export function createApp(clients: Clients = loadClients()) {
 
   app.get("/v1/roots/:address/portfolio", async (c) => {
     const root = asAddress(c.req.param("address"), "root");
-    await assertOurRoot(clients, root);
     const portfolio = await readPortfolio(clients, root);
     return c.json({ root, ...portfolio });
   });

@@ -68,6 +68,7 @@ function FundNotice() {
 
 export default function OverviewView() {
   const portfolioReady = usePqtabsData((state) => state.portfolioReady);
+  const portfolioError = usePqtabsData((state) => state.portfolioError);
   const totals = useTotals();
   const tabs = useTabs();
   const activity = useActivity();
@@ -225,8 +226,14 @@ export default function OverviewView() {
           ) : (
             <EmptyState
               icon={<Layers className="h-5 w-5" strokeWidth={1.75} />}
-              title={portfolioReady ? "No active capabilities" : "Loading capabilities"}
-              body={portfolioReady ? "Create a capability that limits how much an agent can spend." : "The treasury balance is already the onchain USDC balance. The capability list is still being read from Arc."}
+              title={portfolioReady ? "No active capabilities" : portfolioError ? "Couldn't read capabilities" : "Loading capabilities"}
+              body={
+                portfolioReady
+                  ? "Create a capability that limits how much an agent can spend."
+                  : portfolioError
+                    ? "The treasury balance above is the onchain USDC balance. The capability list did not finish."
+                    : "The treasury balance is already the onchain USDC balance. The capability list is still being read from Arc."
+              }
               action={
                 <Button
                   onClick={() => setCreateOpen(true)}
