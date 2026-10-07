@@ -128,6 +128,7 @@ function CreateFlow() {
   const recipients = useRecipients();
   const totals = useTotals();
   const rootBalance = usePqtabsData((state) => state.snapshot.account.treasuryTotalUsd);
+  const portfolioReady = usePqtabsData((state) => state.portfolioReady);
   const available = Math.min(rootBalance, totals.availableUsd);
 
   const reduceMotion = useReducedMotion();
@@ -179,7 +180,7 @@ function CreateFlow() {
         name: `${typedAgent.slice(0, 6)}…${typedAgent.slice(-4)}`,
         address: typedAgent,
         status: "active" as const,
-        role: "ECDSA key for this new tab",
+        role: "Entered for this capability",
         addedHoursAgo: 0,
         lastActiveHoursAgo: null,
       }
@@ -880,6 +881,43 @@ function CreateFlow() {
                 {selectedRecipientNames.join(" · ")}
               </p>
 
+              <dl className="mt-6 divide-y divide-white/[.06] rounded-lg border border-white/[.06] bg-white/[.015]">
+                <div className="flex items-center justify-between gap-4 px-4 py-3">
+                  <dt className="text-sm text-muted-foreground">Current treasury</dt>
+                  <dd className="font-mono text-sm tabular text-foreground">{usd(rootBalance)}</dd>
+                </div>
+                <div className="flex items-center justify-between gap-4 px-4 py-3">
+                  <dt className="text-sm text-muted-foreground">Becomes available to this agent</dt>
+                  <dd className="font-mono text-sm tabular text-gold">{usd(cap)}</dd>
+                </div>
+                <div className="flex items-center justify-between gap-4 px-4 py-3">
+                  <dt className="text-sm text-muted-foreground">Still in the root</dt>
+                  <dd className="font-mono text-sm tabular text-foreground">{usd(Math.max(0, rootBalance - cap))}</dd>
+                </div>
+                <div className="flex items-center justify-between gap-4 px-4 py-3">
+                  <dt className="text-sm text-muted-foreground">Open exposure after this</dt>
+                  <dd className="font-mono text-sm tabular text-foreground">{usd(totals.allocatedUsd + cap)}</dd>
+                </div>
+                <div className="flex items-center justify-between gap-4 px-4 py-3">
+                  <dt className="text-sm text-muted-foreground">Exposure room left</dt>
+                  <dd className="font-mono text-sm tabular text-foreground">{usd(Math.max(0, totals.availableUsd - cap))}</dd>
+                </div>
+              </dl>
+              <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+                {portfolioReady
+                  ? `Agents can already reach ${usd(totals.exposureUsd)}. This grant adds ${usd(cap)}.`
+                  : `Existing agent reach is not loaded yet. This grant adds ${usd(cap)}.`}
+              </p>
+
+              <div className="mt-5 rounded-lg border border-white/[.06] bg-white/[.015] p-4">
+                <p className={MICRO}>Why this is safe</p>
+                <ul className="mt-3 space-y-2 text-sm leading-relaxed text-muted-foreground">
+                  <li>Your agent does not receive control of the root treasury.</li>
+                  <li>Every spend remains inside this capability&apos;s rules.</li>
+                  <li>Root authority remains protected by PQ authorization.</li>
+                </ul>
+              </div>
+
               <label className="mt-6 flex cursor-pointer items-start gap-3 rounded-lg border border-white/[.06] bg-white/[.015] p-3.5 transition-colors hover:bg-white/[.03]">
                 <Checkbox
                   checked={ack}
@@ -1042,7 +1080,7 @@ function CreateFlow() {
                   </Button>
                 ) : (
                   <Button className={BTN_GOLD} disabled={!ack} onClick={startCreation}>
-                    Create capability
+                    Authorize capability
                   </Button>
                 )}
               </div>

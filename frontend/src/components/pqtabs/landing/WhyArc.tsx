@@ -22,8 +22,8 @@ const FACTS = [
   },
   {
     kicker: "What it protects",
-    title: "Only capability creation",
-    body: "Opening tabs, rotating keys, recovery. Day-to-day payments never touch the root.",
+    title: "Rare root actions",
+    body: "Opening a capability, closing one, and rotating the root key. Day-to-day payments never touch the root.",
   },
 ];
 
@@ -34,7 +34,7 @@ export default function WhyArc() {
         <SectionHeading
           className="flex-1"
           title="Post-quantum verification belongs at the root."
-          lead="PQTABS runs on Arc because Arc verifies SLH-DSA signatures onchain through its post-quantum verification precompile. The authority above your agents’ spending is checked by the network itself — not by a dashboard, not by a promise."
+          lead="Arc makes post-quantum verification available at the application layer. A root authorization is heavy and rare. Agent payments stay light, frequent, and bounded."
         />
         {/* The Arc chain — staged in the heading's negative space */}
         <div className="hidden shrink-0 pt-6 md:block" aria-hidden="true">
