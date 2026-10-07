@@ -141,6 +141,8 @@ export async function createSecurityDomain(vk: Hex, maxOpenExposure: bigint, use
   const account = await existingAccount();
   if (!account) throw new Error("Connect a wallet before creating a security domain.");
   const client = walletClient();
+  const chainId = await client.getChainId();
+  if (chainId !== arc.id) throw new Error("Switch to Arc before creating a security domain.");
   return client.writeContract({
     account,
     address: FACTORY,
