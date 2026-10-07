@@ -8,7 +8,7 @@ import { EmptyState, StatusChip } from "@/components/pqtabs/shared";
 import { relTime, usd } from "@/data/formatters";
 import { loadSnapshot, productionProvider } from "@/data/production";
 import type { Tab } from "@/data/types";
-import { useAgents, useDashboardUi, usePqtabsData, useTabs } from "@/lib/store";
+import { useAgents, useActivity, useDashboardUi, usePqtabsData, useTabs } from "@/lib/store";
 import { TabCard } from "./shared/TabCard";
 
 /**
@@ -19,6 +19,7 @@ export default function TabsView() {
   const portfolioReady = usePqtabsData((state) => state.portfolioReady);
   const portfolioError = usePqtabsData((state) => state.portfolioError);
   const tabs = useTabs();
+  const activity = useActivity();
   const agents = useAgents();
   const openDrawer = useDashboardUi((s) => s.openDrawer);
   const setCreateOpen = useDashboardUi((s) => s.setCreateOpen);
@@ -32,6 +33,14 @@ export default function TabsView() {
   );
 
   const agentName = (id: string) => agents.find((a) => a.id === id)?.name ?? "Unknown agent";
+
+  const historyWhen = (tab: Tab) => {
+    if (tab.status === "expired") return `expired ${relTime(tab.expiredHoursAgo)}`;
+    const closed = activity.find(
+      (record) => record.kind === "capability_closed" && record.tabId?.toLowerCase() === tab.id.toLowerCase(),
+    );
+    return closed ? `closed ${relTime(closed.hoursAgo)}` : `opened ${relTime(tab.openedHoursAgo)}`;
+  };
 
   async function confirmReturn(tab: Tab, path: "reclaim" | "sweep") {
     setPendingReclaimId(tab.id);
@@ -162,7 +171,7 @@ export default function TabsView() {
             Active
           </p>
           <span className="rounded-full border border-white/[.08] bg-white/[.03] px-2 py-0.5 font-mono text-[10px] tabular text-muted-foreground">
-            {active.length}
+            {portfolioReady ? active.length : "—"}
           </span>
         </div>
         {active.length > 0 ? (
@@ -204,7 +213,11 @@ export default function TabsView() {
         <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
           Closed & expired
         </p>
-        {history.length > 0 ? (
+        {!portfolioReady ? (
+          <p className="rounded-xl border border-dashed border-white/[.09] bg-white/[.015] px-4 py-6 text-center text-sm text-muted-foreground">
+            {portfolioError ? "The closed list did not finish." : "The closed list is still being read from Arc."}
+          </p>
+        ) : history.length > 0 ? (
           <div className="max-h-72 overflow-y-auto scrollbar-thin rounded-xl border border-white/[.06] bg-white/[.02]">
             <ul className="divide-y divide-white/[.05]">
               {history.map((tab) => (
@@ -219,8 +232,8 @@ export default function TabsView() {
                   <span className="ml-auto w-[76px] shrink-0 text-right font-mono text-xs tabular text-muted-foreground">
                     {usd(tab.capUsd)}
                   </span>
-                  <span className="w-[64px] shrink-0 text-right font-mono text-[11px] tabular text-muted-foreground">
-                    {relTime(tab.status === "expired" ? tab.expiredHoursAgo : tab.openedHoursAgo)}
+                  <span className="w-[108px] shrink-0 text-right font-mono text-[11px] tabular text-muted-foreground">
+                    {historyWhen(tab)}
                   </span>
                 </li>
               ))}
