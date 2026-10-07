@@ -4,7 +4,7 @@ import { assertOurRoot, rootAbi, tabAbi, usdcAbi, withRpcRetry } from "../chain.
 import { USDC } from "../constants.js";
 import { RequestError } from "../validate.js";
 import { readCursor } from "./apply.js";
-import { ingestRpcInFlight } from "./lane.js";
+import { liveReadsPaused, noteRateLimit } from "./lane.js";
 import type { Sql } from "./sql.js";
 
 export type Freshness = "live" | "recent" | "indexing" | "degraded";
@@ -106,7 +106,7 @@ async function readIndexedPortfolioBody(sql: Sql, client: PublicClient, factory:
     ),
   ]);
   const stored = () => storedPortfolio(root, through, capabilityRows, activityRows, null, "");
-  if (ingestRpcInFlight()) return stored();
+  if (liveReadsPaused()) return stored();
   let headNumber: bigint | null = null;
   let headTimestamp = "";
   try {
@@ -115,6 +115,7 @@ async function readIndexedPortfolioBody(sql: Sql, client: PublicClient, factory:
     headTimestamp = head.timestamp.toString();
   } catch (error) {
     if (!isRateLimit(error)) throw error;
+    noteRateLimit();
     return storedPortfolio(root, through, capabilityRows, activityRows, null, "");
   }
   const gap = headNumber == null ? 2_001n : headNumber - through;
@@ -139,6 +140,7 @@ async function readIndexedPortfolioBody(sql: Sql, client: PublicClient, factory:
     return value;
   } catch (error) {
     if (!isRateLimit(error)) throw error;
+    noteRateLimit();
     return storedPortfolio(root, through, capabilityRows, activityRows, headNumber, headTimestamp);
   }
 }

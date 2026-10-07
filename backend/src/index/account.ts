@@ -2,7 +2,7 @@ import { type Address, getAddress, type PublicClient } from "viem";
 import { assertOurRoot, factoryAbi, rootAbi, usdcAbi, withRpcRetry } from "../chain.js";
 import { USDC } from "../constants.js";
 import { RequestError } from "../validate.js";
-import { ingestRpcInFlight } from "./lane.js";
+import { liveReadsPaused, noteRateLimit } from "./lane.js";
 import type { Sql } from "./sql.js";
 
 export type RootView = {
@@ -45,7 +45,7 @@ export async function readRegistrarRoots(sql: Sql, client: PublicClient, factory
     [registrar],
   );
   if (rows.length > 0) return rows.map((row) => getAddress(row.address));
-  if (ingestRpcInFlight()) throw unavailable();
+  if (liveReadsPaused()) throw unavailable();
   try {
     const count = await withRpcRetry(
       () => client.readContract({ address: factory, abi: factoryAbi, functionName: "rootCount", args: [registrar] }),
@@ -62,7 +62,10 @@ export async function readRegistrarRoots(sql: Sql, client: PublicClient, factory
     }
     return roots;
   } catch (error) {
-    if (isRateLimit(error)) throw unavailable();
+    if (isRateLimit(error)) {
+      noteRateLimit();
+      throw unavailable();
+    }
     throw error;
   }
 }
@@ -75,7 +78,7 @@ export async function readRootState(sql: Sql, client: PublicClient, factory: Add
   ]);
   const row = rows[0];
   const cached = rootCache.get(key);
-  if (ingestRpcInFlight()) {
+  if (liveReadsPaused()) {
     if (row || cached) return viewFrom(root, row, cached, rotated.length > 0);
     throw unavailable();
   }
@@ -86,6 +89,7 @@ export async function readRootState(sql: Sql, client: PublicClient, factory: Add
   } catch (error) {
     if (error instanceof RequestError && error.code === "unknown_root") throw error;
     if (!isRateLimit(error)) throw error;
+    noteRateLimit();
     if (row || cached) return viewFrom(root, row, cached, rotated.length > 0);
     throw unavailable();
   }
