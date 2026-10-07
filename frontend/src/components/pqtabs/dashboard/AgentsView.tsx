@@ -80,7 +80,9 @@ export default function AgentsView() {
       {agents.length > 0 ? (
         <ul className="space-y-3">
           {agents.map((agent) => {
-            const activeTabs = tabs.filter((t) => t.agentId === agent.id && t.status === "active");
+            const activeTabs = tabs.filter(
+              (t) => t.agentId.toLowerCase() === agent.id.toLowerCase() && t.status === "active",
+            );
             const authorized = activeTabs.reduce((s, t) => s + t.capUsd, 0);
             return (
               <li key={agent.id}>

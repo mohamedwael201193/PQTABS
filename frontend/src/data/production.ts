@@ -336,10 +336,10 @@ function activityKind(kind: PortfolioEvent["kind"]): ActivityKind {
 
 function activitySummary(event: PortfolioEvent, root: string): string {
   const amount = event.amount ? usdc(event.amount).toFixed(6) : "";
-  if (event.kind === "opened") return `Opened a tab for ${amount} USDC.`;
-  if (event.kind === "closed") return `Closed a tab and released ${amount} USDC of exposure.`;
+  if (event.kind === "opened") return `Opened a capability for ${amount} USDC.`;
+  if (event.kind === "closed") return `Closed a capability and released its ${amount} USDC limit.`;
   if (event.kind === "spend" && event.to?.toLowerCase() === root.toLowerCase()) {
-    return `The tab returned ${amount} USDC to the root.`;
+    return `The capability returned ${amount} USDC to the treasury.`;
   }
   if (event.kind === "spend") return `Agent paid ${amount} USDC to ${event.to ? short(event.to) : "a recipient"}.`;
   if (event.kind === "rotated") return "Root verifying key rotated. Older signatures no longer verify.";

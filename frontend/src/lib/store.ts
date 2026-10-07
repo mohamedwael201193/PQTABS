@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import type { AccountSnapshot, ActivityRecord, Agent, Tab } from "@/data/types";
+import { labelsFor, saveAgentLabel, type AgentLabel } from "@/data/agent-labels";
 import { totalsFrom } from "@/data/production";
 
 /**
@@ -49,6 +50,7 @@ interface PqtabsDataState {
   registrar: string;
   chainId: number | null;
   localAgents: Agent[];
+  agentLabels: Record<string, AgentLabel>;
   portfolioReady: boolean;
   portfolioError: string | null;
   setRegistrar: (address: string) => void;
@@ -72,15 +74,18 @@ export const usePqtabsData = create<PqtabsDataState>((set) => ({
   registrar: "",
   chainId: null,
   localAgents: [],
+  agentLabels: {},
   portfolioReady: false,
   portfolioError: null,
   setRegistrar: (address) =>
     set((state) => {
       const same = address.toLowerCase() === state.registrar.toLowerCase();
+      const agentLabels = same ? state.agentLabels : labelsFor(address);
       return {
         registrar: address,
         snapshot: same ? state.snapshot : EMPTY_SNAPSHOT,
-        localAgents: same ? state.localAgents : [],
+        localAgents: same ? state.localAgents : agentsFromLabels(agentLabels),
+        agentLabels,
         portfolioReady: same ? state.portfolioReady : false,
         portfolioError: same ? state.portfolioError : null,
       };
@@ -89,11 +94,16 @@ export const usePqtabsData = create<PqtabsDataState>((set) => ({
   setPortfolioReady: (ready) => set({ portfolioReady: ready }),
   setPortfolioError: (message) => set({ portfolioError: message }),
   addLocalAgent: (agent) =>
-    set((state) => ({
-      localAgents: state.localAgents.some((item) => item.id.toLowerCase() === agent.id.toLowerCase())
-        ? state.localAgents
-        : [agent, ...state.localAgents],
-    })),
+    set((state) => {
+      const label = { name: agent.name, purpose: agent.role, address: agent.address };
+      saveAgentLabel(state.registrar, label);
+      const agentLabels = { ...state.agentLabels, [agent.id.toLowerCase()]: label };
+      const exists = state.localAgents.some((item) => item.id.toLowerCase() === agent.id.toLowerCase());
+      return {
+        agentLabels,
+        localAgents: exists ? state.localAgents : [agent, ...state.localAgents],
+      };
+    }),
   replaceSnapshot: (snapshot) => set({ snapshot: { ...snapshot, totals: totalsFrom(snapshot.account, snapshot.tabs) } }),
   createCapability: () => {
     throw new Error(SIGNATURE_REQUIRED);
@@ -164,11 +174,34 @@ export function useTabs(): Tab[] {
   return usePqtabsData((s) => s.snapshot.tabs);
 }
 
+function applyLabel(agent: Agent, labels: Record<string, AgentLabel>): Agent {
+  const label = labels[agent.id.toLowerCase()];
+  if (!label?.name) return agent;
+  return { ...agent, name: label.name, role: label.purpose || agent.role };
+}
+
+function agentsFromLabels(labels: Record<string, AgentLabel>): Agent[] {
+  return Object.values(labels).map((label) => ({
+    id: label.address,
+    name: label.name,
+    address: label.address,
+    status: "active" as const,
+    role: label.purpose || "Named on this device.",
+    addedHoursAgo: 0,
+    lastActiveHoursAgo: null,
+  }));
+}
+
 export function useAgents(): Agent[] {
   const chain = usePqtabsData((s) => s.snapshot.agents);
   const local = usePqtabsData((s) => s.localAgents);
-  const seen = new Set(chain.map((agent) => agent.id.toLowerCase()));
-  return [...local.filter((agent) => !seen.has(agent.id.toLowerCase())), ...chain];
+  const labels = usePqtabsData((s) => s.agentLabels);
+  const namedChain = chain.map((agent) => applyLabel(agent, labels));
+  const seen = new Set(namedChain.map((agent) => agent.id.toLowerCase()));
+  return [
+    ...local.filter((agent) => !seen.has(agent.id.toLowerCase())).map((agent) => applyLabel(agent, labels)),
+    ...namedChain,
+  ];
 }
 
 export function useActivity(): ActivityRecord[] {
