@@ -62,3 +62,4 @@ download/
 mini-services/
 db/
 agent-ctx/
+.vercel

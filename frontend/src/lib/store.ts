@@ -49,8 +49,10 @@ interface PqtabsDataState {
   registrar: string;
   chainId: number | null;
   localAgents: Agent[];
+  portfolioReady: boolean;
   setRegistrar: (address: string) => void;
   setChainId: (chainId: number | null) => void;
+  setPortfolioReady: (ready: boolean) => void;
   addLocalAgent: (agent: Agent) => void;
   replaceSnapshot: (snapshot: AccountSnapshot) => void;
   createCapability: () => never;
@@ -68,6 +70,7 @@ export const usePqtabsData = create<PqtabsDataState>((set) => ({
   registrar: "",
   chainId: null,
   localAgents: [],
+  portfolioReady: false,
   setRegistrar: (address) =>
     set((state) => {
       const same = address.toLowerCase() === state.registrar.toLowerCase();
@@ -75,9 +78,11 @@ export const usePqtabsData = create<PqtabsDataState>((set) => ({
         registrar: address,
         snapshot: same ? state.snapshot : EMPTY_SNAPSHOT,
         localAgents: same ? state.localAgents : [],
+        portfolioReady: same ? state.portfolioReady : false,
       };
     }),
   setChainId: (chainId) => set({ chainId }),
+  setPortfolioReady: (ready) => set({ portfolioReady: ready }),
   addLocalAgent: (agent) =>
     set((state) => ({
       localAgents: state.localAgents.some((item) => item.id.toLowerCase() === agent.id.toLowerCase())

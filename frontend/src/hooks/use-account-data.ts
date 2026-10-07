@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { AccountSnapshot } from "@/data/types";
-import { loadSnapshot, rememberRegistrar } from "@/data/production";
+import { loadAccount, rememberRegistrar } from "@/data/production";
 import { existingAccount, watchChain, watchWallet, walletClient } from "@/data/wallet";
 import { usePqtabsData } from "@/lib/store";
 
@@ -19,6 +19,7 @@ export function useAccountData(): {
   const registrar = usePqtabsData((state) => state.registrar);
   const setRegistrar = usePqtabsData((state) => state.setRegistrar);
   const setChainId = usePqtabsData((state) => state.setChainId);
+  const setPortfolioReady = usePqtabsData((state) => state.setPortfolioReady);
   const replaceSnapshot = usePqtabsData((state) => state.replaceSnapshot);
   const [snapshot, setSnapshot] = useState<AccountSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
@@ -90,25 +91,36 @@ export function useAccountData(): {
       return;
     }
     let cancelled = false;
+    let treasuryShown = false;
     setLoading(true);
     setError(null);
     setSnapshot(null);
-    loadSnapshot(registrar)
+    setPortfolioReady(false);
+    loadAccount(registrar, (treasury) => {
+      if (cancelled) return;
+      treasuryShown = true;
+      replaceSnapshot(treasury);
+      setSnapshot(treasury);
+      setLoading(false);
+    })
       .then((data) => {
         if (cancelled) return;
         replaceSnapshot(data);
         setSnapshot(data);
+        setPortfolioReady(true);
         setLoading(false);
+        setError(null);
       })
       .catch((reason: unknown) => {
         if (cancelled) return;
         setError(reason instanceof Error ? reason.message : "Couldn't load your treasury.");
         setLoading(false);
+        if (!treasuryShown) setSnapshot(null);
       });
     return () => {
       cancelled = true;
     };
-  }, [attempt, hydrated, registrar, replaceSnapshot]);
+  }, [attempt, hydrated, registrar, replaceSnapshot, setPortfolioReady]);
 
   const retry = () => {
     setError(null);

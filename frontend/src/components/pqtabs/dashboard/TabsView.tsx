@@ -16,6 +16,7 @@ import { TabCard } from "./shared/TabCard";
  * be reclaimed, the active set, and the settled history at the bottom.
  */
 export default function TabsView() {
+  const portfolioReady = usePqtabsData((state) => state.portfolioReady);
   const tabs = useTabs();
   const agents = useAgents();
   const openDrawer = useDashboardUi((s) => s.openDrawer);
@@ -136,8 +137,8 @@ export default function TabsView() {
         ) : (
           <EmptyState
             icon={<Wallet className="h-5 w-5" strokeWidth={1.75} />}
-            title="No active capabilities"
-            body="Open a capability to let an agent spend within bounds."
+            title={portfolioReady ? "No active capabilities" : "Loading capabilities"}
+            body={portfolioReady ? "Open a capability to let an agent spend within bounds." : "The capability list is still being read from Arc."}
             action={
               <Button
                 onClick={() => setCreateOpen(true)}

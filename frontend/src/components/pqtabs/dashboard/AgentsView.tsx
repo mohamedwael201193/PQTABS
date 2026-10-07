@@ -14,6 +14,7 @@ import { useAgents, useDashboardUi, usePqtabsData, useTabs } from "@/lib/store";
  * across its capabilities. The whole row opens the agent drawer.
  */
 export default function AgentsView() {
+  const portfolioReady = usePqtabsData((state) => state.portfolioReady);
   const agents = useAgents();
   const tabs = useTabs();
   const openDrawer = useDashboardUi((s) => s.openDrawer);
@@ -156,8 +157,8 @@ export default function AgentsView() {
       ) : (
         <EmptyState
           icon={<Bot className="h-5 w-5" strokeWidth={1.75} />}
-          title="No agents yet"
-          body="Create an agent to give software controlled spending access. An agent has no treasury access until you give it a capability."
+          title={portfolioReady ? "No agents yet" : "Loading agents"}
+          body={portfolioReady ? "Create an agent to give software controlled spending access. An agent has no treasury access until you give it a capability." : "Agents already on this root appear when Arc finishes the capability read."}
         />
       )}
     </div>

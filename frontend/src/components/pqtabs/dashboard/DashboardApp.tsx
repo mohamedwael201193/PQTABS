@@ -182,6 +182,14 @@ export default function DashboardApp({ onExit }: { onExit: () => void }) {
 
       <div className="flex min-h-screen flex-1 flex-col md:pl-[248px]">
         <main className="mx-auto w-full max-w-[1200px] flex-1 px-4 pb-24 pt-6 md:px-8 md:pb-10 md:pt-8">
+          {error && snapshot && (
+            <p className="mb-4 text-sm text-muted-foreground">
+              {error}{" "}
+              <button type="button" onClick={retry} className="text-gold">
+                Try again
+              </button>
+            </p>
+          )}
           {booting ? (
             <ViewSkeleton
               variant={activeView === "settings" ? "security" : activeView}

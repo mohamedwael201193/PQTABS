@@ -137,6 +137,25 @@ export async function loadConfig(): Promise<ConfigJson> {
   return config;
 }
 
+export async function loadAccount(
+  registrar: string,
+  onTreasury: (snapshot: AccountSnapshot) => void,
+): Promise<AccountSnapshot> {
+  const config = await loadConfig();
+  const listed = await getJson<{ roots: string[] }>(`/v1/registrars/${registrar}/roots`);
+  const preferred = currentRoot();
+  const root = listed.roots.find((item) => item.toLowerCase() === preferred?.toLowerCase()) ?? listed.roots[0];
+  if (!root) {
+    const empty = emptySnapshot(registrar, config);
+    onTreasury(empty);
+    return empty;
+  }
+  const state = await getJson<RootJson>(`/v1/roots/${root}`);
+  onTreasury(mapSnapshot(registrar, state, [], [], config));
+  const portfolio = await getJson<{ tabs: PortfolioTab[]; activity: PortfolioEvent[] }>(`/v1/roots/${root}/portfolio`);
+  return mapSnapshot(registrar, state, portfolio.tabs, portfolio.activity, config);
+}
+
 export async function loadSnapshot(registrar: string): Promise<AccountSnapshot> {
   const config = await loadConfig();
   const listed = await getJson<{ roots: string[] }>(`/v1/registrars/${registrar}/roots`);
