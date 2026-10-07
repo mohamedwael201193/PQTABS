@@ -172,13 +172,37 @@ export type PortfolioEvent = {
   to?: Address;
 };
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function readWindow<T>(read: () => Promise<readonly T[]>): Promise<readonly T[]> {
+  let pause = 750;
+  for (let attempt = 0; attempt < 8; attempt++) {
+    try {
+      return await read();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const limited = message.includes("429") || message.includes("rate limit");
+      if (!limited || attempt === 7) {
+        if (limited) throw new RequestError(429, "rate_limited", "Arc is rate limiting log reads. Try again in a moment.");
+        throw error;
+      }
+      await sleep(pause);
+      pause = Math.min(pause * 2, 8_000);
+    }
+  }
+  throw new RequestError(429, "rate_limited", "Arc is rate limiting log reads. Try again in a moment.");
+}
+
 async function chunked<T>(client: PublicClient, read: (from: bigint, to: bigint) => Promise<readonly T[]>): Promise<T[]> {
   const latest = await client.getBlockNumber();
   const span = 4_000n;
   const rows: T[] = [];
   for (let from = FACTORY_BLOCK; from <= latest; from += span) {
     const to = from + span - 1n > latest ? latest : from + span - 1n;
-    rows.push(...(await read(from, to)));
+    rows.push(...(await readWindow(() => read(from, to))));
+    await sleep(150);
   }
   return rows;
 }

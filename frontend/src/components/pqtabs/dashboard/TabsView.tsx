@@ -172,7 +172,7 @@ export default function TabsView() {
                     {usd(tab.capUsd)}
                   </span>
                   <span className="w-[64px] shrink-0 text-right font-mono text-[11px] tabular text-muted-foreground">
-                    {relTime(tab.expiredHoursAgo)}
+                    {relTime(tab.status === "expired" ? tab.expiredHoursAgo : tab.openedHoursAgo)}
                   </span>
                 </li>
               ))}

@@ -87,7 +87,7 @@ export default function DashboardApp({ onExit }: { onExit: () => void }) {
         <EmptyState
           icon={<ShieldCheck className="h-5 w-5" strokeWidth={1.75} />}
           title="Couldn&apos;t load your treasury."
-          body="Check your connection and try again."
+          body={error ?? "Check your connection and try again."}
           action={
             <Button onClick={retry} className="bg-gold text-[#171204] hover:bg-[#eec95e]">
               Try again

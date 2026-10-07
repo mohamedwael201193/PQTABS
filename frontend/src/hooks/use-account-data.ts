@@ -22,13 +22,16 @@ export function useAccountData(): {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     const stored = currentRegistrar();
     if (stored !== registrar) setRegistrar(stored);
+    setHydrated(true);
   }, [registrar, setRegistrar]);
 
   useEffect(() => {
+    if (!hydrated) return;
     let cancelled = false;
     setLoading(true);
     loadSnapshot(registrar)
@@ -46,7 +49,7 @@ export function useAccountData(): {
     return () => {
       cancelled = true;
     };
-  }, [attempt, registrar, replaceSnapshot]);
+  }, [attempt, hydrated, registrar, replaceSnapshot]);
 
   const retry = () => {
     setError(null);

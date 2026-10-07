@@ -82,6 +82,14 @@ type PortfolioEvent = {
   to?: string;
 };
 
+function readableError(detail: string | undefined, fallback: string): string {
+  if (!detail) return fallback;
+  if (detail.includes("rate limit") || detail.includes("429")) {
+    return "Arc is rate limiting reads. Try again in a moment.";
+  }
+  return detail.length > 240 ? `${detail.slice(0, 240)}…` : detail;
+}
+
 function usdc(raw: string | undefined): number {
   if (!raw) return 0;
   return Number(raw) / 1_000_000;
@@ -115,7 +123,7 @@ async function getJson<T>(path: string): Promise<T> {
   const response = await fetch(`${BACKEND_URL}${path}`);
   const body = (await readBody(response)) as T & { error?: string; detail?: string };
   if (!response.ok) {
-    throw new Error(body.detail || body.error || `read failed (${response.status})`);
+    throw new Error(readableError(body.detail || body.error, `read failed (${response.status})`));
   }
   return body;
 }
@@ -250,7 +258,7 @@ function mapSnapshot(
     tabId: event.tab,
     recipientId: event.to,
     amountUsd: event.amount ? usdc(event.amount) : undefined,
-    summary: activitySummary(event),
+    summary: activitySummary(event, state.root),
     txHash: event.tx,
   }));
 
@@ -305,10 +313,13 @@ function activityKind(kind: PortfolioEvent["kind"]): ActivityKind {
   return "reclaim";
 }
 
-function activitySummary(event: PortfolioEvent): string {
+function activitySummary(event: PortfolioEvent, root: string): string {
   const amount = event.amount ? usdc(event.amount).toFixed(6) : "";
   if (event.kind === "opened") return `Opened a tab for ${amount} USDC.`;
   if (event.kind === "closed") return `Closed a tab and released ${amount} USDC of exposure.`;
+  if (event.kind === "spend" && event.to?.toLowerCase() === root.toLowerCase()) {
+    return `The tab returned ${amount} USDC to the root.`;
+  }
   if (event.kind === "spend") return `Agent paid ${amount} USDC to ${event.to ? short(event.to) : "a recipient"}.`;
   if (event.kind === "rotated") return "Root verifying key rotated. Older signatures no longer verify.";
   return `Root transferred ${amount} USDC.`;
@@ -336,7 +347,7 @@ async function relay(path: string, body: unknown): Promise<{ hash: string }> {
   });
   const payload = (await readBody(response)) as { hash?: string; error?: string; detail?: string };
   if (!response.ok || !payload.hash) {
-    throw new Error(payload.detail || payload.error || "the chain did not accept this action");
+    throw new Error(readableError(payload.detail || payload.error, "the chain did not accept this action"));
   }
   const receipt = await waitForReceipt(payload.hash);
   if (receipt.status !== "success") {
