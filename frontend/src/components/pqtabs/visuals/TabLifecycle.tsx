@@ -118,8 +118,8 @@ export default function TabLifecycle({ className }: { className?: string }) {
         role="img"
       >
         <title>
-          The capability lifecycle: open, spend, check, expire, reclaim —
-          unspent funds return to the treasury.
+          The capability lifecycle: open, spend, check, expire, reclaim.
+          Unspent funds return only when someone reclaims the capability.
         </title>
 
         {/* ── Treasury ────────────────────────────────────────────── */}

@@ -58,9 +58,9 @@ export default function InsightSection() {
                 <PQSigil size={56} className="relative z-10 text-gold" />
               </div>
               <p className="mt-7 max-w-sm text-[15px] leading-relaxed text-muted-foreground">
-                Rare and deliberate. Signs capability creation, rotation and
-                recovery. Protected by SLH-DSA — a post-quantum signature
-                scheme.
+                Rare and deliberate. Signs opening a capability, closing one,
+                and rotating the root key. There is no recovery. Protected
+                by SLH-DSA — a post-quantum signature scheme.
               </p>
               <p className="mt-6 flex items-center gap-2.5 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground/75">
                 <span className="h-1 w-1 rounded-full bg-gold" aria-hidden="true" />

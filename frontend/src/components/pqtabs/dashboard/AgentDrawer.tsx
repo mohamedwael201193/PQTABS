@@ -109,7 +109,7 @@ function AgentDrawerBody({ agent }: { agent: Agent }) {
       "Last credential rotation",
       lastRotationHoursAgo != null ? relTime(lastRotationHoursAgo) : "not yet rotated",
     ],
-    ["Can participate in recovery", "No"],
+    ["Can rotate the root key", "No"],
   ];
 
   return (

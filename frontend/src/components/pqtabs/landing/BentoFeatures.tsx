@@ -64,7 +64,7 @@ export default function BentoFeatures() {
         overline="THE GUARANTEES"
         title={
           <>
-            Every tab is a{" "}
+            Every capability is a{" "}
             <span className="text-gradient-gold">vault</span> with an allowance.
           </>
         }

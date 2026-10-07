@@ -41,9 +41,9 @@ const SPEC = [
     body: "Policy lives in the capability itself. The interface displays it; the chain enforces it.",
   },
   {
-    key: "RECOVERY",
-    title: "Root-governed",
-    body: "Rotation and recovery are root-authority actions. Agents can never participate in them.",
+    key: "CUSTODY",
+    title: "No operator recovery",
+    body: "The backup file is the only copy of the root key. If that file and the device are both lost, the USDC stays in the root. Agents cannot rotate the key.",
   },
 ];
 

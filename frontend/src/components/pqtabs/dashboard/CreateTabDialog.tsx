@@ -825,9 +825,9 @@ function CreateFlow() {
 
               <div className="mt-6 rounded-lg border border-white/[.06] bg-white/[.015] p-4">
                 <p className="text-sm leading-relaxed text-muted-foreground">
-                  When it expires, remaining funds return to your treasury and the agent loses
-                  spending authority immediately. Expiry is the default — capabilities are never
-                  permanent.
+                  When it expires, the agent can no longer spend. The remaining USDC stays in the
+                  capability until someone reclaims it to your treasury. That reclaim does not need
+                  your security key. A close before expiry does.
                 </p>
               </div>
 

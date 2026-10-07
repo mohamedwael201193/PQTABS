@@ -25,13 +25,13 @@ const STEPS: { num: string; title: string; body: string; icon: Icon3DName }[] = 
   {
     num: "01",
     title: "Authorize the root",
-    body: "Your treasury is controlled by a post-quantum root key. It signs capability creation — nothing else.",
+    body: "Your treasury is controlled by a post-quantum root key. It signs opening a capability, closing one, and rotating that key. It does not sign each payment.",
     icon: "key",
   },
   {
     num: "02",
     title: "Open a capability",
-    body: "Fund a tab with a cap, a per-call limit, approved recipients and an expiry. Policy is set by you.",
+    body: "Fund a capability with a cap, a per-call limit, approved recipients and an expiry. Policy is set by you.",
     icon: "card",
   },
   {
@@ -43,7 +43,7 @@ const STEPS: { num: string; title: string; body: string; icon: Icon3DName }[] = 
   {
     num: "04",
     title: "Expire and reclaim",
-    body: "When a tab expires, remaining funds return to the treasury. Nothing lingers.",
+    body: "After expiry the agent can no longer spend. The remaining USDC stays until someone reclaims it. That call does not need the root key.",
     icon: "shield",
   },
 ];
