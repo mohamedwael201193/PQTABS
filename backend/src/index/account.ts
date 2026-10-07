@@ -2,7 +2,7 @@ import { type Address, getAddress, type PublicClient } from "viem";
 import { assertOurRoot, factoryAbi, rootAbi, usdcAbi, withRpcRetry } from "../chain.js";
 import { USDC } from "../constants.js";
 import { RequestError } from "../validate.js";
-import { liveReadsPaused, noteRateLimit } from "./lane.js";
+import { indexCoversHead, liveReadsPaused, noteRateLimit } from "./lane.js";
 import type { Sql } from "./sql.js";
 
 export type RootView = {
@@ -48,6 +48,7 @@ export async function readRegistrarRoots(sql: Sql, client: PublicClient, factory
     [registrar],
   );
   if (rows.length > 0) return rows.map((row) => getAddress(row.address));
+  if (indexCoversHead()) return [];
   if (liveReadsPaused()) throw unavailable();
   try {
     const count = await withRpcRetry(

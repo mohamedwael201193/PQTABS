@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { Address, Hex } from "viem";
+import type { Address, Hex, PublicClient } from "viem";
 import { applyEvents, type IndexEvent, readCursor, resetIndex, writeEvents } from "../src/index/apply.js";
+import { readRegistrarRoots } from "../src/index/account.js";
+import { indexCoversHead, noteIndexCursor, noteIndexHead, noteRateLimit } from "../src/index/lane.js";
 import { tabFromStored } from "../src/index/portfolio.js";
 import { openMemory, type Sql } from "../src/index/sql.js";
 
@@ -177,5 +179,32 @@ describe("derived index", () => {
     assert.equal(open.open, true);
     assert.equal(open.balanceKnown, false);
     assert.equal(open.limitKnown, false);
+  });
+
+  it("treats a missing registrar as no root once the index is near head", async () => {
+    const sql = await openMemory();
+    const silent = { readContract: () => Promise.reject(new Error("Arc should not be read")) } as unknown as PublicClient;
+    noteIndexHead(1_000n, "1790000000");
+    noteIndexCursor(1_000n);
+    noteRateLimit();
+    assert.equal(indexCoversHead(), true);
+    const none = await readRegistrarRoots(sql, silent, rootA, registrarA);
+    assert.deepEqual(none, []);
+    await applyEvents(sql, [{
+      block: 100n,
+      logIndex: 0,
+      tx,
+      timestamp: "1790000000",
+      root: rootA,
+      kind: "root",
+      registrar: registrarA,
+      verifyingKey: "0xdbb8245905fe933f16b4ed744b0e0c7050c616f7f2c83207aa72a7a97ed1ef50",
+      amount: "200000",
+    }], 100n);
+    const found = await readRegistrarRoots(sql, silent, rootA, registrarA);
+    assert.equal(found[0], rootA);
+    noteIndexHead(2_000n, "1790001000");
+    await assert.rejects(readRegistrarRoots(sql, silent, rootA, "0xBDfCee82bd42fefa58ee850b3709636a8b6b0034"), /temporarily unavailable/);
+    await sql.close();
   });
 });

@@ -2,7 +2,7 @@
 
 Arc remains the authority. The database is a replay of logs.
 
-`GET /v1/roots/:root/portfolio` reads the derived rows. It does not scan factory history, it does not wait for the backfill, and it does not call Arc. Registrar and root identity for a known root come from the same rows.
+`GET /v1/roots/:root/portfolio` reads the derived rows. It does not scan factory history, it does not wait for the backfill, and it does not call Arc. Registrar and root identity for a known root come from the same rows. A registrar with no stored root is reported as no root when the cursor is within 30 blocks of the head the indexer last observed. If the cursor is further behind and a live read is paused, the route returns 503 instead of claiming the wallet has no domain.
 
 The background loop pages `eth_getLogs` at 2,000 blocks, under the public 9,999-block cap documented at https://docs.arc.io/arc/references/rpc-endpoints. Committed blocks are not rolled back. Ordering is block number, then log index. USDC spends are the ERC-20 `Transfer` from `0x3600…0000` only. The system emitter is not indexed, because that would double-count. The sender of a spend is the token log `from`, which is the capability, not the relayer.
 

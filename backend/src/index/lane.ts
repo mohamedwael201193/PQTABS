@@ -46,6 +46,13 @@ export function liveReadsPaused(): boolean {
   return ingestActive > 0 || Date.now() < livePausedUntil;
 }
 
+/** True when stored logs already include recent heads. Absence of a row is then meaningful. */
+export function indexCoversHead(maxLag = 30n): boolean {
+  if (indexedBlock == null || chainHead == null) return false;
+  const lag = chainHead > indexedBlock ? chainHead - indexedBlock : 0n;
+  return lag <= maxLag;
+}
+
 export async function ingestRead<T>(read: () => Promise<T>): Promise<T> {
   ingestActive += 1;
   try {
