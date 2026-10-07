@@ -34,10 +34,16 @@ function FundNotice() {
     setBusy(true);
     setMessage(null);
     try {
-      const hash = await fundRoot(root as `0x${string}`, parseUsdcRaw(amount));
+      const live = usePqtabsData.getState();
+      if (live.registrar.toLowerCase() !== registrar.toLowerCase() || !live.snapshot.account.rootAddress) {
+        throw new Error("The wallet changed. The deposit was not sent.");
+      }
+      const hash = await fundRoot(live.snapshot.account.rootAddress as `0x${string}`, parseUsdcRaw(amount));
       const receipt = await arcClient().waitForTransactionReceipt({ hash });
       if (receipt.status !== "success") throw new Error("The deposit reverted.");
-      replaceSnapshot(await loadSnapshot(registrar));
+      const after = usePqtabsData.getState();
+      if (after.registrar.toLowerCase() !== registrar.toLowerCase()) return;
+      replaceSnapshot(await loadSnapshot(after.registrar));
       setMessage("Confirmed. The treasury balance is the onchain USDC balance.");
     } catch (reason: unknown) {
       setMessage(reason instanceof Error ? reason.message : "The deposit was not confirmed.");

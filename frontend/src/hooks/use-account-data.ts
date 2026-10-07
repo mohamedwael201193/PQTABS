@@ -89,17 +89,18 @@ export function useAccountData(): {
     let cancelled = false;
     let treasuryShown = false;
     const key = `${registrar.toLowerCase()}:${attempt}`;
+    const stillHere = () => usePqtabsData.getState().registrar.toLowerCase() === registrar.toLowerCase();
     setPortfolioReady(false);
     setPortfolioError(null);
     loadAccount(registrar, (treasury) => {
-      if (cancelled) return;
+      if (cancelled || !stillHere()) return;
       treasuryShown = true;
       replaceSnapshot(treasury);
       setSnapshot(treasury);
       setSettled({ key, error: null });
     })
       .then((data) => {
-        if (cancelled) return;
+        if (cancelled || !stillHere()) return;
         replaceSnapshot(data);
         setSnapshot(data);
         setPortfolioReady(true);

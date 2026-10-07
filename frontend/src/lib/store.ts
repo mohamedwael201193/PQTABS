@@ -55,6 +55,7 @@ interface PqtabsDataState {
   agentLabels: Record<string, AgentLabel>;
   portfolioReady: boolean;
   portfolioError: string | null;
+  accountReady: boolean;
   setRegistrar: (address: string) => void;
   setChainId: (chainId: number | null) => void;
   setPortfolioReady: (ready: boolean) => void;
@@ -79,6 +80,7 @@ export const usePqtabsData = create<PqtabsDataState>((set) => ({
   agentLabels: {},
   portfolioReady: false,
   portfolioError: null,
+  accountReady: false,
   setRegistrar: (address) =>
     set((state) => {
       const same = address.toLowerCase() === state.registrar.toLowerCase();
@@ -94,6 +96,7 @@ export const usePqtabsData = create<PqtabsDataState>((set) => ({
         agentLabels,
         portfolioReady: same ? state.portfolioReady : false,
         portfolioError: same ? state.portfolioError : null,
+        accountReady: same ? state.accountReady : false,
       };
     }),
   setChainId: (chainId) => set({ chainId }),
@@ -110,7 +113,16 @@ export const usePqtabsData = create<PqtabsDataState>((set) => ({
         localAgents: exists ? state.localAgents : [agent, ...state.localAgents],
       };
     }),
-  replaceSnapshot: (snapshot) => set({ snapshot: { ...snapshot, totals: totalsFrom(snapshot.account, snapshot.tabs) } }),
+  replaceSnapshot: (snapshot) =>
+    set((state) => {
+      const owner = snapshot.account.registrar?.toLowerCase() ?? "";
+      const current = state.registrar.toLowerCase();
+      if (!current || !owner || owner !== current) return state;
+      return {
+        accountReady: true,
+        snapshot: { ...snapshot, totals: totalsFrom(snapshot.account, snapshot.tabs) },
+      };
+    }),
   createCapability: () => {
     throw new Error(SIGNATURE_REQUIRED);
   },

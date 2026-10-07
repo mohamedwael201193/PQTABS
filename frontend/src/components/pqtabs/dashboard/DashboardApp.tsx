@@ -143,6 +143,8 @@ export default function DashboardApp({ onExit }: { onExit: () => void }) {
   }, [activeView]);
 
   const chainId = usePqtabsData((s) => s.chainId);
+  const accountReady = usePqtabsData((s) => s.accountReady);
+  const booting = !accountReady || (!snapshot && loading);
 
   if (!registrar) return <ConnectGate onExit={onExit} />;
   if (chainId !== null && chainId !== 5042) {
@@ -171,7 +173,6 @@ export default function DashboardApp({ onExit }: { onExit: () => void }) {
   }
   if (snapshot && !snapshot.account.rootAddress) return <DomainSetup onExit={onExit} onReady={retry} />;
 
-  const booting = !snapshot && loading;
   const failed = !snapshot && error !== null;
 
   if (failed) {
@@ -247,6 +248,7 @@ function Sidebar({ onExit, loading }: { onExit: () => void; loading: boolean }) 
   const activeView = useDashboardUi((s) => s.activeView);
   const setView = useDashboardUi((s) => s.setView);
   const setCreateOpen = useDashboardUi((s) => s.setCreateOpen);
+  const accountReady = usePqtabsData((s) => s.accountReady);
   const totals = useTotals();
   const account = usePqtabsData((s) => s.snapshot.account);
 
@@ -320,7 +322,7 @@ function Sidebar({ onExit, loading }: { onExit: () => void; loading: boolean }) 
             <Skeleton className="mt-1.5 h-5 w-24" />
           ) : (
             <p className="mt-1 font-mono text-sm font-medium tabular text-gold">
-              {usd(totals.treasuryTotalUsd)}
+              {accountReady ? usd(totals.treasuryTotalUsd) : "—"}
             </p>
           )}
         </div>
