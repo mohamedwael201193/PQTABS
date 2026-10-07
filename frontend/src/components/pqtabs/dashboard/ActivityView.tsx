@@ -279,7 +279,7 @@ export default function ActivityView() {
           value={typeFilter}
           onValueChange={(v) => setTypeFilter(v as TypeFilter | "all")}
         >
-          <SelectTrigger aria-label="Filter by event type" className="w-[168px] text-xs">
+          <SelectTrigger aria-label="Filter by event type" className="w-[232px] text-xs">
             <SelectValue placeholder="All events" />
           </SelectTrigger>
           <SelectContent>

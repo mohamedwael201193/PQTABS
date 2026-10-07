@@ -37,7 +37,7 @@ const STEPS: { num: string; title: string; body: string; icon: Icon3DName }[] = 
   {
     num: "03",
     title: "Agents spend within bounds",
-    body: "The agent pays allowed recipients within limits. Every attempt is checked against policy — onchain.",
+    body: "The agent pays allowed recipients within limits. Arc checks a payment that reaches it. A payment rejected before that is not in the ledger.",
     icon: "robot",
   },
   {

@@ -148,7 +148,7 @@ export default function FinalCta({ onLaunchApp }: { onLaunchApp: () => void }) {
 
         <Reveal delay={0.18}>
           <p className="relative mt-6 text-base text-muted-foreground md:text-lg">
-            Open your first bounded capability in under a minute.
+            The capability exists when Arc includes it.
           </p>
         </Reveal>
 

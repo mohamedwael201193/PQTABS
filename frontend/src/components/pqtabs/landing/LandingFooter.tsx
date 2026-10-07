@@ -95,7 +95,7 @@ export default function LandingFooter() {
         {/* Bottom row */}
         <div className="flex flex-col gap-3 border-t border-white/[.06] py-6 sm:flex-row sm:items-center sm:justify-between">
           <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-            © 2025 PQTABS
+            © 2026 PQTABS
           </p>
           <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
             Post-quantum authorization · Arc · USDC

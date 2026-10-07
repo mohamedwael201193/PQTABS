@@ -27,7 +27,7 @@ export default function ProductFlow({ onLaunchApp }: { onLaunchApp: () => void }
   return (
     <SectionShell id="product" index="08" label="The Product Flow">
       <SectionHeading
-        title="Create a bounded capability in seconds."
+        title="Create a bounded capability."
         lead="Five decisions, plain language, one confirmation. The interface states policy in human terms — the contracts enforce it."
       />
 

@@ -33,7 +33,7 @@ const SPEC = [
   {
     key: "SETTLEMENT",
     title: "USDC",
-    body: "Agents spend a stable, auditable unit. Every payment is a record you can reconcile.",
+    body: "Agents spend a stable, auditable unit. A payment Arc includes is a record you can reconcile.",
   },
   {
     key: "POLICY",
