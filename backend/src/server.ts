@@ -3,6 +3,9 @@ import { Hono } from "hono";
 import type { Address, Hex } from "viem";
 import { assertOurRoot, type Clients, factoryAbi, loadClients, readPortfolio, relay, rootAbi, tabAbi, usdcAbi, withRpcRetry } from "./chain.js";
 import { BARKEEP, CHAIN_ID, EXPLORER, MAX_BODY_BYTES, USDC } from "./constants.js";
+import { startIngest } from "./index/ingest.js";
+import { readIndexedPortfolio } from "./index/portfolio.js";
+import { openIndex, type Sql } from "./index/sql.js";
 import { RateLimiter } from "./limit.js";
 import { log } from "./log.js";
 import { asAddress, asHex, asUint, encodeExecute, encodeReclaim, encodeRetrySweep, encodeSpend, RequestError } from "./validate.js";
@@ -14,7 +17,7 @@ function clientIp(header: string | undefined): string {
   return header?.split(",")[0]?.trim() || "unknown";
 }
 
-export function createApp(clients: Clients = loadClients()) {
+export function createApp(clients: Clients = loadClients(), index?: Sql | null) {
   const app = new Hono<{ Variables: { requestId: string } }>();
 
   app.use("*", async (c, next) => {
@@ -118,7 +121,7 @@ export function createApp(clients: Clients = loadClients()) {
 
   app.get("/v1/roots/:address/portfolio", async (c) => {
     const root = asAddress(c.req.param("address"), "root");
-    const portfolio = await readPortfolio(clients, root);
+    const portfolio = index ? await readIndexedPortfolio(index, clients.public, clients.factory, root) : await readPortfolio(clients, root);
     return c.json({ root, ...portfolio });
   });
 
@@ -236,7 +239,18 @@ async function readBody(c: { req: { text: () => Promise<string> } }): Promise<Re
 const entry = process.argv[1]?.replaceAll("\\", "/");
 if (entry?.endsWith("/src/server.js")) {
   const port = Number(process.env.PORT || 8080);
-  serve({ fetch: createApp().fetch, port }, (info) => {
-    log({ route: "listen", result: `port ${info.port}` });
-  });
+  const clients = loadClients();
+  openIndex()
+    .then((index) => {
+      startIngest(index, clients.public, clients.factory);
+      serve({ fetch: createApp(clients, index).fetch, port }, (info) => {
+        log({ route: "listen", result: `indexed port ${info.port}` });
+      });
+    })
+    .catch(() => {
+      log({ route: "index", result: "error", error: "index_open_failed" });
+      serve({ fetch: createApp(clients).fetch, port }, (info) => {
+        log({ route: "listen", result: `port ${info.port}` });
+      });
+    });
 }

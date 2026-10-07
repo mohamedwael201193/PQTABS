@@ -159,6 +159,9 @@ export interface AccountSnapshot {
   activity: ActivityRecord[];
   security: SecurityState;
   totals: TreasuryTotals;
+  /** Present while the derived index is still behind Arc. */
+  indexFreshness?: "live" | "recent" | "indexing" | "degraded";
+  indexedThrough?: string;
 }
 
 export interface NewCapabilityInput {

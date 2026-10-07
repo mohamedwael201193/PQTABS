@@ -28,6 +28,7 @@ tools/
 node_modules/
 dist/
 *.tsbuildinfo
+.pqtabs-index/
 
 # Foundry
 cache/

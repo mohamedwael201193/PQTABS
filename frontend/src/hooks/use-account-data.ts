@@ -90,6 +90,7 @@ export function useAccountData(): {
     let treasuryShown = false;
     const key = `${registrar.toLowerCase()}:${attempt}`;
     const stillHere = () => usePqtabsData.getState().registrar.toLowerCase() === registrar.toLowerCase();
+    const gate = { cancelled: false, onIndex: (note: string) => usePqtabsData.getState().setIndexNote(note) };
     setPortfolioReady(false);
     setPortfolioError(null);
     loadAccount(registrar, (treasury) => {
@@ -98,9 +99,10 @@ export function useAccountData(): {
       replaceSnapshot(treasury);
       setSnapshot(treasury);
       setSettled({ key, error: null });
-    })
+    }, gate)
       .then((data) => {
         if (cancelled || !stillHere()) return;
+        if (data.indexFreshness === "indexing") return;
         usePqtabsData.getState().acceptPortfolio(data);
         setSnapshot(data);
         setPortfolioReady(true);
@@ -116,6 +118,7 @@ export function useAccountData(): {
       });
     return () => {
       cancelled = true;
+      gate.cancelled = true;
     };
   }, [attempt, hydrated, registrar, replaceSnapshot, setPortfolioError, setPortfolioReady]);
 

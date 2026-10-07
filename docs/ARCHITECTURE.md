@@ -65,7 +65,7 @@ Revocation is `CLOSE_TAB`. Rotation is a new key, a new tab, and close of the ol
 
 ## Backend
 
-Stateless. Chain is authoritative. No database: roots and tabs are factory and root events plus view calls. Rate limits and idempotent relay are process memory; a Render restart drops them and the chain still enforces nonces. Documented as a free-tier constraint, not a second ledger.
+Chain is authoritative. Portfolio history is a derived Postgres replay of Arc logs, described in `docs/INDEXER.md`. Balances and open flags are read from Arc at request time. The process does not hold a PQ seed or an agent key. Rate limits and the relay idempotency map are process memory; a restart drops them and the chain still enforces nonces. Without `DATABASE_URL`, the derived file is local to the process and is rebuilt from Arc after a restart.
 
 ## Deployment sequence
 

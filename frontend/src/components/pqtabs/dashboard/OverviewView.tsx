@@ -84,6 +84,7 @@ function FundNotice() {
 export default function OverviewView() {
   const portfolioReady = usePqtabsData((state) => state.portfolioReady);
   const portfolioError = usePqtabsData((state) => state.portfolioError);
+  const indexNote = usePqtabsData((state) => state.indexNote);
   const totals = useTotals();
   const tabs = useTabs();
   const activity = useActivity();
@@ -241,7 +242,7 @@ export default function OverviewView() {
           ) : (
             <EmptyState
               icon={<Layers className="h-5 w-5" strokeWidth={1.75} />}
-              title={portfolioReady ? "No active capabilities" : portfolioError ? "Couldn't read capabilities" : "Loading capabilities"}
+              title={portfolioReady ? "No active capabilities" : portfolioError ? "Couldn't read capabilities" : indexNote ?? "Loading capabilities"}
               body={
                 portfolioReady
                   ? "Create a capability that limits how much an agent can spend."

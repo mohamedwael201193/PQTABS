@@ -168,6 +168,7 @@ export default function ActivityView() {
   );
   const portfolioReady = usePqtabsData((state) => state.portfolioReady);
   const portfolioError = usePqtabsData((state) => state.portfolioError);
+  const indexNote = usePqtabsData((state) => state.indexNote);
 
   const activeCount =
     (agentFilter !== "all" ? 1 : 0) +
@@ -328,7 +329,7 @@ export default function ActivityView() {
         {!portfolioReady ? (
           <EmptyState
             icon={<ActivityIcon className="size-5" />}
-            title={portfolioError ? "Couldn't read activity" : "Loading activity"}
+            title={portfolioError ? "Couldn't read activity" : indexNote ?? "Loading activity"}
             body={
               portfolioError
                 ? "The treasury balance is already the onchain USDC balance. The activity list did not finish."

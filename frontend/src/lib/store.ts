@@ -55,11 +55,13 @@ interface PqtabsDataState {
   agentLabels: Record<string, AgentLabel>;
   portfolioReady: boolean;
   portfolioError: string | null;
+  indexNote: string | null;
   accountReady: boolean;
   setRegistrar: (address: string) => void;
   setChainId: (chainId: number | null) => void;
   setPortfolioReady: (ready: boolean) => void;
   setPortfolioError: (message: string | null) => void;
+  setIndexNote: (note: string | null) => void;
   addLocalAgent: (agent: Agent) => void;
   replaceSnapshot: (snapshot: AccountSnapshot) => void;
   acceptPortfolio: (snapshot: AccountSnapshot) => void;
@@ -81,6 +83,7 @@ export const usePqtabsData = create<PqtabsDataState>((set) => ({
   agentLabels: {},
   portfolioReady: false,
   portfolioError: null,
+  indexNote: null,
   accountReady: false,
   setRegistrar: (address) =>
     set((state) => {
@@ -97,12 +100,14 @@ export const usePqtabsData = create<PqtabsDataState>((set) => ({
         agentLabels,
         portfolioReady: same ? state.portfolioReady : false,
         portfolioError: same ? state.portfolioError : null,
+        indexNote: same ? state.indexNote : null,
         accountReady: same ? state.accountReady : false,
       };
     }),
   setChainId: (chainId) => set({ chainId }),
   setPortfolioReady: (ready) => set({ portfolioReady: ready }),
   setPortfolioError: (message) => set({ portfolioError: message }),
+  setIndexNote: (note) => set({ indexNote: note }),
   addLocalAgent: (agent) =>
     set((state) => {
       const label = { name: agent.name, purpose: agent.role, address: agent.address };
@@ -133,6 +138,7 @@ export const usePqtabsData = create<PqtabsDataState>((set) => ({
         accountReady: true,
         portfolioReady: true,
         portfolioError: null,
+        indexNote: null,
         snapshot: { ...snapshot, totals: totalsFrom(snapshot.account, snapshot.tabs) },
       };
     }),

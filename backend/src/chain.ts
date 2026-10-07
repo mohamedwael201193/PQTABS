@@ -229,7 +229,7 @@ async function ranged<T>(
   read: (from: bigint, to: bigint) => Promise<readonly T[]>,
 ): Promise<T[]> {
   try {
-    return await windows(latest, 10_000n, read);
+    return await windows(latest, 9_999n, read);
   } catch (error) {
     if (!isRangeError(error)) throw error;
     return windows(latest, 4_000n, read);

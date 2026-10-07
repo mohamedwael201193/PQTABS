@@ -18,6 +18,7 @@ import { TabCard } from "./shared/TabCard";
 export default function TabsView() {
   const portfolioReady = usePqtabsData((state) => state.portfolioReady);
   const portfolioError = usePqtabsData((state) => state.portfolioError);
+  const indexNote = usePqtabsData((state) => state.indexNote);
   const tabs = useTabs();
   const activity = useActivity();
   const agents = useAgents();
@@ -198,7 +199,7 @@ export default function TabsView() {
         ) : (
           <EmptyState
             icon={<Wallet className="h-5 w-5" strokeWidth={1.75} />}
-            title={portfolioReady ? "No active capabilities" : portfolioError ? "Couldn't read capabilities" : "Loading capabilities"}
+            title={portfolioReady ? "No active capabilities" : portfolioError ? "Couldn't read capabilities" : indexNote ?? "Loading capabilities"}
             body={
               portfolioReady
                 ? "Open a capability to let an agent spend within bounds."
@@ -226,7 +227,7 @@ export default function TabsView() {
         </p>
         {!portfolioReady ? (
           <p className="rounded-xl border border-dashed border-white/[.09] bg-white/[.015] px-4 py-6 text-center text-sm text-muted-foreground">
-            {portfolioError ? "The closed list did not finish." : "The closed list is still being read from Arc."}
+            {portfolioError ? "The closed list did not finish." : indexNote ?? "The closed list is still being read from Arc."}
           </p>
         ) : history.length > 0 ? (
           <div className="max-h-72 overflow-y-auto scrollbar-thin rounded-xl border border-white/[.06] bg-white/[.02]">

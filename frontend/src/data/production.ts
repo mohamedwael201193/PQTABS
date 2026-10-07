@@ -72,6 +72,9 @@ type PortfolioJson = {
   tabs: PortfolioTab[];
   activity: PortfolioEvent[];
   asOf?: string;
+  freshness?: "live" | "recent" | "indexing" | "degraded";
+  indexedThrough?: string;
+  head?: string;
 };
 
 type PortfolioEvent = {
@@ -159,6 +162,7 @@ export async function loadConfig(): Promise<ConfigJson> {
 export async function loadAccount(
   registrar: string,
   onTreasury: (snapshot: AccountSnapshot) => void,
+  gate?: { cancelled: boolean; onIndex?: (note: string) => void },
 ): Promise<AccountSnapshot> {
   const config = await loadConfig();
   const listed = await getJson<{ roots: string[] }>(`/v1/registrars/${registrar}/roots`);
@@ -171,8 +175,8 @@ export async function loadAccount(
   }
   const state = await getJson<RootJson>(`/v1/roots/${root}`);
   onTreasury(mapSnapshot(registrar, state, [], [], config));
-  const portfolio = await getJson<PortfolioJson>(`/v1/roots/${root}/portfolio`);
-  return mapSnapshot(registrar, state, portfolio.tabs, portfolio.activity, config, portfolio.asOf);
+  const portfolio = await waitForPortfolio(root, gate);
+  return mapSnapshot(registrar, state, portfolio.tabs, portfolio.activity, config, portfolio.asOf, portfolio);
 }
 
 export async function loadSnapshot(registrar: string): Promise<AccountSnapshot> {
@@ -185,12 +189,21 @@ export async function loadSnapshot(registrar: string): Promise<AccountSnapshot> 
   }
   const [state, portfolio] = await Promise.all([
     getJson<RootJson>(`/v1/roots/${root}`),
-    getJson<PortfolioJson>(`/v1/roots/${root}/portfolio`),
+    waitForPortfolio(root),
   ]);
-  return mapSnapshot(registrar, state, portfolio.tabs, portfolio.activity, config, portfolio.asOf);
+  return mapSnapshot(registrar, state, portfolio.tabs, portfolio.activity, config, portfolio.asOf, portfolio);
 }
 
 const ROOT_KEY = "pqtabs.root";
+
+async function waitForPortfolio(root: string, gate?: { cancelled: boolean; onIndex?: (note: string) => void }): Promise<PortfolioJson> {
+  for (;;) {
+    const portfolio = await getJson<PortfolioJson>(`/v1/roots/${root}/portfolio`);
+    if (portfolio.freshness !== "indexing" || gate?.cancelled) return portfolio;
+    gate?.onIndex?.(`Updating through Arc block ${portfolio.indexedThrough ?? "0"}`);
+    await new Promise((resolve) => setTimeout(resolve, 3_000));
+  }
+}
 
 export function currentRoot(): string | null {
   if (typeof window === "undefined") return null;
@@ -237,6 +250,7 @@ function mapSnapshot(
   events: PortfolioEvent[],
   config?: ConfigJson,
   asOf?: string,
+  portfolio?: PortfolioJson,
 ): AccountSnapshot {
   const chainNow = asOf ? Number(asOf) : Number.NaN;
   const timed = Number.isFinite(chainNow) && chainNow > 0;
@@ -338,6 +352,8 @@ function mapSnapshot(
     activity,
     security: securityState(rotated ? Number(rotated.timestamp) : null, now),
     totals: totalsFrom(account, tabs),
+    indexFreshness: portfolio?.freshness,
+    indexedThrough: portfolio?.indexedThrough,
   };
 }
 
