@@ -115,8 +115,10 @@ export interface ActivityRecord {
   agentId?: string;
   tabId?: string;
   recipientId?: string;
-  /** Payment amount where applicable, USDC. */
+  /** USDC that moved, for a payment, a return, or an opened capability. */
   amountUsd?: number;
+  /** Exposure limit released by a close or a reclaim. Not a USDC transfer. */
+  limitUsd?: number;
   /** Human sentence describing the event. */
   summary: string;
   txHash?: string;

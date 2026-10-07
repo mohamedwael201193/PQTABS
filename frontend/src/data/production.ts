@@ -305,7 +305,8 @@ function mapSnapshot(
       tabs.find((tab) => tab.id.toLowerCase() === event.tab?.toLowerCase())?.agentId,
     tabId: event.tab,
     recipientId: event.to,
-    amountUsd: event.amount ? usdc(event.amount) : undefined,
+    amountUsd: event.kind === "closed" || !event.amount ? undefined : usdc(event.amount),
+    limitUsd: event.kind === "closed" && event.amount ? usdc(event.amount) : undefined,
     summary: activitySummary(event, state.root),
     txHash: event.tx,
   }));

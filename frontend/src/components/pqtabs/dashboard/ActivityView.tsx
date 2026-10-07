@@ -132,9 +132,9 @@ function ActivityDetail({
           </dd>
         </div>
         <div>
-          <dt className={MICRO}>Amount</dt>
+          <dt className={MICRO}>{record.limitUsd != null ? "Limit released" : "Amount"}</dt>
           <dd className="mt-1 font-mono text-xs tabular text-foreground">
-            {record.amountUsd != null ? usd(record.amountUsd) : "—"}
+            {record.limitUsd != null ? usd(record.limitUsd) : record.amountUsd != null ? usd(record.amountUsd) : "—"}
           </dd>
         </div>
         <div>
