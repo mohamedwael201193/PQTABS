@@ -76,8 +76,27 @@ function periodOf(hoursAgo: number): Period {
   return "EARLIER";
 }
 
-function RecipientDetail({ recipient }: { recipient: Recipient | undefined }) {
-  if (!recipient) return <span className="text-sm text-muted-foreground">—</span>;
+function RecipientDetail({
+  recipient,
+  raw,
+  root,
+}: {
+  recipient: Recipient | undefined;
+  raw?: string;
+  root?: string;
+}) {
+  if (raw && root && raw.toLowerCase() === root.toLowerCase()) {
+    return (
+      <span className="block">
+        <span className="block text-sm text-foreground">Your treasury</span>
+        <span className="mt-0.5 block font-mono text-[10px] text-muted-foreground">{root}</span>
+      </span>
+    );
+  }
+  if (!raw) return <span className="text-sm text-muted-foreground">None</span>;
+  if (!recipient) {
+    return <span className="block font-mono text-xs text-foreground">{raw}</span>;
+  }
   return (
     <span className="block">
       <span className="block text-sm text-foreground">{recipient.name}</span>
@@ -93,11 +112,13 @@ function ActivityDetail({
   agentsById,
   tabsById,
   recipientsById,
+  rootAddress,
 }: {
   record: ActivityRecord;
   agentsById: Map<string, Agent>;
   tabsById: Map<string, Tab>;
   recipientsById: Map<string, Recipient>;
+  rootAddress?: string;
 }) {
   return (
     <div className="ml-3 animate-in fade-in slide-in-from-top-1 border-l border-white/[.08] py-3 pl-10 pr-2 duration-200">
@@ -120,7 +141,11 @@ function ActivityDetail({
         <div>
           <dt className={MICRO}>Recipient</dt>
           <dd className="mt-1">
-            <RecipientDetail recipient={recipientsById.get((record.recipientId ?? "").toLowerCase())} />
+            <RecipientDetail
+              recipient={recipientsById.get((record.recipientId ?? "").toLowerCase())}
+              raw={record.recipientId}
+              root={rootAddress}
+            />
           </dd>
         </div>
         <div>
@@ -409,6 +434,7 @@ export default function ActivityView() {
                             agentsById={agentsById}
                             tabsById={tabsById}
                             recipientsById={recipientsById}
+                            rootAddress={snapshot.account.rootAddress}
                           />
                         )}
                       </div>
