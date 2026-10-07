@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { ChevronDown, Copy, KeyRound, Loader2, Plus, ShieldOff } from "lucide-react";
+import { useEffect, useRef } from "react";
+import { ChevronDown, Copy, Plus, ShieldOff } from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -29,7 +29,6 @@ import {
 } from "@/components/ui/sheet";
 import { StatusChip } from "@/components/pqtabs/shared";
 import { relFuture, relTime, usd } from "@/data/formatters";
-import { productionProvider } from "@/data/production";
 import type { Agent } from "@/data/types";
 import { useActivity, useAgents, useDashboardUi, useTabs } from "@/lib/store";
 import { ActivityRow } from "./shared/ActivityRow";
@@ -46,8 +45,6 @@ export default function AgentDrawer() {
   const drawer = useDashboardUi((s) => s.drawer);
   const closeDrawer = useDashboardUi((s) => s.closeDrawer);
   const agents = useAgents();
-  const tabs = useTabs();
-  const activity = useActivity();
 
   const open = drawer?.type === "agent";
   const liveAgent = drawer?.type === "agent"
@@ -59,80 +56,32 @@ export default function AgentDrawer() {
   if (liveAgent) frozenRef.current = liveAgent;
   const agent = liveAgent ?? (open ? null : frozenRef.current);
 
-  const [rotating, setRotating] = useState(false);
-  const [revoking, setRevoking] = useState(false);
-
-  const liveId = liveAgent?.id ?? null;
-  useEffect(() => {
-    setRotating(false);
-    setRevoking(false);
-  }, [liveId]);
-
   // If the agent disappears while its drawer is open, close gracefully.
   useEffect(() => {
     if (open && !liveAgent) closeDrawer();
   }, [open, liveAgent, closeDrawer]);
 
-  async function handleRotate() {
-    if (!liveAgent) return;
-    setRotating(true);
-    try {
-      await productionProvider.rotateAgentKey();
-      toast.success(`Credentials rotated for ${liveAgent.name}`);
-    } catch {
-      toast.error("Couldn't rotate credentials. Try again.");
-    } finally {
-      setRotating(false);
-    }
-  }
-
-  function handleRevoke() {
-    if (!liveAgent) return;
-    const openTabs = tabs.filter((t) => t.agentId === liveAgent.id && t.status === "active");
-    if (openTabs.length === 0) {
-      toast.message("This agent has no open tab. Closing a tab requires a root signature.");
-      return;
-    }
-    toast.message("Open the tab and close it with a root signature. The agent key cannot revoke itself.");
-  }
-
   return (
     <Sheet open={open} onOpenChange={(o) => !o && closeDrawer()}>
       <SheetContent side="right" className={SHEET_CLASS}>
         {agent ? (
-          <AgentDrawerBody
-            agent={agent}
-            rotating={rotating}
-            revoking={revoking}
-            onRotate={handleRotate}
-            onRevoke={handleRevoke}
-          />
+          <AgentDrawerBody agent={agent} />
         ) : null}
       </SheetContent>
     </Sheet>
   );
 }
 
-function AgentDrawerBody({
-  agent,
-  rotating,
-  revoking,
-  onRotate,
-  onRevoke,
-}: {
-  agent: Agent;
-  rotating: boolean;
-  revoking: boolean;
-  onRotate: () => void;
-  onRevoke: () => void;
-}) {
+function AgentDrawerBody({ agent }: { agent: Agent }) {
   const tabs = useTabs();
   const activity = useActivity();
   const closeDrawer = useDashboardUi((s) => s.closeDrawer);
   const openDrawer = useDashboardUi((s) => s.openDrawer);
   const setCreateOpen = useDashboardUi((s) => s.setCreateOpen);
 
-  const activeTabs = tabs.filter((t) => t.agentId === agent.id && t.status === "active");
+  const activeTabs = tabs.filter(
+    (t) => t.agentId.toLowerCase() === agent.id.toLowerCase() && t.status === "active",
+  );
   const totalAuthorized = activeTabs.reduce((s, t) => s + t.capUsd, 0);
   const currentExposure = activeTabs.reduce((s, t) => s + t.balanceUsd, 0);
   const agentActivity = activity.filter((a) => a.agentId === agent.id).slice(0, 5);
@@ -324,36 +273,24 @@ function AgentDrawerBody({
             <Plus className="size-4" strokeWidth={2} />
             Create capability
           </Button>
-          <Button
-            onClick={onRotate}
-            disabled={rotating}
-            className="h-9 border border-white/10 bg-white/[.03] text-foreground shadow-none hover:bg-white/[.06] hover:text-foreground"
-          >
-            {rotating ? (
-              <Loader2 className="size-4 animate-spin" strokeWidth={2} />
-            ) : (
-              <KeyRound className="size-4" strokeWidth={1.75} />
-            )}
-            Rotate credentials
-          </Button>
           <AlertDialog>
+            {activeTabs.length > 0 ? (
             <AlertDialogTrigger asChild>
-              <Button
-                disabled={revoking}
-                className="h-9 border border-danger/30 bg-transparent text-danger shadow-none hover:bg-danger/10 hover:text-danger"
-              >
+              <Button className="h-9 border border-danger/30 bg-transparent text-danger shadow-none hover:bg-danger/10 hover:text-danger">
                 <ShieldOff className="size-4" strokeWidth={1.75} />
-                Revoke agent
+                Close capability
               </Button>
             </AlertDialogTrigger>
+            ) : null}
             <AlertDialogContent className="border-white/[.08] bg-[#0e1013]">
               <AlertDialogHeader>
                 <AlertDialogTitle className="font-display tracking-tight">
-                  Revoke this agent?
+                  Close this capability?
                 </AlertDialogTitle>
                 <AlertDialogDescription>
-                  All its capabilities close immediately and remaining funds return to the
-                  treasury.
+                  {activeTabs.length > 1
+                    ? `This agent has ${activeTabs.length} open capabilities. Each one closes on its own. The remaining balance returns to your treasury after you authorize the close.`
+                    : "The remaining balance returns to your treasury after you authorize the close with your security key."}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -361,10 +298,17 @@ function AgentDrawerBody({
                   Cancel
                 </AlertDialogCancel>
                 <AlertDialogAction
-                  onClick={onRevoke}
+                  onClick={() => {
+                    const next = activeTabs[0];
+                    if (!next) {
+                      toast.message("This agent has no capability to close.");
+                      return;
+                    }
+                    openDrawer({ type: "tab", id: next.id });
+                  }}
                   className="bg-danger text-white hover:bg-danger/90"
                 >
-                  Revoke agent
+                  Review close
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
