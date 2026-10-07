@@ -175,7 +175,7 @@ function AgentDrawerBody({ agent }: { agent: Agent }) {
                         <StatusChip status={tab.status} pulse />
                       </div>
                       <div className="mt-2 flex items-center justify-between gap-2 font-mono text-[11px] tabular">
-                        <span className="text-gold">{usd(tab.balanceUsd)} available</span>
+                        <span className="text-gold">{tab.balanceKnown === false ? "—" : `${usd(tab.balanceUsd)} available`}</span>
                         <span className="text-muted-foreground">{usd(tab.capUsd)} cap</span>
                       </div>
                       <div className="mt-1 font-mono text-[10px] text-muted-foreground">

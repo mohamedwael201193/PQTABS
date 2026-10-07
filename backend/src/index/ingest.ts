@@ -2,6 +2,7 @@ import { type Address, decodeEventLog, type Hex, type PublicClient, parseAbiItem
 import { withRpcRetry } from "../chain.js";
 import { FACTORY_BLOCK, USDC } from "../constants.js";
 import { applyEvents, type IndexEvent, readCursor } from "./apply.js";
+import { ingestRead } from "./lane.js";
 import type { Sql } from "./sql.js";
 
 const PAGE = 2_000n;
@@ -33,7 +34,7 @@ export function startIngest(sql: Sql, client: PublicClient, factory: Address): v
   const run = async () => {
     while (true) {
       try {
-        const head = await withRpcRetry(() => client.getBlock({ blockTag: "latest" }));
+        const head = await ingestRead(() => withRpcRetry(() => client.getBlock({ blockTag: "latest" }), 1));
         if (head.number == null) throw new Error("Arc did not return a block number.");
         const cursor = await readCursor(sql);
         const from = cursor == null ? FACTORY_BLOCK : cursor + 1n;
@@ -43,7 +44,7 @@ export function startIngest(sql: Sql, client: PublicClient, factory: Address): v
         }
         const to = from + PAGE - 1n > head.number ? head.number : from + PAGE - 1n;
         await indexWindow(sql, client, factory, from, to, times);
-        await sleep(750);
+        await sleep(2_000);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         const limited = message.includes("429") || message.includes("rate limit") || message.includes("-32005");
@@ -80,11 +81,11 @@ async function indexWindowBody(
   to: bigint,
   times: Map<string, string>,
 ): Promise<void> {
-  const factoryLogs = await withRpcRetry(() => client.getLogs({ address: factory, fromBlock: from, toBlock: to }), 2);
+  const factoryLogs = await ingestRead(() => withRpcRetry(() => client.getLogs({ address: factory, fromBlock: from, toBlock: to }), 1));
   const created = decodeLogs(factoryLogs);
   const knownRoots = await sql.query<{ address: string }>("SELECT address FROM roots");
   const roots = uniqueAddresses([...knownRoots.map((row) => row.address as Address), ...created.flatMap((event) => (event.kind === "root" ? [event.root] : []))]);
-  const rootLogs = roots.length === 0 ? [] : await withRpcRetry(() => client.getLogs({ address: roots, fromBlock: from, toBlock: to }), 2);
+  const rootLogs = roots.length === 0 ? [] : await ingestRead(() => withRpcRetry(() => client.getLogs({ address: roots, fromBlock: from, toBlock: to }), 1));
   const rootEvents = decodeLogs(rootLogs);
   const knownTabs = await sql.query<{ tab: string }>("SELECT tab FROM capabilities");
   const tabs = uniqueAddresses([
@@ -94,9 +95,8 @@ async function indexWindowBody(
   const spendLogs =
     tabs.length === 0
       ? []
-      : await withRpcRetry(
-          () => client.getLogs({ address: USDC, event: spent, args: { from: tabs }, fromBlock: from, toBlock: to }),
-          2,
+      : await ingestRead(() =>
+          withRpcRetry(() => client.getLogs({ address: USDC, event: spent, args: { from: tabs }, fromBlock: from, toBlock: to }), 1),
         );
   const spends = spendLogs.flatMap((log) => {
     if (log.blockNumber == null || log.logIndex == null || log.transactionHash == null || !log.args.from || !log.args.to) return [];
@@ -173,7 +173,7 @@ async function blockTime(client: PublicClient, blockNumber: bigint, cache: Map<s
   const key = blockNumber.toString();
   const cached = cache.get(key);
   if (cached) return cached;
-  const block = await withRpcRetry(() => client.getBlock({ blockNumber }));
+  const block = await ingestRead(() => withRpcRetry(() => client.getBlock({ blockNumber }), 1));
   const stamp = block.timestamp.toString();
   cache.set(key, stamp);
   return stamp;

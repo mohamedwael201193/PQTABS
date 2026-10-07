@@ -104,13 +104,21 @@ export function useAccountData(): {
         if (cancelled || !stillHere()) return;
         if (data.indexFreshness === "indexing" && data.tabs.length === 0) return;
         usePqtabsData.getState().acceptPortfolio(data);
-        if (data.indexFreshness && data.indexFreshness !== "live" && data.indexedThrough) {
+        if (data.account.treasuryKnown === false || data.indexFreshness === "degraded") {
+          const through = data.indexedThrough ? ` Last stored record is through Arc block ${data.indexedThrough}.` : "";
+          usePqtabsData.getState().setIndexNote(`Network reads are busy. Your last confirmed state is still safe.${through}`);
+        } else if (data.indexFreshness && data.indexFreshness !== "live" && data.indexedThrough) {
           usePqtabsData.getState().setIndexNote(`Updated through Arc block ${data.indexedThrough}`);
         }
         setSnapshot(data);
         setPortfolioReady(true);
         setPortfolioError(null);
         setSettled({ key, error: null });
+        if (attempt === 0 && (data.account.treasuryKnown === false || data.indexFreshness === "degraded")) {
+          window.setTimeout(() => {
+            if (!cancelled && stillHere()) setAttempt(1);
+          }, 4_000);
+        }
       })
       .catch((reason: unknown) => {
         if (cancelled) return;

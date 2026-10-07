@@ -162,6 +162,10 @@ export type PortfolioTab = {
   openedTx: Hex;
   openedBlock: string;
   openedAt: string;
+  /** False when this response did not read the capability balance from Arc. */
+  balanceKnown?: boolean;
+  /** False when this response did not read the per-payment limit from Arc. */
+  limitKnown?: boolean;
 };
 
 export type PortfolioEvent = {

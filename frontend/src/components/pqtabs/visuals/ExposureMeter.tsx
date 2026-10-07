@@ -14,10 +14,12 @@ import { cn } from "@/lib/utils";
 export function ExposureMeter({
   totals,
   capabilitiesKnown = true,
+  treasuryKnown = true,
   className,
 }: {
   totals: TreasuryTotals;
   capabilitiesKnown?: boolean;
+  treasuryKnown?: boolean;
   className?: string;
 }) {
   const reduced = useReducedMotion();
@@ -62,7 +64,7 @@ export function ExposureMeter({
             Treasury
           </p>
           <p className="mt-1 font-display text-xl font-semibold leading-none tabular text-foreground">
-            {usd(held)}
+            {treasuryKnown ? usd(held) : "—"}
           </p>
         </div>
         <p className="font-mono text-[11px] tabular text-muted-foreground">

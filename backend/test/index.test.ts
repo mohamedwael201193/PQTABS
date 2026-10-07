@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { Address, Hex } from "viem";
 import { applyEvents, type IndexEvent, readCursor, resetIndex, writeEvents } from "../src/index/apply.js";
+import { tabFromStored } from "../src/index/portfolio.js";
 import { openMemory, type Sql } from "../src/index/sql.js";
 
 const rootA = "0x846f56a8547Fe5cC3120c189c5640e84DAAB65Cf" as Address;
@@ -144,5 +145,37 @@ describe("derived index", () => {
     await applyEvents(sql, [], 150n);
     assert.equal(await readCursor(sql), 200n);
     await sql.close();
+  });
+
+  it("treats a swept close as an empty balance and leaves an open balance unconfirmed", () => {
+    const swept = tabFromStored(rootA, {
+      tab: tabA,
+      agent: agentA,
+      cap: "10000",
+      expiry: "1790100000",
+      opened_block: 100,
+      opened_tx: tx,
+      opened_at: "1790000000",
+      close_block: 110,
+      swept: true,
+    });
+    assert.equal(swept.open, false);
+    assert.equal(swept.balanceKnown, true);
+    assert.equal(swept.usdc, "0");
+    assert.equal(swept.limitKnown, false);
+    const open = tabFromStored(rootA, {
+      tab: tabB,
+      agent: agentA,
+      cap: "10000",
+      expiry: "1790100000",
+      opened_block: 100,
+      opened_tx: tx,
+      opened_at: "1790000000",
+      close_block: null,
+      swept: null,
+    });
+    assert.equal(open.open, true);
+    assert.equal(open.balanceKnown, false);
+    assert.equal(open.limitKnown, false);
   });
 });

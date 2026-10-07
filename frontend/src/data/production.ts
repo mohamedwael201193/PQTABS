@@ -50,7 +50,8 @@ type RootJson = {
   nextNonce: string;
   maxOpenExposure: string;
   openExposure: string;
-  usdc: string;
+  usdc?: string;
+  balancesConfirmed?: boolean;
 };
 
 type PortfolioTab = {
@@ -66,6 +67,8 @@ type PortfolioTab = {
   payees: string[];
   openedTx: string;
   openedAt: string;
+  balanceKnown?: boolean;
+  limitKnown?: boolean;
 };
 
 type PortfolioJson = {
@@ -93,8 +96,9 @@ type PortfolioEvent = {
 function readableError(detail: string | undefined, fallback: string): string {
   if (!detail) return fallback;
   if (detail.includes("rate limit") || detail.includes("429")) {
-    return "Arc is rate limiting reads. Try again in a moment.";
+    return "Network reads are busy. Your last confirmed state is still safe.";
   }
+  if (detail.includes("temporarily unavailable")) return "Arc is temporarily unavailable. Your funds are safe. Try again.";
   if (/NotExpired/i.test(detail)) return "Arc has not reached this capability's expiry yet. Nothing was submitted.";
   if (/AlreadyClosed/i.test(detail)) return "This capability is already closed.";
   if (/ExposureExceeded/i.test(detail)) return "This amount would pass the exposure ceiling. Nothing was submitted.";
@@ -138,17 +142,10 @@ async function readBody(response: Response): Promise<{ error?: string; detail?: 
 }
 
 async function getJson<T>(path: string): Promise<T> {
-  let pause = 2000;
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const response = await fetch(`${BACKEND_URL}${path}`);
-    const body = (await readBody(response)) as T & { error?: string; detail?: string };
-    if (response.ok) return body;
-    const message = readableError(body.detail || body.error, `read failed (${response.status})`);
-    if (!message.includes("rate limit") || attempt === 2) throw new Error(message);
-    await new Promise((resolve) => setTimeout(resolve, pause));
-    pause *= 2;
-  }
-  throw new Error("Arc is rate limiting reads. Try again in a moment.");
+  const response = await fetch(`${BACKEND_URL}${path}`);
+  const body = (await readBody(response)) as T & { error?: string; detail?: string };
+  if (response.ok) return body;
+  throw new Error(readableError(body.detail || body.error, `read failed (${response.status})`));
 }
 
 export async function loadConfig(): Promise<ConfigJson> {
@@ -268,17 +265,21 @@ function mapSnapshot(
     }
     const status = tabStatus(row, now);
     const expiry = Number(row.expiry);
+    const balanceKnown = row.balanceKnown !== false;
+    const limitKnown = row.limitKnown !== false;
     return {
       id: row.tab,
       reference: short(row.tab),
       agentId: row.agent,
       status,
       capUsd: usdc(row.cap),
-      balanceUsd: usdc(row.usdc),
-      balanceRaw: row.usdc,
-      maxPerCallRaw: row.maxPerCall,
+      balanceUsd: balanceKnown ? usdc(row.usdc) : 0,
+      balanceKnown,
+      limitKnown,
+      balanceRaw: balanceKnown ? row.usdc : undefined,
+      maxPerCallRaw: limitKnown ? row.maxPerCall : undefined,
       policy: {
-        maxPerCallUsd: usdc(row.maxPerCall),
+        maxPerCallUsd: limitKnown ? usdc(row.maxPerCall) : 0,
         allowedRecipients: row.payees,
         expiresInHours: status === "active" ? (expiry - now) / 3600 : 0,
       },
@@ -325,14 +326,16 @@ function mapSnapshot(
     txHash: event.tx,
   }));
 
+  const treasuryKnown = Boolean(state.usdc);
   const account: UserAccount = {
     id: state.root,
     name: short(state.root),
     rootLabel: `Registrar ${short(registrar)}`,
-    treasuryTotalUsd: usdc(state.usdc),
+    treasuryTotalUsd: treasuryKnown ? usdc(state.usdc) : 0,
+    treasuryKnown,
     activeHours: 0,
-    maxExposureUsd: usdc(state.maxOpenExposure),
-    openExposureUsd: usdc(state.openExposure),
+    maxExposureUsd: state.maxOpenExposure ? usdc(state.maxOpenExposure) : undefined,
+    openExposureUsd: state.openExposure ? usdc(state.openExposure) : undefined,
     rootAddress: state.root,
     registrar,
     pqVk: state.pqVk,

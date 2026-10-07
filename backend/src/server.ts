@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import type { Address, Hex } from "viem";
 import { assertOurRoot, type Clients, factoryAbi, loadClients, readPortfolio, relay, rootAbi, tabAbi, usdcAbi, withRpcRetry } from "./chain.js";
 import { BARKEEP, CHAIN_ID, EXPLORER, MAX_BODY_BYTES, USDC } from "./constants.js";
+import { readRegistrarRoots, readRootState } from "./index/account.js";
 import { startIngest } from "./index/ingest.js";
 import { readIndexedPortfolio } from "./index/portfolio.js";
 import { openIndex, type Sql } from "./index/sql.js";
@@ -72,6 +73,11 @@ export function createApp(clients: Clients = loadClients(), getIndex?: () => Sql
 
   app.get("/v1/registrars/:address/roots", async (c) => {
     const registrar = asAddress(c.req.param("address"), "registrar");
+    const index = getIndex?.() ?? null;
+    if (index) {
+      const roots = await readRegistrarRoots(index, clients.public, clients.factory, registrar);
+      return c.json({ registrar, count: roots.length.toString(), roots });
+    }
     const count = await clients.public.readContract({
       address: clients.factory,
       abi: factoryAbi,
@@ -99,6 +105,8 @@ export function createApp(clients: Clients = loadClients(), getIndex?: () => Sql
 
   app.get("/v1/roots/:address", async (c) => {
     const root = asAddress(c.req.param("address"), "root");
+    const index = getIndex?.() ?? null;
+    if (index) return c.json(await readRootState(index, clients.public, clients.factory, root));
     await assertOurRoot(clients, root);
     const [pqVk, registrar, nextNonce, maxOpenExposure, openExposure] = await Promise.all([
       withRpcRetry(() => clients.public.readContract({ address: root, abi: rootAbi, functionName: "pqVk" })),
@@ -116,6 +124,7 @@ export function createApp(clients: Clients = loadClients(), getIndex?: () => Sql
       maxOpenExposure: maxOpenExposure.toString(),
       openExposure: openExposure.toString(),
       usdc: balance.toString(),
+      balancesConfirmed: true,
     });
   });
 

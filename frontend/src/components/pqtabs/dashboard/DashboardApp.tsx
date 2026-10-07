@@ -349,7 +349,7 @@ function Sidebar({ onExit, loading }: { onExit: () => void; loading: boolean }) 
             <Skeleton className="mt-1.5 h-5 w-24" />
           ) : (
             <p className="mt-1 font-mono text-sm font-medium tabular text-gold">
-              {accountReady ? usd(totals.treasuryTotalUsd) : "—"}
+              {accountReady && account.treasuryKnown !== false ? usd(totals.treasuryTotalUsd) : "—"}
             </p>
           )}
         </div>

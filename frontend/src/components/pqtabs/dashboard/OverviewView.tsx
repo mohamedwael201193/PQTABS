@@ -84,6 +84,7 @@ function FundNotice() {
 export default function OverviewView() {
   const portfolioReady = usePqtabsData((state) => state.portfolioReady);
   const portfolioError = usePqtabsData((state) => state.portfolioError);
+  const treasuryKnown = usePqtabsData((state) => state.snapshot.account.treasuryKnown !== false);
   const indexNote = usePqtabsData((state) => state.indexNote);
   const totals = useTotals();
   const tabs = useTabs();
@@ -128,7 +129,7 @@ export default function OverviewView() {
         </Button>
       </header>
 
-      {totals.treasuryTotalUsd === 0 && <FundNotice />}
+      {treasuryKnown && totals.treasuryTotalUsd === 0 && <FundNotice />}
 
       {/* Key figures */}
       <section aria-label="Treasury figures" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -136,7 +137,7 @@ export default function OverviewView() {
           label="Root balance"
           icon={<Landmark strokeWidth={1.75} />}
           accent="gold"
-          value={<CountUp value={totals.treasuryTotalUsd} format={usd} />}
+          value={treasuryKnown ? <CountUp value={totals.treasuryTotalUsd} format={usd} /> : "—"}
           sub="under root control"
         />
         <StatCard
@@ -213,7 +214,7 @@ export default function OverviewView() {
             Where every dollar can reach
           </p>
           <div className="mt-5">
-            <ExposureMeter totals={totals} capabilitiesKnown={portfolioReady} />
+            <ExposureMeter totals={totals} capabilitiesKnown={portfolioReady} treasuryKnown={treasuryKnown} />
           </div>
         </section>
       </Reveal>

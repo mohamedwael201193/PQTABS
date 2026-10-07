@@ -119,7 +119,7 @@ export default function TabsView() {
                     </span>
                     <span className="text-sm text-muted-foreground">{agentName(tab.agentId)}</span>
                     <span className="ml-auto font-mono text-sm tabular text-gold">
-                      {usd(tab.balanceUsd)}
+                      {tab.balanceKnown === false ? "—" : usd(tab.balanceUsd)}
                     </span>
                     <span className="font-mono text-[11px] tabular text-muted-foreground">
                       expired {relTime(tab.expiredHoursAgo)}
@@ -158,7 +158,7 @@ export default function TabsView() {
                   <li key={tab.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 md:px-5">
                     <span className="font-mono text-xs font-medium text-foreground">{tab.reference}</span>
                     <span className="text-sm text-muted-foreground">{agentName(tab.agentId)}</span>
-                    <span className="ml-auto font-mono text-sm tabular text-gold">{usd(tab.balanceUsd)}</span>
+                    <span className="ml-auto font-mono text-sm tabular text-gold">{tab.balanceKnown === false ? "—" : usd(tab.balanceUsd)}</span>
                     <Button
                       size="sm"
                       disabled={pending}

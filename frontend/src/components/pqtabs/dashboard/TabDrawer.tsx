@@ -273,7 +273,7 @@ function TabDrawerBody({
             </p>
             <div className="mt-1 flex flex-wrap items-baseline gap-2">
               <span className="font-display text-3xl font-semibold leading-none tabular text-gold">
-                {usd(tab.balanceUsd)}
+                {tab.balanceKnown === false ? "—" : usd(tab.balanceUsd)}
               </span>
               <span className="font-mono text-xs tabular text-muted-foreground">
                 of {usd(tab.capUsd)} cap

@@ -15,8 +15,9 @@ import { cn } from "@/lib/utils";
 export function TabCard({ tab, onOpen }: { tab: Tab; onOpen?: (id: string) => void }) {
   const agents = useAgents();
   const agent = agents.find((a) => a.id === tab.agentId);
-  const spent = Math.max(0, tab.capUsd - tab.balanceUsd);
-  const spentPct = tab.capUsd > 0 ? Math.min(100, (spent / tab.capUsd) * 100) : 0;
+  const balanceKnown = tab.balanceKnown !== false;
+  const spent = balanceKnown ? Math.max(0, tab.capUsd - tab.balanceUsd) : 0;
+  const spentPct = balanceKnown && tab.capUsd > 0 ? Math.min(100, (spent / tab.capUsd) * 100) : 0;
   const expiringSoon = tab.status === "active" && tab.policy.expiresInHours < 24;
 
   return (
@@ -45,7 +46,7 @@ export function TabCard({ tab, onOpen }: { tab: Tab; onOpen?: (id: string) => vo
           Available
         </p>
         <p className="mt-1 font-display text-2xl font-semibold leading-tight tabular text-gold">
-          {usd(tab.balanceUsd)}
+          {tab.balanceKnown === false ? "—" : usd(tab.balanceUsd)}
         </p>
       </div>
 
@@ -65,7 +66,7 @@ export function TabCard({ tab, onOpen }: { tab: Tab; onOpen?: (id: string) => vo
           />
         </div>
         <p className="mt-1.5 font-mono text-[10px] uppercase tracking-[0.14em] tabular text-muted-foreground">
-          Spent {usd(spent)} of {usd(tab.capUsd)}
+          {tab.balanceKnown === false ? "Balance not confirmed" : `Spent ${usd(spent)} of ${usd(tab.capUsd)}`}
         </p>
       </div>
 
@@ -76,7 +77,7 @@ export function TabCard({ tab, onOpen }: { tab: Tab; onOpen?: (id: string) => vo
             Per-call limit
           </p>
           <p className="mt-1 font-mono text-xs tabular text-foreground">
-            {usd(tab.policy.maxPerCallUsd)}
+            {tab.limitKnown === false ? "—" : usd(tab.policy.maxPerCallUsd)}
           </p>
         </div>
         <div>

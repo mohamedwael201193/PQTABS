@@ -71,6 +71,7 @@ export default function SecurityView() {
   const security = useSecurity();
   const totals = useTotals();
   const portfolioReady = usePqtabsData((state) => state.portfolioReady);
+  const treasuryKnown = usePqtabsData((state) => state.snapshot.account.treasuryKnown !== false);
   const tabs = useTabs();
   const agents = useAgents();
   const activity = useActivity();
@@ -138,7 +139,7 @@ export default function SecurityView() {
         />
       </div>
 
-      <ExposureMeter totals={totals} capabilitiesKnown={portfolioReady} />
+      <ExposureMeter totals={totals} capabilitiesKnown={portfolioReady} treasuryKnown={treasuryKnown} />
 
       {/* Root authority + custody */}
       <div className="grid gap-4 lg:grid-cols-3">

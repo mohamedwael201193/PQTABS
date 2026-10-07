@@ -37,6 +37,8 @@ export interface UserAccount {
   rootLabel: string;
   /** USDC sitting on the root, in whole units (6-decimal raw / 1e6). */
   treasuryTotalUsd: number;
+  /** False when this response did not include a root balance. */
+  treasuryKnown?: boolean;
   activeHours: number;
   maxExposureUsd?: number;
   openExposureUsd?: number;
@@ -91,6 +93,10 @@ export interface Tab {
   capUsd: number;
   /** Remaining spendable balance, USDC (completed payments only). */
   balanceUsd: number;
+  /** False when Arc did not confirm the remaining balance for this response. */
+  balanceKnown?: boolean;
+  /** False when Arc did not confirm the per-payment limit for this response. */
+  limitKnown?: boolean;
   /** Remaining USDC in raw 6-decimal units, when Arc reported it. */
   balanceRaw?: string;
   /** Per-payment limit in raw 6-decimal units, when Arc reported it. */
