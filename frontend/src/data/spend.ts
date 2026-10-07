@@ -17,11 +17,11 @@ export function forgetAgentKeys(): void {
   agentKeys.clear();
 }
 
-export function createAgentKey(): { address: Hex; privateKey: Hex } {
+export function createAgentKey(): { address: Hex } {
   const privateKey = generatePrivateKey();
   const address = privateKeyToAccount(privateKey).address;
   rememberAgentKey(address, privateKey);
-  return { address, privateKey };
+  return { address };
 }
 
 export async function authorizationBlob(

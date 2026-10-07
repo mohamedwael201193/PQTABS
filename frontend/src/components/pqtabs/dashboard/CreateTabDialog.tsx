@@ -67,6 +67,11 @@ const STEP_META = [
 const CAP_MIN = 0.01;
 const CAP_SLIDER_MAX = 1;
 const HOURS_MIN = 1;
+
+function isSigningKey(value: string): boolean {
+  const body = value.slice(0, 2).toLowerCase() === "0x" ? value.slice(2) : value;
+  return /^[0-9a-fA-F]{64}$/.test(body);
+}
 const HOURS_MAX = 720;
 
 const EXPIRY_PRESETS = [
@@ -140,7 +145,9 @@ function CreateFlow() {
   const [perCall, setPerCall] = useState(0.01);
   const [agentDraft, setAgentDraft] = useState("");
   const [agentName, setAgentName] = useState("");
+  const [agentNote, setAgentNote] = useState<string | null>(null);
   const [payeeDraft, setPayeeDraft] = useState("");
+  const [payeeNote, setPayeeNote] = useState<string | null>(null);
   const [extraRecipients, setExtraRecipients] = useState<Recipient[]>([]);
   const [prepared, setPrepared] = useState<PreparedAction | null>(null);
   const [passphrase, setPassphrase] = useState("");
@@ -516,9 +523,11 @@ function CreateFlow() {
                   type="button"
                   variant="ghost"
                   className={cn(BTN_GHOST, "mt-2 h-8")}
+                  disabled={!agentName.trim()}
                   onClick={() => {
+                    const name = agentName.trim();
+                    if (!name) return;
                     const created = createAgentKey();
-                    const name = agentName.trim() || "Agent";
                     usePqtabsData.getState().addLocalAgent({
                       id: created.address,
                       name,
@@ -543,7 +552,15 @@ function CreateFlow() {
                   <Input
                     value={agentDraft}
                     onChange={(event) => {
-                      setAgentDraft(event.target.value.trim());
+                      const value = event.target.value.trim();
+                      if (isSigningKey(value)) {
+                        setAgentDraft("");
+                        setAgentId(null);
+                        setAgentNote("Paste the agent address. This screen does not take a signing key.");
+                        return;
+                      }
+                      setAgentNote(null);
+                      setAgentDraft(value);
                       setAgentId(null);
                     }}
                     placeholder="0x…"
@@ -551,6 +568,7 @@ function CreateFlow() {
                     aria-label="Existing agent address"
                     className="mt-2 border-white/10 bg-transparent font-mono text-xs"
                   />
+                  {agentNote && <p className="mt-2 text-xs text-danger">{agentNote}</p>}
                 </details>
               </div>
               {eligibleAgents.map((a, idx) => {
@@ -699,7 +717,16 @@ function CreateFlow() {
               <div className="mt-4 flex gap-2">
                 <Input
                   value={payeeDraft}
-                  onChange={(event) => setPayeeDraft(event.target.value.trim())}
+                  onChange={(event) => {
+                    const value = event.target.value.trim();
+                    if (isSigningKey(value)) {
+                      setPayeeDraft("");
+                      setPayeeNote("Paste a recipient address. This screen does not take a signing key.");
+                      return;
+                    }
+                    setPayeeNote(null);
+                    setPayeeDraft(value);
+                  }}
                   placeholder="Recipient address"
                   spellCheck={false}
                   aria-label="Recipient address"
@@ -730,6 +757,7 @@ function CreateFlow() {
                   Add
                 </Button>
               </div>
+              {payeeNote && <p className="mt-2 text-xs text-danger">{payeeNote}</p>}
               <div className="mt-4 space-y-5">
                 {CATEGORY_ORDER.map((category) => {
                   const group = directory.filter((r) => r.category === category);

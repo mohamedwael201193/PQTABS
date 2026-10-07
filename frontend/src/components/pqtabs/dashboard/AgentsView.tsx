@@ -25,8 +25,9 @@ export default function AgentsView() {
   const [purpose, setPurpose] = useState("");
 
   function createAgent() {
+    const label = name.trim();
+    if (!label) return;
     const created = createAgentKey();
-    const label = name.trim() || "Agent";
     usePqtabsData.getState().addLocalAgent({
       id: created.address,
       name: label,
