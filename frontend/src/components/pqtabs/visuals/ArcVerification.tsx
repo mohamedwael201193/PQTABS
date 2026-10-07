@@ -222,10 +222,7 @@ export default function ArcVerification({ className }: { className?: string }) {
             CAPABILITY
           </text>
           <text x="698" y="159" className="font-display tabular" fontSize="16" fontWeight="600" fill={GOLD}>
-            $500
-            <tspan fontSize="9" fill="rgba(255,255,255,0.45)" className="font-mono" letterSpacing="1.2">
-              {"  CAP"}
-            </tspan>
+            BOUNDED
           </text>
           <text x="698" y="173" fontSize="7.5" letterSpacing="1.2" fill="rgba(255,255,255,0.4)" className="font-mono">
             EXPIRES IN 24H

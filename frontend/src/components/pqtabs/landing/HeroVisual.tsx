@@ -173,7 +173,7 @@ export function HeroVisual({ className }: { className?: string }) {
             className="fill-gold font-mono tabular"
             fontSize="12"
           >
-            $24.8K
+            HELD
           </text>
           <line x1="122" y1="360" x2="146" y2="360" stroke="rgba(255,255,255,0.14)" strokeWidth="1.2" />
           <circle cx="146" cy="360" r="2" className="fill-foreground/40" />
@@ -350,10 +350,7 @@ export function HeroVisual({ className }: { className?: string }) {
                   fontSize="16"
                   fontWeight="600"
                 >
-                  ${t.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                  <tspan className="fill-muted-foreground" fontSize="10" fontWeight="400">
-                    {"  /  $" + t.cap.toLocaleString("en-US")}
-                  </tspan>
+                  WITHIN CAP
                 </text>
                 {/* balance progress */}
                 <rect x={x + 14} y={y + 56} width="152" height="3" rx="1.5" fill="rgba(255,255,255,0.08)" />

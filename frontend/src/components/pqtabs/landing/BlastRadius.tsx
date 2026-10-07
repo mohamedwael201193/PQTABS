@@ -5,31 +5,27 @@ import { motion, useReducedMotion } from "framer-motion";
 import { Clock, Users } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { Reveal, SpotlightCard } from "@/components/pqtabs/shared";
-import { usd } from "@/data/formatters";
 
 /**
  * BlastRadius — the interactive model of the core promise.
  *
- * A fixed $100,000 treasury, fixed policy chips, and one variable: the size of
- * the capability you grant. The reachable sliver animates against the
- * protected mass; every number recomputes live.
+ * The visitor sets a share of a treasury. No account balance is shown.
+ * The reachable sliver animates against the protected remainder.
  */
 
-const TREASURY = 100_000;
-const MIN_CAP = 100;
-const MAX_CAP = 5_000;
-const CAP_STEP = 50;
-const PER_CALL_RATE = 0.1;
+const MIN_SHARE = 1;
+const MAX_SHARE = 20;
+const SHARE_STEP = 1;
 
-const fmt0 = (n: number) => usd(n, { decimals: 0 });
+const pct = (n: number) => `${n}%`;
 
 export default function BlastRadius() {
-  const [cap, setCap] = useState(500);
+  const [share, setShare] = useState(5);
   const reduced = useReducedMotion();
 
-  const perCall = cap * PER_CALL_RATE;
-  const protectedAmount = TREASURY - cap;
-  const reachPct = (cap / TREASURY) * 100;
+  const perCall = Math.max(1, Math.round(share / 10));
+  const protectedShare = 100 - share;
+  const reachPct = share;
 
   return (
     <Reveal>
@@ -52,10 +48,10 @@ export default function BlastRadius() {
           {/* Controls */}
           <div>
             <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-              Treasury under protection
+              Example model, not an account
             </p>
             <p className="mt-2 font-display text-4xl font-semibold tabular text-foreground md:text-5xl">
-              {fmt0(TREASURY)}
+              {pct(protectedShare)} protected
             </p>
 
             <div className="mt-5 flex flex-wrap gap-2">
@@ -76,25 +72,25 @@ export default function BlastRadius() {
                 Size of the capability you grant
               </span>
               <span className="font-display text-3xl font-semibold tabular text-gold">
-                {fmt0(cap)}
+                {pct(share)}
               </span>
             </div>
             <Slider
               className="mt-5"
-              value={[cap]}
-              min={MIN_CAP}
-              max={MAX_CAP}
-              step={CAP_STEP}
-              onValueChange={(v) => setCap(v[0])}
-              aria-label="Size of the capability you grant"
+              value={[share]}
+              min={MIN_SHARE}
+              max={MAX_SHARE}
+              step={SHARE_STEP}
+              onValueChange={(v) => setShare(v[0])}
+              aria-label="Share of a treasury this capability can reach"
             />
             <div className="mt-3 flex items-center justify-between gap-2 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-              <span className="tabular">{fmt0(MIN_CAP)}</span>
+              <span className="tabular">{pct(MIN_SHARE)}</span>
               <span className="text-center">
-                Max per payment{" "}
-                <span className="tabular text-foreground">{fmt0(perCall)}</span>
+                Per payment stays inside{" "}
+                <span className="tabular text-foreground">{pct(perCall)}</span>
               </span>
-              <span className="tabular">{fmt0(MAX_CAP)}</span>
+              <span className="tabular">{pct(MAX_SHARE)}</span>
             </div>
           </div>
 
@@ -103,7 +99,7 @@ export default function BlastRadius() {
             <div className="flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.16em]">
               <span className="text-gold">Reachable</span>
               <span className="text-muted-foreground">
-                Treasury · <span className="tabular">{fmt0(TREASURY)}</span>
+                Remainder · <span className="tabular">{pct(protectedShare)}</span>
               </span>
             </div>
 
@@ -132,7 +128,7 @@ export default function BlastRadius() {
                 />
               </motion.div>
               <span className="absolute bottom-2 right-3 font-mono text-[10px] uppercase tracking-[0.16em] text-success/85">
-                Protected · <span className="tabular">{fmt0(protectedAmount)}</span>
+                Protected · <span className="tabular">{pct(protectedShare)}</span>
               </span>
             </div>
 
@@ -142,7 +138,7 @@ export default function BlastRadius() {
                   Maximum reachable
                 </p>
                 <p className="mt-1.5 font-display text-4xl font-semibold tabular text-gold">
-                  {fmt0(cap)}
+                  {pct(share)}
                 </p>
               </div>
               <div>
@@ -150,7 +146,7 @@ export default function BlastRadius() {
                   Protected
                 </p>
                 <p className="mt-1.5 font-display text-4xl font-semibold tabular text-success">
-                  {fmt0(protectedAmount)}
+                  {pct(protectedShare)}
                 </p>
               </div>
             </div>
@@ -163,9 +159,8 @@ export default function BlastRadius() {
         </div>
 
         <p className="sr-only" aria-live="polite">
-          Capability grant {fmt0(cap)} of {fmt0(TREASURY)}. Maximum reachable{" "}
-          {fmt0(cap)}, protected {fmt0(protectedAmount)}, max per payment{" "}
-          {fmt0(perCall)}.
+          Capability share {pct(share)}. Maximum reachable {pct(share)}, protected{" "}
+          {pct(protectedShare)}, per payment inside {pct(perCall)}.
         </p>
       </SpotlightCard>
     </Reveal>

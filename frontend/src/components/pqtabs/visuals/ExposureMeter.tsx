@@ -22,9 +22,9 @@ export function ExposureMeter({
   const total = totals.treasuryTotalUsd;
   const base = total > 0 ? total : 0;
 
-  const available = Math.max(0, totals.availableUsd);
   const allocated = Math.max(0, totals.allocatedUsd);
   const reclaimable = Math.max(0, totals.reclaimableUsd);
+  const available = Math.max(0, total - allocated - reclaimable);
 
   const share = (n: number) => (base > 0 ? (n / base) * 100 : 0);
   const allocatedPct = share(allocated);
@@ -74,7 +74,7 @@ export function ExposureMeter({
       <div
         className="relative mt-3 flex h-14 overflow-hidden rounded-xl border border-white/[.08] bg-[#0e1013] md:h-16"
         role="img"
-        aria-label={`Treasury of ${usd(total)}: ${usd(available)} available, ${usd(allocated)} allocated to capabilities, ${usd(reclaimable)} awaiting reclaim`}
+        aria-label={`Treasury of ${usd(total)}: ${usd(available)} still in the root, ${usd(allocated)} allocated to capabilities, ${usd(reclaimable)} awaiting reclaim`}
       >
         {segments.map((s, i) => (
           <motion.div
@@ -114,7 +114,7 @@ export function ExposureMeter({
 
       {/* Legend */}
       <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2">
-        <LegendRow dot="bg-white/25" label="Available" value={usd(available)} />
+        <LegendRow dot="bg-white/25" label="Still in the root" value={usd(available)} />
         <LegendRow
           dot="bg-gold"
           label="Allocated to capabilities"

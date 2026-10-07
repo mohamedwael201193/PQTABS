@@ -114,7 +114,7 @@ function TraditionalModel() {
             letterSpacing="0.5"
             className="fill-gold font-mono tabular"
           >
-            $100,000
+            HELD
           </text>
         </motion.g>
 
@@ -212,7 +212,7 @@ function TraditionalModel() {
         {/* At-risk marker */}
         <motion.g {...fade(0.95)}>
           <text x="638" y="252" textAnchor="middle" fontSize="9" letterSpacing="1.8" className="fill-danger/85 font-mono tabular">
-            $100,000 AT RISK
+            TREASURY AT RISK
           </text>
         </motion.g>
       </svg>

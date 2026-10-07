@@ -357,13 +357,13 @@ export default function AttackBlocked({ className }: { className?: string }) {
           </text>
           <text x="760" y={GATE_Y + 4}>
             <tspan fontSize="13" fontWeight="600" fill={GOLD} className="font-display tabular">
-              $47.00
+              WITHIN CAP
             </tspan>
             <tspan fontSize="9.5" letterSpacing="1.2" fill="rgba(255,255,255,0.35)" className="font-mono">
               {" → "}
             </tspan>
             <tspan fontSize="9.5" letterSpacing="1.2" fill="rgba(255,255,255,0.85)" className="font-mono">
-              VERCEL EDGE
+              ALLOW-LIST
             </tspan>
           </text>
         </g>

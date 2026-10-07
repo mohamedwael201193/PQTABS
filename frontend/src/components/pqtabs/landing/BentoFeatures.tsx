@@ -96,7 +96,7 @@ export default function BentoFeatures() {
               </p>
               <div className="mt-auto pt-8 md:pt-10">
                 <p className="font-display text-6xl font-semibold leading-none tabular text-gradient-gold md:text-7xl">
-                  $0
+                  0
                 </p>
                 <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.24em] text-muted-foreground">
                   Reachable beyond the cap

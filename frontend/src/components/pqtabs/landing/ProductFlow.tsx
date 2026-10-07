@@ -67,10 +67,10 @@ export default function ProductFlow({ onLaunchApp }: { onLaunchApp: () => void }
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium text-foreground">
-                      Research Agent
+                      Agent you choose
                     </span>
                     <span className="block truncate font-mono text-[10px] text-muted-foreground">
-                      agt_0x7C3a…F18b
+                      address you paste
                     </span>
                   </span>
                   <span
@@ -87,10 +87,10 @@ export default function ProductFlow({ onLaunchApp }: { onLaunchApp: () => void }
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium text-foreground/80">
-                      Infrastructure Agent
+                      A separate agent
                     </span>
                     <span className="block truncate font-mono text-[10px] text-muted-foreground">
-                      agt_0x5bE2…9d41
+                      its own key
                     </span>
                   </span>
                   <span
@@ -121,7 +121,7 @@ export default function ProductFlow({ onLaunchApp }: { onLaunchApp: () => void }
 
               <div className="mt-5 flex items-baseline gap-2.5">
                 <p className="font-display text-4xl font-semibold tabular text-foreground">
-                  $500
+                  Cap
                 </p>
                 <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
                   Capability
@@ -132,7 +132,7 @@ export default function ProductFlow({ onLaunchApp }: { onLaunchApp: () => void }
                 <div>
                   <div className="flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
                     <span>Max per payment</span>
-                    <span className="tabular text-foreground">$50</span>
+                    <span className="tabular text-foreground">inside the cap</span>
                   </div>
                   <div className="mt-1.5 h-1 rounded-full bg-white/[.07]">
                     <div className="h-1 w-[10%] rounded-full bg-gold" />
@@ -170,8 +170,8 @@ export default function ProductFlow({ onLaunchApp }: { onLaunchApp: () => void }
 
               <blockquote className="mt-5 flex-1 border-l-2 border-gold/60 pl-4">
                 <p className="text-sm leading-relaxed text-foreground/90">
-                  This gives Research Agent access to $500, with a maximum of $50
-                  per payment, to 4 approved recipients, until tomorrow at 16:00.
+                  This gives the agent you choose a cap, a per-payment limit,
+                  approved recipients, and an expiry. You set every number.
                 </p>
               </blockquote>
 
