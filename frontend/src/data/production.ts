@@ -330,13 +330,12 @@ function mapSnapshot(
     tabs,
     recipients: [...recipients.values()],
     activity,
-    security: securityState(rotated ? Number(rotated.timestamp) : null),
+    security: securityState(rotated ? Number(rotated.timestamp) : null, now),
     totals: totalsFrom(account, tabs),
   };
 }
 
-function securityState(rotatedAt: number | null): SecurityState {
-  const now = Date.now() / 1000;
+function securityState(rotatedAt: number | null, now = Date.now() / 1000): SecurityState {
   return {
     rootScheme: "SLH-DSA-SHA2-128s",
     rootStatus: "secured",
@@ -415,32 +414,40 @@ export type PreparedAction = {
   expiry?: string;
 };
 
+async function chainNow(): Promise<bigint> {
+  const body = await getJson<{ asOf?: string }>("/v1/time");
+  const asOf = body.asOf ? BigInt(body.asOf) : BigInt(0);
+  if (asOf <= BigInt(0)) throw new Error("Could not read Arc's clock. Nothing was signed.");
+  return asOf;
+}
+
 export async function prepareOpen(input: {
   root: string;
   agent: string;
   payees: string[];
   capRaw: bigint;
   maxPerCallRaw: bigint;
-  expiry: bigint;
+  hours: number;
 }): Promise<PreparedAction> {
-  const state = await getJson<RootJson>(`/v1/roots/${input.root}`);
+  const [state, now] = await Promise.all([getJson<RootJson>(`/v1/roots/${input.root}`), chainNow()]);
   const nonce = BigInt(state.nextNonce);
-  const deadline = BigInt(Math.floor(Date.now() / 1000) + 60 * 60);
-  const action = encodeOpen(input.agent, input.payees, input.maxPerCallRaw, input.expiry, input.capRaw);
+  const deadline = now + BigInt(3600);
+  const expiry = now + BigInt(input.hours) * BigInt(3600);
+  const action = encodeOpen(input.agent, input.payees, input.maxPerCallRaw, expiry, input.capRaw);
   return {
     root: input.root,
     action,
     nonce: nonce.toString(),
     deadline: deadline.toString(),
     digest: digestFor(input.root, nonce, deadline, action),
-    expiry: input.expiry.toString(),
+    expiry: expiry.toString(),
   };
 }
 
 export async function prepareClose(root: string, tab: string): Promise<PreparedAction> {
-  const state = await getJson<RootJson>(`/v1/roots/${root}`);
+  const [state, now] = await Promise.all([getJson<RootJson>(`/v1/roots/${root}`), chainNow()]);
   const nonce = BigInt(state.nextNonce);
-  const deadline = BigInt(Math.floor(Date.now() / 1000) + 60 * 60);
+  const deadline = now + BigInt(3600);
   const action = encodeClose(tab);
   return {
     root,

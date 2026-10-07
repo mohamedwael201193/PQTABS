@@ -89,6 +89,11 @@ export function createApp(clients: Clients = loadClients()) {
     return c.json({ registrar, count: count.toString(), roots });
   });
 
+  app.get("/v1/time", async (c) => {
+    const head = await withRpcRetry(() => clients.public.getBlock({ blockTag: "latest" }));
+    return c.json({ asOf: head.timestamp.toString() });
+  });
+
   app.get("/v1/roots/:address", async (c) => {
     const root = asAddress(c.req.param("address"), "root");
     await assertOurRoot(clients, root);

@@ -293,7 +293,7 @@ function CreateFlow() {
       payees,
       capRaw: parseUsdcRaw(capInput),
       maxPerCallRaw: parseUsdcRaw(effectivePerCall.toFixed(6)),
-      expiry: BigInt(Math.floor(Date.now() / 1000) + hours * 3600),
+      hours,
     })
       .then(setPrepared)
       .catch((error: unknown) => {
@@ -852,8 +852,8 @@ function CreateFlow() {
                 “This capability allows {selectedAgent.name} to spend up to{" "}
                 <span className="tabular text-gold">{usd(cap)}</span>, with no payment above{" "}
                 <span className="tabular text-gold">{usd(effectivePerCall)}</span>, to{" "}
-                {recipientIds.size === 1 ? "this recipient" : "these recipients"}, until{" "}
-                {new Date(Date.now() + hours * 3600 * 1000).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}.”
+                {recipientIds.size === 1 ? "this recipient" : "these recipients"}, for{" "}
+                {hours} {hours === 1 ? "hour" : "hours"} after Arc includes it.”
               </blockquote>
 
               <dl className="mt-7 grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-3">
