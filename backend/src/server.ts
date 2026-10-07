@@ -7,6 +7,7 @@ import { readRegistrarRoots, readRootState } from "./index/account.js";
 import { startIngest } from "./index/ingest.js";
 import { indexHealth } from "./index/lane.js";
 import { readIndexedPortfolio } from "./index/portfolio.js";
+import { decideSpend } from "./index/decide.js";
 import { openIndex, type Sql } from "./index/sql.js";
 import { RateLimiter } from "./limit.js";
 import { log } from "./log.js";
@@ -228,12 +229,38 @@ export function createApp(clients: Clients = loadClients(), getIndex?: () => Sql
     const body = await readBody(c);
     const tab = asAddress(body.tab, "tab");
     const to = asAddress(body.to, "to");
+    const value = asUint(body.value, "value");
     const owner = await clients.public.readContract({ address: tab, abi: tabAbi, functionName: "owner" });
     await assertOurRoot(clients, owner);
+    const [agent, maxPerCall, expiry, payees, balance, tabState, head] = await Promise.all([
+      clients.public.readContract({ address: tab, abi: tabAbi, functionName: "agent" }),
+      clients.public.readContract({ address: tab, abi: tabAbi, functionName: "maxPerCall" }),
+      clients.public.readContract({ address: tab, abi: tabAbi, functionName: "expiry" }),
+      clients.public.readContract({ address: tab, abi: tabAbi, functionName: "payees" }),
+      clients.public.readContract({ address: USDC, abi: usdcAbi, functionName: "balanceOf", args: [tab] }),
+      clients.public.readContract({ address: owner, abi: rootAbi, functionName: "tabs", args: [tab] }),
+      clients.public.getBlock({ blockTag: "latest" }),
+    ]);
+    const decision = decideSpend({
+      now: head.timestamp,
+      amount: value,
+      payee: to,
+      signer: null,
+      tabAgent: String(agent),
+      payees,
+      maxPerCall,
+      balance,
+      expiry,
+      open: tabState[2] === true,
+      serviceAvailable: true,
+    });
+    if (decision.decision !== "ALLOW") {
+      throw new RequestError(400, "policy_refused", decision.reason.join(","));
+    }
     const data = encodeSpend({
       tab,
       to,
-      value: asUint(body.value, "value"),
+      value,
       validAfter: asUint(body.validAfter, "validAfter"),
       validBefore: asUint(body.validBefore, "validBefore"),
       nonce: asHex(body.nonce, "nonce"),
@@ -241,7 +268,7 @@ export function createApp(clients: Clients = loadClients(), getIndex?: () => Sql
     });
     const result = await relay(clients, USDC, data, seen);
     log({ route: "/v1/relay/spend", root: owner, tab, tx: result.hash });
-    return c.json(result);
+    return c.json({ ...result, decision });
   });
 
   return app;
