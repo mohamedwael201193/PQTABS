@@ -181,15 +181,16 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export async function withRpcRetry<T>(read: () => Promise<T>): Promise<T> {
+export async function withRpcRetry<T>(read: () => Promise<T>, attempts = 8): Promise<T> {
   let pause = 750;
-  for (let attempt = 0; attempt < 8; attempt++) {
+  const tries = Math.max(1, attempts);
+  for (let attempt = 0; attempt < tries; attempt++) {
     try {
       return await read();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       const limited = message.includes("429") || message.includes("rate limit");
-      if (!limited || attempt === 7) {
+      if (!limited || attempt === tries - 1) {
         if (limited) throw new RequestError(429, "rate_limited", "Arc is rate limiting reads. Try again in a moment.");
         throw error;
       }

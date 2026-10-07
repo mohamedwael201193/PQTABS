@@ -43,6 +43,7 @@ export function startIngest(sql: Sql, client: PublicClient, factory: Address): v
         }
         const to = from + PAGE - 1n > head.number ? head.number : from + PAGE - 1n;
         await indexWindow(sql, client, factory, from, to, times);
+        await sleep(750);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         const limited = message.includes("429") || message.includes("rate limit") || message.includes("-32005");
@@ -79,11 +80,11 @@ async function indexWindowBody(
   to: bigint,
   times: Map<string, string>,
 ): Promise<void> {
-  const factoryLogs = await withRpcRetry(() => client.getLogs({ address: factory, fromBlock: from, toBlock: to }));
+  const factoryLogs = await withRpcRetry(() => client.getLogs({ address: factory, fromBlock: from, toBlock: to }), 2);
   const created = decodeLogs(factoryLogs);
   const knownRoots = await sql.query<{ address: string }>("SELECT address FROM roots");
   const roots = uniqueAddresses([...knownRoots.map((row) => row.address as Address), ...created.flatMap((event) => (event.kind === "root" ? [event.root] : []))]);
-  const rootLogs = roots.length === 0 ? [] : await withRpcRetry(() => client.getLogs({ address: roots, fromBlock: from, toBlock: to }));
+  const rootLogs = roots.length === 0 ? [] : await withRpcRetry(() => client.getLogs({ address: roots, fromBlock: from, toBlock: to }), 2);
   const rootEvents = decodeLogs(rootLogs);
   const knownTabs = await sql.query<{ tab: string }>("SELECT tab FROM capabilities");
   const tabs = uniqueAddresses([
@@ -93,8 +94,9 @@ async function indexWindowBody(
   const spendLogs =
     tabs.length === 0
       ? []
-      : await withRpcRetry(() =>
-          client.getLogs({ address: USDC, event: spent, args: { from: tabs }, fromBlock: from, toBlock: to }),
+      : await withRpcRetry(
+          () => client.getLogs({ address: USDC, event: spent, args: { from: tabs }, fromBlock: from, toBlock: to }),
+          2,
         );
   const spends = spendLogs.flatMap((log) => {
     if (log.blockNumber == null || log.logIndex == null || log.transactionHash == null || !log.args.from || !log.args.to) return [];

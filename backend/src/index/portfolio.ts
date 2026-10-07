@@ -44,17 +44,36 @@ type ActivityRow = {
 };
 
 export async function readIndexedPortfolio(sql: Sql, client: PublicClient, factory: Address, root: Address): Promise<IndexedPortfolio> {
-  await assertOurRoot({ public: client, relayer: null, relayerAddress: null, factory }, root);
-  const head = await withRpcRetry(() => client.getBlock({ blockTag: "latest" }));
-  if (head.number == null) throw new Error("Arc did not return a block number.");
-  let cursor = await readCursor(sql);
-  const gap = head.number - (cursor ?? 0n);
-  if (cursor != null && gap > 0n && gap <= 30n) {
-    await indexWindow(sql, client, factory, cursor + 1n, head.number, new Map());
-    cursor = await readCursor(sql);
-  }
+  const cursor = await readCursor(sql);
   const through = cursor ?? 0n;
-  const behind = head.number - through;
+  let headNumber: bigint | null = null;
+  let headTimestamp = "";
+  try {
+    const head = await client.getBlock({ blockTag: "latest" });
+    headNumber = head.number;
+    headTimestamp = head.timestamp.toString();
+  } catch {
+    headNumber = null;
+  }
+  const gap = headNumber == null ? 31n : headNumber - through;
+  if (headNumber == null || gap > 30n) {
+    return {
+      tabs: [],
+      activity: [],
+      asOf: headTimestamp || "0",
+      freshness: "indexing",
+      indexedThrough: through.toString(),
+      head: (headNumber ?? through).toString(),
+    };
+  }
+  await assertOurRoot({ public: client, relayer: null, relayerAddress: null, factory }, root);
+  let next = cursor;
+  if (next != null && gap > 0n) {
+    await indexWindow(sql, client, factory, next + 1n, headNumber, new Map());
+    next = await readCursor(sql);
+  }
+  const caughtUp = next ?? 0n;
+  const behind = headNumber - caughtUp;
   const freshness: Freshness = behind <= 2n ? "live" : behind <= 30n ? "recent" : "indexing";
   const capabilityRows = await sql.query<CapabilityRow>(
     "SELECT tab, agent, cap, expiry, opened_block, opened_tx, opened_at, close_block FROM capabilities WHERE lower(root) = lower($1) ORDER BY opened_block, opened_log_index",
@@ -116,10 +135,10 @@ export async function readIndexedPortfolio(sql: Sql, client: PublicClient, facto
   return {
     tabs,
     activity,
-    asOf: head.timestamp.toString(),
+    asOf: headTimestamp,
     freshness,
-    indexedThrough: through.toString(),
-    head: head.number.toString(),
+    indexedThrough: caughtUp.toString(),
+    head: headNumber.toString(),
   };
 }
 
