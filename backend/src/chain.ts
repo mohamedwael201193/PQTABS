@@ -176,7 +176,7 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function readWindow<T>(read: () => Promise<readonly T[]>): Promise<readonly T[]> {
+async function withRpcRetry<T>(read: () => Promise<T>): Promise<T> {
   let pause = 750;
   for (let attempt = 0; attempt < 8; attempt++) {
     try {
@@ -185,14 +185,14 @@ async function readWindow<T>(read: () => Promise<readonly T[]>): Promise<readonl
       const message = error instanceof Error ? error.message : String(error);
       const limited = message.includes("429") || message.includes("rate limit");
       if (!limited || attempt === 7) {
-        if (limited) throw new RequestError(429, "rate_limited", "Arc is rate limiting log reads. Try again in a moment.");
+        if (limited) throw new RequestError(429, "rate_limited", "Arc is rate limiting reads. Try again in a moment.");
         throw error;
       }
       await sleep(pause);
       pause = Math.min(pause * 2, 8_000);
     }
   }
-  throw new RequestError(429, "rate_limited", "Arc is rate limiting log reads. Try again in a moment.");
+  throw new RequestError(429, "rate_limited", "Arc is rate limiting reads. Try again in a moment.");
 }
 
 async function chunked<T>(client: PublicClient, read: (from: bigint, to: bigint) => Promise<readonly T[]>): Promise<T[]> {
@@ -201,7 +201,7 @@ async function chunked<T>(client: PublicClient, read: (from: bigint, to: bigint)
   const rows: T[] = [];
   for (let from = FACTORY_BLOCK; from <= latest; from += span) {
     const to = from + span - 1n > latest ? latest : from + span - 1n;
-    rows.push(...(await readWindow(() => read(from, to))));
+    rows.push(...(await withRpcRetry(() => read(from, to))));
     await sleep(150);
   }
   return rows;
@@ -211,7 +211,7 @@ async function blockTime(client: PublicClient, blockNumber: bigint, cache: Map<s
   const key = blockNumber.toString();
   const cached = cache.get(key);
   if (cached) return cached;
-  const block = await client.getBlock({ blockNumber });
+  const block = await withRpcRetry(() => client.getBlock({ blockNumber }));
   const stamp = block.timestamp.toString();
   cache.set(key, stamp);
   return stamp;
@@ -229,15 +229,19 @@ export async function readPortfolio(clients: Clients, root: Address): Promise<{ 
     const tab = log.args.tab;
     const agent = log.args.agent;
     if (!tab || !agent) continue;
-    const [state, owner, onchainAgent, maxPerCall, expiry, balance, payees] = await Promise.all([
-      client.readContract({ address: root, abi: rootAbi, functionName: "tabs", args: [tab] }),
-      client.readContract({ address: tab, abi: tabAbi, functionName: "owner" }),
-      client.readContract({ address: tab, abi: tabAbi, functionName: "agent" }),
-      client.readContract({ address: tab, abi: tabAbi, functionName: "maxPerCall" }),
-      client.readContract({ address: tab, abi: tabAbi, functionName: "expiry" }),
-      client.readContract({ address: USDC, abi: usdcAbi, functionName: "balanceOf", args: [tab] }),
-      client.readContract({ address: tab, abi: tabAbi, functionName: "payees" }).catch(() => [] as Address[]),
-    ]);
+    const state = await withRpcRetry(() => client.readContract({ address: root, abi: rootAbi, functionName: "tabs", args: [tab] }));
+    const owner = await withRpcRetry(() => client.readContract({ address: tab, abi: tabAbi, functionName: "owner" }));
+    const onchainAgent = await withRpcRetry(() => client.readContract({ address: tab, abi: tabAbi, functionName: "agent" }));
+    const maxPerCall = await withRpcRetry(() => client.readContract({ address: tab, abi: tabAbi, functionName: "maxPerCall" }));
+    const expiry = await withRpcRetry(() => client.readContract({ address: tab, abi: tabAbi, functionName: "expiry" }));
+    const balance = await withRpcRetry(() => client.readContract({ address: USDC, abi: usdcAbi, functionName: "balanceOf", args: [tab] }));
+    const payees = await withRpcRetry(() =>
+      client.readContract({ address: tab, abi: tabAbi, functionName: "payees" }).catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error);
+        if (message.includes("429") || message.includes("rate limit")) throw error;
+        return [] as Address[];
+      }),
+    );
     tabs.push({
       tab,
       agent: onchainAgent,

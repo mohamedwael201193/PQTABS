@@ -34,6 +34,8 @@ export function useAccountData(): {
     if (!hydrated) return;
     let cancelled = false;
     setLoading(true);
+    setError(null);
+    setSnapshot(null);
     loadSnapshot(registrar)
       .then((data) => {
         if (cancelled) return;
