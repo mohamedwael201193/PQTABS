@@ -103,11 +103,15 @@ export default function TabDrawer() {
     try {
       const registrar = usePqtabsData.getState().registrar;
       const { snapshot } = await submitPrepared(registrar, prepared, signature);
+      const now = usePqtabsData.getState();
+      if (now.registrar.toLowerCase() !== registrar.toLowerCase()) {
+        throw new Error("The wallet changed. The receipt belongs to the previous wallet.");
+      }
       const row = snapshot.tabs.find((item) => item.id.toLowerCase() === liveTab.id.toLowerCase());
       if (!row || row.status !== "closed") {
         throw new Error("Arc did not show this tab as closed.");
       }
-      usePqtabsData.getState().replaceSnapshot(snapshot);
+      now.replaceSnapshot(snapshot);
       toast.success("Close confirmed on Arc");
       closeDrawer();
     } catch (error) {
@@ -122,7 +126,12 @@ export default function TabDrawer() {
     setReclaiming(true);
     try {
       const store = usePqtabsData.getState();
-      await productionProvider.reclaimCapability(store.snapshot.account.id, liveTab.id);
+      const root = store.snapshot.account.rootAddress;
+      if (!root || !store.registrar) throw new Error("The wallet changed. Nothing was submitted.");
+      await productionProvider.reclaimCapability(root, liveTab.id);
+      if (usePqtabsData.getState().registrar.toLowerCase() !== store.registrar.toLowerCase()) {
+        throw new Error("The wallet changed. The receipt belongs to the previous wallet.");
+      }
       const snapshot = await loadSnapshot(store.registrar);
       const row = snapshot.tabs.find((item) => item.id.toLowerCase() === liveTab.id.toLowerCase());
       if (!row || row.status !== "closed") {
@@ -558,8 +567,13 @@ function TabDrawerBody({
                     onClick={(event) => {
                       event.preventDefault();
                       if (!closePrep) return;
+                      const live = usePqtabsData.getState();
+                      if (!live.snapshot.account.rootAddress || live.snapshot.account.rootAddress.toLowerCase() !== closePrep.root.toLowerCase()) {
+                        toast.error("The wallet changed. Nothing was signed.");
+                        return;
+                      }
                       setClosingSig(true);
-                      void signRootDigest(usePqtabsData.getState().registrar, closePrep.digest)
+                      void signRootDigest(live.registrar, closePrep.digest)
                         .then((signed) => onClose(closePrep, signed))
                         .catch((reason: unknown) => {
                           toast.error(reason instanceof Error ? reason.message : "Unlock your security key first.");

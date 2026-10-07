@@ -276,8 +276,9 @@ function CreateFlow() {
 
   const startCreation = () => {
     if (!selectedAgent || !step2Valid || recipientIds.size === 0 || !hoursValid) return;
-    const root = usePqtabsData.getState().snapshot.account.rootAddress;
-    if (!root) {
+    const live = usePqtabsData.getState();
+    const root = live.snapshot.account.rootAddress;
+    if (!live.registrar || !root) {
       setFailure("This registrar has no root on the factory, so there is nothing to authorize.");
       setPhase("error");
       return;
@@ -308,6 +309,9 @@ function CreateFlow() {
     const registrar = usePqtabsData.getState().registrar;
     submitPrepared(registrar, prepared, signed)
       .then(async ({ hash, snapshot }) => {
+        if (usePqtabsData.getState().registrar.toLowerCase() !== registrar.toLowerCase()) {
+          throw new Error("The wallet changed. The receipt belongs to the previous wallet.");
+        }
         const tab =
           snapshot.tabs.find((item) => item.txHash?.toLowerCase() === hash.toLowerCase()) ??
           snapshot.tabs.find(
@@ -330,7 +334,8 @@ function CreateFlow() {
     let v = raw.replace(/[^0-9.]/g, "");
     const dot = v.indexOf(".");
     if (dot !== -1) {
-      v = v.slice(0, dot + 1) + v.slice(dot + 1).replace(/\./g, "");
+      const frac = v.slice(dot + 1).replace(/\./g, "").slice(0, 6);
+      v = v.slice(0, dot + 1) + frac;
     }
     setCapInput(v);
   };
@@ -629,7 +634,7 @@ function CreateFlow() {
                   max={CAP_SLIDER_MAX}
                   step={0.01}
                   aria-label="Capability budget"
-                  onValueChange={([v]) => setCapInput(String(v))}
+                  onValueChange={([v]) => setCapInput(v.toFixed(2))}
                 />
               </div>
               {capTooHigh && (
@@ -1099,8 +1104,14 @@ function CreateFlow() {
                 disabled={!prepared || authorizing || !keyReady}
                 onClick={() => {
                   if (!prepared) return;
+                  const live = usePqtabsData.getState();
+                  if (!live.snapshot.account.rootAddress || live.snapshot.account.rootAddress.toLowerCase() !== prepared.root.toLowerCase()) {
+                    setFailure("The wallet changed. Nothing was signed.");
+                    setPhase("error");
+                    return;
+                  }
                   setAuthorizing(true);
-                  void signRootDigest(usePqtabsData.getState().registrar, prepared.digest)
+                  void signRootDigest(live.registrar, prepared.digest)
                     .then((signed) => submitCreation(signed))
                     .catch((reason: unknown) => {
                       setFailure(reason instanceof Error ? reason.message : "The security key could not authorize this.");
@@ -1136,7 +1147,7 @@ function CreateFlow() {
                   finishClose();
                 }}
               >
-                View in Tabs <ArrowRight className="size-4" />
+                View capabilities <ArrowRight className="size-4" />
               </Button>
             </div>
           </div>
