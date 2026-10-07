@@ -867,7 +867,7 @@ function CreateFlow() {
               {hoursValid && (
                 <p className="mt-5">
                   <span className="inline-flex items-center rounded-full border border-gold/25 bg-gold/[.06] px-3 py-1 font-mono text-xs text-gold">
-                    Expires {relFuture(hours)}
+                    Lasts {hours} {hours === 1 ? "hour" : "hours"} after Arc includes it
                   </span>
                 </p>
               )}
@@ -907,7 +907,9 @@ function CreateFlow() {
                 </div>
                 <div>
                   <dt className={MICRO}>Expiry</dt>
-                  <dd className="mt-1.5 font-mono text-xs text-gold">{relFuture(hours)}</dd>
+                  <dd className="mt-1.5 font-mono text-xs text-gold">
+                    {hours} {hours === 1 ? "hour" : "hours"} after Arc includes it
+                  </dd>
                 </div>
               </dl>
               <p className="mt-2 font-mono text-[10px] leading-relaxed text-muted-foreground">
@@ -1065,7 +1067,10 @@ function CreateFlow() {
                 </span>
               </p>
               <p className="mt-4 max-w-xs text-sm leading-relaxed text-muted-foreground">
-                {selectedAgent.name} can spend up to {usd(cap)} — expires {relFuture(hours)}.
+                {selectedAgent.name} can spend up to {usd(cap)} —{" "}
+                {createdTab.policy.expiresInHours > 0
+                  ? `expires ${relFuture(createdTab.policy.expiresInHours)} on Arc's clock.`
+                  : `lasts ${hours} ${hours === 1 ? "hour" : "hours"} after Arc included it.`}
               </p>
             </div>
           )}
