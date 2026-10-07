@@ -98,6 +98,8 @@ export interface Tab {
   expiredHoursAgo: number;
   txHash?: string;
   expiryUnix?: number;
+  /** Closed, but the tab still holds USDC until a permissionless sweep. */
+  needsSweep?: boolean;
 }
 
 export interface ActivityRecord {

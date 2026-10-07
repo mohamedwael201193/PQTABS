@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { EmptyState, StatusChip } from "@/components/pqtabs/shared";
 import { relTime, usd } from "@/data/formatters";
-import { productionProvider } from "@/data/production";
+import { loadSnapshot, productionProvider } from "@/data/production";
 import type { Tab } from "@/data/types";
 import { useAgents, useDashboardUi, usePqtabsData, useTabs } from "@/lib/store";
 import { TabCard } from "./shared/TabCard";
@@ -25,20 +25,29 @@ export default function TabsView() {
   const [pendingReclaimId, setPendingReclaimId] = useState<string | null>(null);
 
   const reclaimable = tabs.filter((t) => t.status === "expired" && t.balanceUsd > 0);
+  const stuck = tabs.filter((t) => t.needsSweep && t.balanceUsd > 0);
   const active = tabs.filter((t) => t.status === "active");
   const history = tabs.filter(
-    (t) => t.status !== "active" && !(t.status === "expired" && t.balanceUsd > 0)
+    (t) => t.status !== "active" && !reclaimable.includes(t) && !stuck.includes(t)
   );
 
   const agentName = (id: string) => agents.find((a) => a.id === id)?.name ?? "Unknown agent";
 
-  async function handleReclaim(tab: Tab) {
+  async function confirmReturn(tab: Tab, path: "reclaim" | "sweep") {
     setPendingReclaimId(tab.id);
     try {
-      await productionProvider.reclaimCapability(usePqtabsData.getState().snapshot.account.id, tab.id);
-      toast.success(`${usd(tab.balanceUsd)} reclaimed to treasury`);
-    } catch {
-      toast.error("Couldn't reclaim this capability. Try again.");
+      const store = usePqtabsData.getState();
+      const root = store.snapshot.account.id;
+      if (path === "reclaim") await productionProvider.reclaimCapability(root, tab.id);
+      else await productionProvider.retrySweep(root, tab.id);
+      const snapshot = await loadSnapshot(store.registrar);
+      const row = snapshot.tabs.find((item) => item.id.toLowerCase() === tab.id.toLowerCase());
+      const returned = row && row.balanceUsd === 0 && (path === "reclaim" ? row.status === "closed" : !row.needsSweep);
+      if (!returned) throw new Error("The receipt succeeded, but the tab still holds USDC.");
+      store.replaceSnapshot(snapshot);
+      toast.success(`${usd(tab.balanceUsd)} returned to the treasury`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Couldn't return these funds.");
     } finally {
       setPendingReclaimId(null);
     }
@@ -49,9 +58,9 @@ export default function TabsView() {
       {/* Header */}
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-gold">Tabs</p>
+          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-gold">Capabilities</p>
           <h1 className="mt-2 font-display text-2xl font-semibold tracking-tight md:text-3xl">
-            Tabs
+            Capabilities
           </h1>
           <p className="mt-1.5 text-sm text-muted-foreground">
             Every bounded spending capability under your root.
@@ -97,7 +106,7 @@ export default function TabsView() {
                     <Button
                       size="sm"
                       disabled={pending}
-                      onClick={() => handleReclaim(tab)}
+                      onClick={() => confirmReturn(tab, "reclaim")}
                       className="h-8 rounded-md border border-gold/40 bg-transparent text-gold shadow-none hover:bg-gold/10 hover:text-gold"
                     >
                       {pending ? (
@@ -106,6 +115,37 @@ export default function TabsView() {
                         <RotateCcw className="size-3.5" strokeWidth={1.75} />
                       )}
                       Reclaim
+                    </Button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </section>
+      )}
+
+      {stuck.length > 0 && (
+        <section aria-label="Funds still on a closed capability" className="space-y-3">
+          <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+            Funds still on a closed capability
+          </p>
+          <div className="overflow-hidden rounded-xl border border-warning/25 bg-warning/[.04]">
+            <ul className="divide-y divide-white/[.06]">
+              {stuck.map((tab) => {
+                const pending = pendingReclaimId === tab.id;
+                return (
+                  <li key={tab.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 md:px-5">
+                    <span className="font-mono text-xs font-medium text-foreground">{tab.reference}</span>
+                    <span className="text-sm text-muted-foreground">{agentName(tab.agentId)}</span>
+                    <span className="ml-auto font-mono text-sm tabular text-gold">{usd(tab.balanceUsd)}</span>
+                    <Button
+                      size="sm"
+                      disabled={pending}
+                      onClick={() => confirmReturn(tab, "sweep")}
+                      className="h-8 rounded-md border border-gold/40 bg-transparent text-gold shadow-none hover:bg-gold/10 hover:text-gold"
+                    >
+                      {pending ? <Loader2 className="size-3.5 animate-spin" strokeWidth={2} /> : <RotateCcw className="size-3.5" strokeWidth={1.75} />}
+                      Return funds
                     </Button>
                   </li>
                 );

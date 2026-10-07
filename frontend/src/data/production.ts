@@ -247,6 +247,7 @@ function mapSnapshot(
       expiredHoursAgo: status === "expired" ? hoursBetween(expiry, now) : 0,
       txHash: row.openedTx,
       expiryUnix: expiry,
+      needsSweep: row.needsSweep,
     };
   });
 
@@ -347,7 +348,9 @@ function activitySummary(event: PortfolioEvent, root: string): string {
 
 export function totalsFrom(account: UserAccount, tabs: Tab[]): TreasuryTotals {
   const active = tabs.filter((tab) => tab.status === "active");
-  const reclaimable = tabs.filter((tab) => tab.status === "expired" && tab.balanceUsd > 0);
+  const reclaimable = tabs.filter(
+    (tab) => tab.balanceUsd > 0 && (tab.status === "expired" || tab.needsSweep),
+  );
   return {
     treasuryTotalUsd: account.treasuryTotalUsd,
     allocatedUsd: account.openExposureUsd ?? active.reduce((sum, tab) => sum + tab.capUsd, 0),
@@ -483,5 +486,8 @@ export const productionProvider = {
   },
   async reclaimCapability(root: string, tab: string): Promise<void> {
     await relay("/v1/relay/reclaim", { root, tab });
+  },
+  async retrySweep(root: string, tab: string): Promise<void> {
+    await relay("/v1/relay/retry-sweep", { root, tab });
   },
 };
