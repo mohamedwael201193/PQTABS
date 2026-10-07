@@ -145,10 +145,10 @@ export default function BentoFeatures() {
               </span>
               <div className="min-w-0 flex-1">
                 <h3 className="font-display text-base font-medium tracking-tight text-foreground">
-                  Every attempt recorded
+                  What Arc included
                 </h3>
                 <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-                  Approved and blocked, side by side in one ledger.
+                  Opens, payments, closes, and returns. A rejected attempt is not written into this ledger.
                 </p>
               </div>
               <p className="shrink-0 font-mono text-[9px] uppercase tracking-[0.24em] text-muted-foreground/70">

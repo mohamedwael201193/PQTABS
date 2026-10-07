@@ -16,7 +16,6 @@ import { usd } from "@/data/formatters";
 import type {
   ActivityKind,
   ActivityRecord,
-  ActivityStatus,
   Agent,
   Recipient,
   Tab,
@@ -30,41 +29,25 @@ import { ViewSkeleton } from "@/components/pqtabs/dashboard/shared/ViewSkeleton"
 /**
  * ActivityView — the ledger under your root.
  *
- * Every event (payments, policy blocks, lifecycle) is filterable, grouped by
- * recency and expandable inline for its full detail.
+ * Opens, payments, closes, returns, and key rotations that Arc included.
+ * Rejected attempts are not in this list.
  */
 
 const MICRO = "font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground";
 const BTN_GHOST = "border border-white/10 bg-white/[.03] text-foreground shadow-none hover:bg-white/[.06]";
 
-const STATUS_OPTIONS: { value: ActivityStatus; label: string }[] = [
-  { value: "authorized", label: "Authorized" },
-  { value: "settling", label: "Settling" },
-  { value: "completed", label: "Completed" },
-  { value: "reverted", label: "Reverted" },
-  { value: "expired", label: "Expired" },
-  { value: "reclaimed", label: "Reclaimed" },
-];
-
-type TypeFilter = "payments" | "policy" | "lifecycle";
+type TypeFilter = "payments" | "lifecycle" | "keys";
 
 const TYPE_OPTIONS: { value: TypeFilter; label: string }[] = [
   { value: "payments", label: "Payments" },
-  { value: "policy", label: "Policy blocks" },
-  { value: "lifecycle", label: "Lifecycle" },
+  { value: "lifecycle", label: "Opens and closes" },
+  { value: "keys", label: "Key rotations" },
 ];
 
 const TYPE_KINDS: Record<TypeFilter, ActivityKind[]> = {
   payments: ["payment"],
-  policy: ["policy_blocked"],
-  lifecycle: [
-    "capability_opened",
-    "capability_closed",
-    "capability_expired",
-    "reclaim",
-    "agent_added",
-    "key_rotated",
-  ],
+  lifecycle: ["capability_opened", "capability_closed", "reclaim"],
+  keys: ["key_rotated"],
 };
 
 const PERIODS = ["TODAY", "YESTERDAY", "EARLIER"] as const;
@@ -173,7 +156,6 @@ export default function ActivityView() {
   const { snapshot, error, retry } = useAccountData();
 
   const [agentFilter, setAgentFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState<TypeFilter | "all">("all");
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -189,13 +171,11 @@ export default function ActivityView() {
 
   const activeCount =
     (agentFilter !== "all" ? 1 : 0) +
-    (statusFilter !== "all" ? 1 : 0) +
     (typeFilter !== "all" ? 1 : 0) +
     (query.trim() !== "" ? 1 : 0);
 
   const clearFilters = () => {
     setAgentFilter("all");
-    setStatusFilter("all");
     setTypeFilter("all");
     setQuery("");
   };
@@ -205,7 +185,6 @@ export default function ActivityView() {
     return [...activity]
       .sort((a, b) => a.hoursAgo - b.hoursAgo)
       .filter((r) => agentFilter === "all" || r.agentId?.toLowerCase() === agentFilter.toLowerCase())
-      .filter((r) => statusFilter === "all" || r.status === statusFilter)
       .filter((r) => typeFilter === "all" || TYPE_KINDS[typeFilter].includes(r.kind))
       .filter((r) => {
         if (!q) return true;
@@ -217,7 +196,7 @@ export default function ActivityView() {
           (agentName?.includes(q) ?? false)
         );
       });
-  }, [activity, agentFilter, statusFilter, typeFilter, query, recipientsById, agentsById]);
+  }, [activity, agentFilter, typeFilter, query, recipientsById, agentsById]);
 
   const grouped = useMemo(() => {
     const map: Record<Period, ActivityRecord[]> = { TODAY: [], YESTERDAY: [], EARLIER: [] };
@@ -243,7 +222,7 @@ export default function ActivityView() {
             Activity
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Every event under your root — payments, policy decisions, lifecycle.
+            Opens, payments, closes, and returns that Arc included.
           </p>
         </header>
         <EmptyState
@@ -272,7 +251,7 @@ export default function ActivityView() {
             Activity
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Every event under your root — payments, policy decisions, lifecycle.
+            Opens, payments, closes, and returns that Arc included.
           </p>
         </div>
         <span className="rounded-full border border-white/[.08] bg-white/[.03] px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
@@ -296,25 +275,11 @@ export default function ActivityView() {
           </SelectContent>
         </Select>
 
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger aria-label="Filter by status" className="w-[142px] text-xs">
-            <SelectValue placeholder="All statuses" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            {STATUS_OPTIONS.map((s) => (
-              <SelectItem key={s.value} value={s.value}>
-                {s.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
         <Select
           value={typeFilter}
           onValueChange={(v) => setTypeFilter(v as TypeFilter | "all")}
         >
-          <SelectTrigger aria-label="Filter by event type" className="w-[134px] text-xs">
+          <SelectTrigger aria-label="Filter by event type" className="w-[168px] text-xs">
             <SelectValue placeholder="All events" />
           </SelectTrigger>
           <SelectContent>
@@ -375,7 +340,7 @@ export default function ActivityView() {
             <EmptyState
               icon={<Search className="size-5" />}
               title="No activity matches these filters"
-              body="Try a different agent, status, or search."
+              body="Try a different agent, event type, or search."
               action={
                 <Button variant="ghost" className={BTN_GHOST} onClick={clearFilters}>
                   Clear filters

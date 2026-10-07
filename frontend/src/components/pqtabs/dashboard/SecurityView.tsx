@@ -26,7 +26,7 @@ import ExposureMeter from "@/components/pqtabs/visuals/ExposureMeter";
 
 const MICRO = "font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground";
 
-const SECURITY_EVENT_KINDS: ActivityKind[] = ["policy_blocked", "key_rotated", "capability_expired"];
+const SECURITY_EVENT_KINDS: ActivityKind[] = ["key_rotated"];
 
 const ENFORCEMENT_ROWS = [
   { statement: "UI displays policy", note: "What you see" },
@@ -78,7 +78,7 @@ export default function SecurityView() {
   const setView = useDashboardUi((s) => s.setView);
 
   const activeTabs = useMemo(() => tabs.filter((t) => t.status === "active"), [tabs]);
-  const agentsById = useMemo(() => new Map(agents.map((a) => [a.id, a])), [agents]);
+  const agentsById = useMemo(() => new Map(agents.map((a) => [a.id.toLowerCase(), a])), [agents]);
 
   const events = useMemo(
     () =>
@@ -127,7 +127,7 @@ export default function SecurityView() {
         <PostureTile
           label="Treasury exposure"
           status="Controlled"
-          detail={`${pct(allocatedPct)} of funds allocated`}
+          detail={portfolioReady ? `${pct(allocatedPct)} of funds an agent can reach` : "list not loaded"}
           tone="gold"
         />
         <PostureTile
@@ -272,7 +272,8 @@ export default function SecurityView() {
                     <tr key={tab.id} className="text-xs text-foreground">
                       <td className="py-3 pr-6 font-mono text-gold">{tab.reference}</td>
                       <td className="py-3 pr-6">
-                        {agentsById.get(tab.agentId)?.name ?? "—"}
+                        {agentsById.get(tab.agentId.toLowerCase())?.name ??
+                          `${tab.agentId.slice(0, 6)}…${tab.agentId.slice(-4)}`}
                       </td>
                       <td className="py-3 pr-6 font-mono tabular">
                         {usd(tab.capUsd, { decimals: 0 })}
@@ -327,13 +328,17 @@ export default function SecurityView() {
         <div className="flex items-center justify-between gap-3">
           <p className={MICRO}>Security events</p>
           <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-            {events.length} recorded
+            {portfolioReady ? `${events.length} recorded` : "list not loaded"}
           </span>
         </div>
         <div className="mt-2 max-h-72 overflow-y-auto scrollbar-thin pr-1">
-          {events.length === 0 ? (
+          {!portfolioReady ? (
             <p className="py-6 text-center text-sm text-muted-foreground">
-              No security events recorded.
+              Key rotations are still being read from Arc.
+            </p>
+          ) : events.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              No key rotation is recorded.
             </p>
           ) : (
             events.map((r) => (

@@ -54,7 +54,7 @@ export default function HowItWorks() {
   return (
     <SectionShell id="how" index="04" label="How PQTABS Works">
       <SectionHeading
-        title="One root. Many capabilities. Zero treasury exposure."
+        title="One root. Many capabilities. Spending stays inside them."
         lead="The post-quantum root never authorizes individual payments. It issues bounded spending capabilities — Barkeep tabs — that carry their own policy."
       />
 
