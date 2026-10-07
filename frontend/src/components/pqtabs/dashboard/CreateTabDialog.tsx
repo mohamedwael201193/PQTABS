@@ -1,0 +1,1068 @@
+"use client";
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import { motion, useReducedMotion } from "framer-motion";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Slider } from "@/components/ui/slider";
+import { cn } from "@/lib/utils";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  CircleAlert,
+  Loader2,
+  Lock,
+  X,
+} from "lucide-react";
+import { isAddress, parseUsdcRaw, signatureBytes } from "@/data/actions";
+import { initials, relFuture, usd } from "@/data/formatters";
+import { loadSnapshot, prepareOpen, submitPrepared, type PreparedAction } from "@/data/production";
+import { createAgentKey } from "@/data/spend";
+import type { Recipient, Tab } from "@/data/types";
+import { useAgents, useDashboardUi, usePqtabsData, useRecipients, useTotals } from "@/lib/store";
+
+/**
+ * CreateTabDialog — the create-capability flow.
+ *
+ * A five-step stepper (agent → budget → rules → expiry → review) that ends in
+ * a staged authorization sequence and a human-readable security summary. The
+ * whole flow reads like a security decision, because it is one.
+ *
+ * The flow state lives in <CreateFlow />, which is mounted inside the dialog
+ * content — Radix unmounts closed dialogs, so every open starts from a clean,
+ * preset-aware baseline without reset effects.
+ */
+
+const MICRO = "font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground";
+const BTN_GOLD = "bg-gold text-[#171204] shadow-none hover:bg-[#eec95e]";
+const BTN_GHOST = "border border-white/10 bg-white/[.03] text-foreground shadow-none hover:bg-white/[.06]";
+
+const STEP_META = [
+  { label: "AGENT", title: "Who will spend?", sub: "Pick the agent that will hold this spending capability." },
+  { label: "BUDGET", title: "How much can this agent spend?", sub: "Set a hard ceiling, then the most it can move in one payment." },
+  { label: "RULES", title: "Where can it pay?", sub: "Approve the recipients this capability may pay. Everything else is rejected." },
+  { label: "EXPIRY", title: "When should this capability expire?", sub: "Choose how long the agent keeps spending authority." },
+  { label: "REVIEW", title: "Review capability", sub: "Read it back before you open it." },
+] as const;
+
+const CAP_MIN = 0.01;
+const CAP_SLIDER_MAX = 1;
+const HOURS_MIN = 1;
+const HOURS_MAX = 720;
+
+const EXPIRY_PRESETS = [
+  { label: "12 hours", hours: 12 },
+  { label: "24 hours", hours: 24 },
+  { label: "3 days", hours: 72 },
+  { label: "7 days", hours: 168 },
+] as const;
+
+const CATEGORY_ORDER: Recipient["category"][] = [
+  "Data",
+  "Infrastructure",
+  "Compute",
+  "Monitoring",
+  "Communications",
+];
+
+const CONFIRM_STAGES = [
+  "Preparing capability",
+  "Awaiting root authorization",
+  "Opening capability",
+  "Capability active",
+] as const;
+
+type Phase = "wizard" | "authorize" | "confirming" | "error";
+
+/** Syncs a dollar-formatted value text onto the Radix slider thumb. */
+function useSliderAnnouncement(
+  ref: React.RefObject<HTMLDivElement | null>,
+  label: string,
+  valueText: string
+) {
+  useEffect(() => {
+    const thumb = ref.current?.querySelector<HTMLElement>('[role="slider"]');
+    if (!thumb) return;
+    thumb.setAttribute("aria-label", label);
+    thumb.setAttribute("aria-valuetext", valueText);
+  }, [ref, label, valueText]);
+}
+
+export default function CreateTabDialog() {
+  const createOpen = useDashboardUi((s) => s.createOpen);
+  const setCreateOpen = useDashboardUi((s) => s.setCreateOpen);
+
+  return (
+    <Dialog open={createOpen} onOpenChange={(o) => !o && setCreateOpen(false)}>
+      {/* Mounted only while the dialog is open — state resets between runs. */}
+      {createOpen && <CreateFlow />}
+    </Dialog>
+  );
+}
+
+function CreateFlow() {
+  const createPresetAgentId = useDashboardUi((s) => s.createPresetAgentId);
+  const setCreateOpen = useDashboardUi((s) => s.setCreateOpen);
+  const setView = useDashboardUi((s) => s.setView);
+  const agents = useAgents();
+  const recipients = useRecipients();
+  const totals = useTotals();
+  const rootBalance = usePqtabsData((state) => state.snapshot.account.treasuryTotalUsd);
+  const available = Math.min(rootBalance, totals.availableUsd);
+
+  const reduceMotion = useReducedMotion();
+
+  // ----- flow state (fresh on every mount) -----------------------------------
+  const [step, setStep] = useState(1);
+  const [agentId, setAgentId] = useState<string | null>(createPresetAgentId);
+  const [capInput, setCapInput] = useState("0.01");
+  const [perCall, setPerCall] = useState(0.01);
+  const [agentDraft, setAgentDraft] = useState("");
+  const [agentSecret, setAgentSecret] = useState<string | null>(null);
+  const [payeeDraft, setPayeeDraft] = useState("");
+  const [extraRecipients, setExtraRecipients] = useState<Recipient[]>([]);
+  const [prepared, setPrepared] = useState<PreparedAction | null>(null);
+  const [signature, setSignature] = useState("");
+  const [failure, setFailure] = useState("The capability was not opened.");
+  const [recipientIds, setRecipientIds] = useState<Set<string>>(() => new Set());
+  const [hours, setHours] = useState(24);
+  const [customInput, setCustomInput] = useState("");
+  const [ack, setAck] = useState(false);
+
+  const [phase, setPhase] = useState<Phase>("wizard");
+  const [stage, setStage] = useState(0);
+  const [createdTab, setCreatedTab] = useState<Tab | null>(null);
+  const [discardOpen, setDiscardOpen] = useState(false);
+
+  const agentRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const budgetSliderRef = useRef<HTMLDivElement | null>(null);
+  const perCallSliderRef = useRef<HTMLDivElement | null>(null);
+
+  // ----- derived --------------------------------------------------------------
+  const eligibleAgents = useMemo(
+    () => agents.filter((a) => a.status !== "revoked"),
+    [agents]
+  );
+  const directory = useMemo(() => [...recipients, ...extraRecipients], [recipients, extraRecipients]);
+  const typedAgent = isAddress(agentDraft) ? agentDraft : null;
+  const selectedAgent = typedAgent
+    ? {
+        id: typedAgent,
+        name: `${typedAgent.slice(0, 6)}…${typedAgent.slice(-4)}`,
+        address: typedAgent,
+        status: "active" as const,
+        role: "ECDSA key for this new tab",
+        addedHoursAgo: 0,
+        lastActiveHoursAgo: null,
+      }
+    : eligibleAgents.find((a) => a.id === agentId) ?? null;
+
+  const cap = Number.parseFloat(capInput) || 0;
+  const maxPerCall = Math.max(CAP_MIN, cap);
+  const effectivePerCall = Math.min(perCall, maxPerCall);
+
+  const capTooLow = cap < CAP_MIN;
+  const capTooHigh = cap > available;
+  const step2Valid = !capTooLow && !capTooHigh;
+
+  const customActive = customInput.trim() !== "";
+  const activePresetHours = customActive ? null : hours;
+  const hoursValid = hours >= HOURS_MIN && hours <= HOURS_MAX;
+
+  const succeeded = phase === "confirming" && stage >= CONFIRM_STAGES.length - 1 && createdTab !== null;
+
+  const selectedRecipientNames = useMemo(
+    () => directory.filter((r) => recipientIds.has(r.id)).map((r) => r.name),
+    [directory, recipientIds]
+  );
+
+  const canProceed =
+    phase !== "wizard"
+      ? false
+      : step === 1
+        ? selectedAgent !== null
+        : step === 2
+          ? step2Valid
+          : step === 3
+            ? recipientIds.size > 0
+            : step === 4
+              ? hoursValid
+              : ack;
+
+  const hint =
+    step === 1
+      ? "Select an agent to continue"
+      : step === 2
+        ? capTooHigh
+          ? "Not enough available funds"
+          : "Enter a cap of at least 0.01 USDC"
+        : step === 3
+          ? "Approve at least one recipient"
+          : step === 4
+            ? "Set an expiry to continue"
+            : "Confirm the acknowledgment";
+
+  useSliderAnnouncement(
+    budgetSliderRef,
+    "Capability budget",
+    usd(Math.min(Math.max(cap, CAP_MIN), CAP_SLIDER_MAX))
+  );
+  useSliderAnnouncement(perCallSliderRef, "Maximum per payment", usd(effectivePerCall));
+
+  // ----- handlers ---------------------------------------------------------------
+  const finishClose = () => setCreateOpen(false);
+
+  const requestClose = () => {
+    if (phase === "confirming" && !succeeded) return;
+    if (phase === "wizard" && step > 1) {
+      setDiscardOpen(true);
+      return;
+    }
+    finishClose();
+  };
+
+  const guardClose = (e: { preventDefault: () => void }) => {
+    if (phase === "confirming" && !succeeded) {
+      e.preventDefault();
+      return;
+    }
+    if (discardOpen) {
+      e.preventDefault();
+      return;
+    }
+    if (phase === "wizard" && step > 1) {
+      e.preventDefault();
+      setDiscardOpen(true);
+    }
+  };
+
+  const goNext = () => {
+    if (!canProceed) return;
+    if (step === 2) setPerCall(effectivePerCall);
+    if (step === 5) return;
+    setStep((s) => Math.min(5, s + 1));
+  };
+
+  const goBack = () => setStep((s) => Math.max(1, s - 1));
+
+  const startCreation = () => {
+    if (!selectedAgent || !step2Valid || recipientIds.size === 0 || !hoursValid) return;
+    const root = usePqtabsData.getState().snapshot.account.rootAddress;
+    if (!root) {
+      setFailure("This registrar has no root on the factory, so there is nothing to authorize.");
+      setPhase("error");
+      return;
+    }
+    const payees = directory.filter((item) => recipientIds.has(item.id)).map((item) => item.address);
+    setPhase("authorize");
+    setPrepared(null);
+    setSignature("");
+    setCreatedTab(null);
+    prepareOpen({
+      root,
+      agent: selectedAgent.address,
+      payees,
+      capRaw: parseUsdcRaw(capInput),
+      maxPerCallRaw: parseUsdcRaw(effectivePerCall.toFixed(6)),
+      expiry: BigInt(Math.floor(Date.now() / 1000) + hours * 3600),
+    })
+      .then(setPrepared)
+      .catch((error: unknown) => {
+        setFailure(error instanceof Error ? error.message : "The action could not be prepared.");
+        setPhase("error");
+      });
+  };
+
+  const submitCreation = () => {
+    if (!prepared || !selectedAgent) return;
+    setPhase("confirming");
+    setStage(2);
+    const registrar = usePqtabsData.getState().registrar;
+    submitPrepared(registrar, prepared, signature)
+      .then(async ({ hash, snapshot }) => {
+        const tab =
+          snapshot.tabs.find((item) => item.txHash?.toLowerCase() === hash.toLowerCase()) ??
+          snapshot.tabs.find(
+            (item) => item.agentId.toLowerCase() === selectedAgent.address.toLowerCase() && item.status === "active",
+          );
+        if (!tab) {
+          throw new Error(`Arc included ${hash}, but the portfolio does not list the new tab.`);
+        }
+        usePqtabsData.getState().replaceSnapshot(await loadSnapshot(registrar));
+        setCreatedTab(tab);
+        setStage(4);
+      })
+      .catch((error: unknown) => {
+        setFailure(error instanceof Error ? error.message : "The chain rejected this capability.");
+        setPhase("error");
+      });
+  };
+
+  const handleCapInput = (raw: string) => {
+    let v = raw.replace(/[^0-9.]/g, "");
+    const dot = v.indexOf(".");
+    if (dot !== -1) {
+      v = v.slice(0, dot + 1) + v.slice(dot + 1).replace(/\./g, "");
+    }
+    setCapInput(v);
+  };
+
+  const handleCustomHours = (raw: string) => {
+    const v = raw.replace(/[^0-9]/g, "").slice(0, 4);
+    setCustomInput(v);
+    const parsed = Number.parseInt(v, 10);
+    if (!Number.isNaN(parsed) && parsed > 0) setHours(parsed);
+  };
+
+  const toggleRecipient = (id: string, on: boolean) => {
+    setRecipientIds((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
+
+  const selectAgent = (id: string, index: number) => {
+    setAgentId(id);
+    agentRefs.current[index]?.focus();
+  };
+
+  const handleAgentGroupKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const count = eligibleAgents.length;
+    if (count === 0) return;
+    const current = eligibleAgents.findIndex((a) => a.id === agentId);
+    let next: number;
+    switch (e.key) {
+      case "ArrowDown":
+      case "ArrowRight":
+        next = current < 0 ? 0 : (current + 1) % count;
+        break;
+      case "ArrowUp":
+      case "ArrowLeft":
+        next = current < 0 ? count - 1 : (current - 1 + count) % count;
+        break;
+      case "Home":
+        next = 0;
+        break;
+      case "End":
+        next = count - 1;
+        break;
+      default:
+        return;
+    }
+    e.preventDefault();
+    selectAgent(eligibleAgents[next].id, next);
+  };
+
+  /** Enter advances the flow when typed into a free-text input. */
+  const handleBodyKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (phase !== "wizard" || e.key !== "Enter") return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    const target = e.target as HTMLElement;
+    if (target.tagName !== "INPUT") return;
+    e.preventDefault();
+    if (step < 5 && canProceed) goNext();
+    else if (step === 5 && ack) startCreation();
+  };
+
+  // ----- per-phase header text ---------------------------------------------------
+  const inWizard = phase === "wizard";
+  // During an error the stepper still reflects the wizard position.
+  const stepperLive = phase === "wizard" || phase === "error";
+  const title = succeeded
+    ? "Capability active"
+    : phase === "authorize"
+      ? "Authorize with the root key"
+      : phase === "confirming"
+        ? "Submitting to Arc"
+        : phase === "error"
+          ? "Couldn’t create this capability"
+          : STEP_META[step - 1].title;
+  const description = succeeded
+    ? "Arc accepted the signature and the tab is in this root's portfolio."
+    : phase === "authorize"
+      ? "The signature is checked by the Arc precompile. This page cannot create it."
+      : phase === "confirming"
+        ? "Waiting for the transaction receipt."
+        : phase === "error"
+          ? "The capability wasn’t opened."
+          : STEP_META[step - 1].sub;
+
+  return (
+    <>
+      <DialogContent
+        showCloseButton={false}
+        onEscapeKeyDown={guardClose}
+        onInteractOutside={guardClose}
+        className="flex max-h-[88dvh] flex-col gap-0 overflow-hidden rounded-xl border-white/[.08] bg-[#0e1013] p-0 sm:max-w-lg"
+      >
+        {/* Header */}
+        <div className="relative shrink-0 px-6 pt-6 pb-4">
+          <p className={cn(MICRO, "text-gold")}>New capability</p>
+          <DialogTitle className="mt-1.5 pr-10 font-display text-xl font-semibold tracking-tight text-foreground">
+            {title}
+          </DialogTitle>
+          <DialogDescription className="mt-1 text-sm leading-relaxed text-muted-foreground">
+            {description}
+          </DialogDescription>
+          {!(phase === "confirming" && !succeeded) && (
+            <button
+              type="button"
+              onClick={requestClose}
+              aria-label="Close"
+              className="absolute top-5 right-5 flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-white/[.06] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <X className="size-4" />
+            </button>
+          )}
+        </div>
+
+        {/* Stepper */}
+        <div className="shrink-0 px-6 pb-4" aria-hidden="true">
+          <div className="flex gap-1.5">
+            {STEP_META.map((s, i) => {
+              const done = !stepperLive || i < step - 1;
+              const current = stepperLive && i === step - 1;
+              return (
+                <div
+                  key={s.label}
+                  className={cn(
+                    "h-1 flex-1 rounded-full transition-colors duration-200",
+                    done ? "bg-gold" : current ? "animate-pulse bg-gold/60" : "bg-white/10"
+                  )}
+                />
+              );
+            })}
+          </div>
+          <div className="mt-2 hidden grid-cols-5 gap-1.5 sm:grid">
+            {STEP_META.map((s, i) => (
+              <span
+                key={s.label}
+                className={cn(
+                  "text-center font-mono text-[9px] uppercase tracking-[0.14em]",
+                  stepperLive && i === step - 1 ? "text-gold" : "text-muted-foreground"
+                )}
+              >
+                {s.label}
+              </span>
+            ))}
+          </div>
+          <p className="mt-2 font-mono text-[9px] uppercase tracking-[0.14em] text-gold sm:hidden">
+            {stepperLive ? STEP_META[step - 1].label : "Complete"}
+          </p>
+        </div>
+
+        {/* Body */}
+        <div
+          onKeyDown={handleBodyKeyDown}
+          className="min-h-[240px] flex-1 overflow-y-auto scrollbar-thin px-6 py-2"
+        >
+          {inWizard && step === 1 && (
+            <div
+              key="step-1"
+              role="radiogroup"
+              aria-label="Choose agent"
+              onKeyDown={handleAgentGroupKeyDown}
+              className="animate-in fade-in slide-in-from-bottom-1 space-y-2 duration-200"
+            >
+              <div className="rounded-xl border border-white/[.07] bg-white/[.015] p-3">
+                <p className={MICRO}>Agent address</p>
+                <Input
+                  value={agentDraft}
+                  onChange={(event) => {
+                    setAgentDraft(event.target.value.trim());
+                    setAgentSecret(null);
+                  }}
+                  placeholder="0x…"
+                  spellCheck={false}
+                  aria-label="Agent address"
+                  className="mt-2 border-white/10 bg-transparent font-mono text-xs"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className={cn(BTN_GHOST, "mt-2 h-8")}
+                  onClick={() => {
+                    const created = createAgentKey();
+                    setAgentDraft(created.address);
+                    setAgentSecret(created.privateKey);
+                    setAgentId(null);
+                  }}
+                >
+                  Generate a key for this tab
+                </Button>
+                {agentSecret && (
+                  <p className="mt-2 break-all font-mono text-[10px] leading-relaxed text-warning">
+                    Agent key, shown once: {agentSecret}. Give it to the agent. It is not saved after you leave this page.
+                  </p>
+                )}
+              </div>
+              {eligibleAgents.map((a, idx) => {
+                const selected = a.id === agentId;
+                return (
+                  <button
+                    key={a.id}
+                    ref={(el) => {
+                      agentRefs.current[idx] = el;
+                    }}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    tabIndex={selected ? 0 : !agentId && idx === 0 ? 0 : -1}
+                    onClick={() => {
+                      setAgentId(a.id);
+                      setAgentDraft("");
+                      setAgentSecret(null);
+                    }}
+                    className={cn(
+                      "flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      selected
+                        ? "border-gold/50 bg-gold/[.06]"
+                        : "border-white/[.07] bg-white/[.015] hover:bg-white/[.04]"
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border font-display text-sm font-semibold",
+                        selected
+                          ? "border-gold/40 bg-gold/[.08] text-gold"
+                          : "border-white/[.08] bg-white/[.03] text-foreground"
+                      )}
+                    >
+                      {initials(a.name)}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium text-foreground">
+                        {a.name}
+                      </span>
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {a.role}
+                      </span>
+                      <span className="mt-0.5 block truncate font-mono text-[10px] text-muted-foreground">
+                        {a.address}
+                      </span>
+                    </span>
+                    {selected && <Check className="size-4 shrink-0 text-gold" />}
+                  </button>
+                );
+              })}
+              {eligibleAgents.length === 0 && (
+                <p className="py-3 text-center text-sm text-muted-foreground">
+                  No open agent is on this root. Paste or generate the address that will spend.
+                </p>
+              )}
+            </div>
+          )}
+
+          {inWizard && step === 2 && (
+            <div key="step-2" className="animate-in fade-in slide-in-from-bottom-1 duration-200">
+              <div className="flex items-baseline gap-1.5">
+                <span className="font-display text-lg font-semibold tracking-tight text-muted-foreground">
+                  USDC
+                </span>
+                <input
+                  value={capInput}
+                  onChange={(e) => handleCapInput(e.target.value)}
+                  inputMode="decimal"
+                  aria-label="Capability budget in USDC"
+                  placeholder="0"
+                  className="w-full min-w-0 bg-transparent font-display text-4xl font-semibold tracking-tight text-foreground tabular outline-none placeholder:text-white/20"
+                />
+              </div>
+              <div
+                ref={budgetSliderRef}
+                className="mt-6 [&_[data-slot=slider-track]]:bg-white/[.07]"
+              >
+                <Slider
+                  value={[Math.min(Math.max(cap, CAP_MIN), CAP_SLIDER_MAX)]}
+                  min={CAP_MIN}
+                  max={CAP_SLIDER_MAX}
+                  step={0.01}
+                  aria-label="Capability budget"
+                  onValueChange={([v]) => setCapInput(String(v))}
+                />
+              </div>
+              {capTooHigh && (
+                <p aria-live="polite" className="mt-3 text-xs text-danger">
+                  Only {usd(available)} is available in your treasury.
+                </p>
+              )}
+              {!capTooHigh && capTooLow && (
+                <p aria-live="polite" className="mt-3 text-xs text-danger">
+                  Set a cap of at least 0.01 USDC.
+                </p>
+              )}
+
+              <div className="mt-9">
+                <p className={MICRO}>Max per payment</p>
+                <div className="mt-3 flex items-baseline justify-between gap-4">
+                  <p className="text-sm text-foreground">How much in one payment?</p>
+                  <p className="font-mono text-sm tabular text-gold">{usd(effectivePerCall)}</p>
+                </div>
+                <div
+                  ref={perCallSliderRef}
+                  className="mt-4 [&_[data-slot=slider-track]]:bg-white/[.07]"
+                >
+                  <Slider
+                    value={[effectivePerCall]}
+                    min={CAP_MIN}
+                    max={Math.max(CAP_MIN, cap || CAP_MIN)}
+                    step={0.01}
+                    aria-label="Maximum per payment"
+                    onValueChange={([v]) => setPerCall(v)}
+                  />
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  The most this agent can move in a single payment. It cannot exceed the cap.
+                </p>
+              </div>
+
+              {step2Valid && selectedAgent && (
+                <p className="mt-6 font-mono text-xs leading-relaxed text-muted-foreground">
+                  {selectedAgent.name} can spend up to{" "}
+                  <span className="tabular text-foreground">{usd(cap)}</span> total,{" "}
+                  <span className="tabular text-foreground">{usd(effectivePerCall)}</span> at a
+                  time.
+                </p>
+              )}
+            </div>
+          )}
+
+          {inWizard && step === 3 && (
+            <div key="step-3" className="animate-in fade-in slide-in-from-bottom-1 duration-200">
+              <div className="flex items-center justify-between gap-3">
+                <p className={MICRO}>Approved recipients</p>
+                <p
+                  className={cn(
+                    "font-mono text-xs tabular",
+                    recipientIds.size > 0 ? "text-gold" : "text-muted-foreground"
+                  )}
+                >
+                  {recipientIds.size} approved {recipientIds.size === 1 ? "recipient" : "recipients"}
+                </p>
+              </div>
+              <div className="mt-4 flex gap-2">
+                <Input
+                  value={payeeDraft}
+                  onChange={(event) => setPayeeDraft(event.target.value.trim())}
+                  placeholder="Recipient address"
+                  spellCheck={false}
+                  aria-label="Recipient address"
+                  className="border-white/10 bg-transparent font-mono text-xs"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className={BTN_GHOST}
+                  disabled={!isAddress(payeeDraft)}
+                  onClick={() => {
+                    const address = payeeDraft;
+                    const recipient: Recipient = {
+                      id: address,
+                      name: `${address.slice(0, 6)}…${address.slice(-4)}`,
+                      address,
+                      category: "Infrastructure",
+                    };
+                    setExtraRecipients((current) =>
+                      current.some((item) => item.id.toLowerCase() === address.toLowerCase())
+                        ? current
+                        : [...current, recipient],
+                    );
+                    setRecipientIds((current) => new Set(current).add(address));
+                    setPayeeDraft("");
+                  }}
+                >
+                  Add
+                </Button>
+              </div>
+              <div className="mt-4 space-y-5">
+                {CATEGORY_ORDER.map((category) => {
+                  const group = directory.filter((r) => r.category === category);
+                  if (group.length === 0) return null;
+                  return (
+                    <div key={category}>
+                      <p className={cn(MICRO, "tracking-[0.16em]")}>{category}</p>
+                      <div className="mt-2 space-y-1.5">
+                        {group.map((r) => {
+                          const selected = recipientIds.has(r.id);
+                          return (
+                            <label
+                              key={r.id}
+                              className={cn(
+                                "flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition-colors",
+                                selected
+                                  ? "border-gold/40 bg-gold/[.04]"
+                                  : "border-white/[.06] bg-white/[.015] hover:bg-white/[.04]"
+                              )}
+                            >
+                              <Checkbox
+                                checked={selected}
+                                onCheckedChange={(c) => toggleRecipient(r.id, c === true)}
+                                aria-label={`Approve ${r.name}`}
+                                className={selected ? "border-gold/50" : undefined}
+                              />
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-sm text-foreground">
+                                  {r.name}
+                                </span>
+                                <span className="block truncate font-mono text-[10px] text-muted-foreground">
+                                  {r.address}
+                                </span>
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="mt-6 text-xs leading-relaxed text-muted-foreground">
+                Payments outside this list are rejected automatically.
+              </p>
+            </div>
+          )}
+
+          {inWizard && step === 4 && (
+            <div key="step-4" className="animate-in fade-in slide-in-from-bottom-1 duration-200">
+              <div className="flex flex-wrap gap-2">
+                {EXPIRY_PRESETS.map((p) => {
+                  const active = activePresetHours === p.hours;
+                  return (
+                    <button
+                      key={p.hours}
+                      type="button"
+                      onClick={() => {
+                        setHours(p.hours);
+                        setCustomInput("");
+                      }}
+                      aria-pressed={active}
+                      className={cn(
+                        "rounded-lg border px-3.5 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                        active
+                          ? "border-gold/60 bg-gold/[.07] text-gold"
+                          : "border-white/[.08] bg-white/[.015] text-muted-foreground hover:bg-white/[.05] hover:text-foreground"
+                      )}
+                    >
+                      {p.label}
+                    </button>
+                  );
+                })}
+                <label
+                  className={cn(
+                    "flex items-center gap-2.5 rounded-lg border px-3.5 py-2 transition-colors",
+                    customActive ? "border-gold/60 bg-gold/[.07]" : "border-white/[.08] bg-white/[.015]"
+                  )}
+                >
+                  <span className={cn(MICRO, "tracking-[0.14em]")}>Custom</span>
+                  <input
+                    value={customInput}
+                    onChange={(e) => handleCustomHours(e.target.value)}
+                    inputMode="numeric"
+                    aria-label="Custom expiry in hours"
+                    placeholder="—"
+                    className="w-14 border-0 bg-transparent p-0 text-center font-mono text-sm tabular text-foreground outline-none placeholder:text-white/20 focus-visible:outline-none"
+                  />
+                  <span className="text-xs text-muted-foreground">hours</span>
+                </label>
+              </div>
+
+              {customActive && !hoursValid && (
+                <p aria-live="polite" className="mt-4 text-xs text-danger">
+                  Choose an expiry between 1 and 720 hours.
+                </p>
+              )}
+
+              <div className="mt-6 rounded-lg border border-white/[.06] bg-white/[.015] p-4">
+                <p className="text-sm leading-relaxed text-muted-foreground">
+                  When it expires, remaining funds return to your treasury and the agent loses
+                  spending authority immediately. Expiry is the default — capabilities are never
+                  permanent.
+                </p>
+              </div>
+
+              {hoursValid && (
+                <p className="mt-5">
+                  <span className="inline-flex items-center rounded-full border border-gold/25 bg-gold/[.06] px-3 py-1 font-mono text-xs text-gold">
+                    Expires {relFuture(hours)}
+                  </span>
+                </p>
+              )}
+            </div>
+          )}
+
+          {inWizard && step === 5 && selectedAgent && (
+            <div key="step-5" className="animate-in fade-in slide-in-from-bottom-1 duration-200">
+              <blockquote className="border-l-2 border-gold/70 pl-4 font-display text-lg leading-relaxed text-foreground">
+                “This capability allows {selectedAgent.name} to spend up to{" "}
+                <span className="tabular text-gold">{usd(cap)}</span>, with no payment above{" "}
+                <span className="tabular text-gold">{usd(effectivePerCall)}</span>, to{" "}
+                {recipientIds.size === 1 ? "this recipient" : "these recipients"}, until{" "}
+                {new Date(Date.now() + hours * 3600 * 1000).toISOString()}.”
+              </blockquote>
+
+              <dl className="mt-7 grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-3">
+                <div>
+                  <dt className={MICRO}>Agent</dt>
+                  <dd className="mt-1.5 text-sm text-foreground">{selectedAgent.name}</dd>
+                </div>
+                <div>
+                  <dt className={MICRO}>Total cap</dt>
+                  <dd className="mt-1.5 font-display text-sm tabular text-foreground">
+                    {usd(cap)}
+                  </dd>
+                </div>
+                <div>
+                  <dt className={MICRO}>Per payment</dt>
+                  <dd className="mt-1.5 font-display text-sm tabular text-foreground">
+                    {usd(effectivePerCall)}
+                  </dd>
+                </div>
+                <div>
+                  <dt className={MICRO}>Recipients</dt>
+                  <dd className="mt-1.5 text-sm text-foreground">{recipientIds.size} approved</dd>
+                </div>
+                <div>
+                  <dt className={MICRO}>Expiry</dt>
+                  <dd className="mt-1.5 font-mono text-xs text-gold">{relFuture(hours)}</dd>
+                </div>
+              </dl>
+              <p className="mt-2 font-mono text-[10px] leading-relaxed text-muted-foreground">
+                {selectedRecipientNames.join(" · ")}
+              </p>
+
+              <label className="mt-6 flex cursor-pointer items-start gap-3 rounded-lg border border-white/[.06] bg-white/[.015] p-3.5 transition-colors hover:bg-white/[.03]">
+                <Checkbox
+                  checked={ack}
+                  onCheckedChange={(c) => setAck(c === true)}
+                  aria-label="Acknowledge spending authority"
+                  className="mt-0.5"
+                />
+                <span className="text-sm leading-relaxed text-muted-foreground">
+                  I understand this agent can spend up to{" "}
+                  <span className="text-foreground">{usd(cap)}</span> without further approvals.
+                </span>
+              </label>
+            </div>
+          )}
+
+          {phase === "authorize" && (
+            <div className="space-y-3 py-2">
+              {prepared ? (
+                <>
+                  <p className="text-sm leading-relaxed text-muted-foreground">
+                    Sign this digest with the root key. Paste the 7856-byte signature. A different digest, a reused nonce, or a signature from another root is rejected onchain.
+                  </p>
+                  <p className="break-all font-mono text-[10px] leading-relaxed text-foreground">{prepared.digest}</p>
+                  <p className="break-all font-mono text-[10px] leading-relaxed text-muted-foreground">
+                    nonce {prepared.nonce} · deadline {prepared.deadline}
+                    {prepared.expiry ? ` · expires ${new Date(Number(prepared.expiry) * 1000).toISOString()}` : ""}
+                  </p>
+                  <textarea
+                    value={signature}
+                    onChange={(event) => setSignature(event.target.value.trim())}
+                    spellCheck={false}
+                    aria-label="Root signature"
+                    placeholder="7856-byte signature hex"
+                    className="h-28 w-full rounded-lg border border-white/10 bg-transparent p-3 font-mono text-[10px] text-foreground outline-none"
+                  />
+                </>
+              ) : (
+                <p className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
+                  <Loader2 className="size-4 animate-spin" /> Preparing the exact action from the current nonce.
+                </p>
+              )}
+            </div>
+          )}
+
+          {phase === "confirming" && !succeeded && (
+            <ul key="confirming" role="status" aria-live="polite" className="space-y-4 py-6">
+              {CONFIRM_STAGES.map((label, i) => {
+                const done = i < stage;
+                const active = i === stage;
+                return (
+                  <li key={label} className="flex items-center gap-3">
+                    {done ? (
+                      <Check className="size-4 shrink-0 text-gold" />
+                    ) : active ? (
+                      i === CONFIRM_STAGES.length - 1 ? (
+                        <Check className="size-4 shrink-0 text-gold" />
+                      ) : i === 1 ? (
+                        <Lock className="size-4 shrink-0 text-gold" />
+                      ) : (
+                        <Loader2 className="size-4 shrink-0 animate-spin text-gold" />
+                      )
+                    ) : (
+                      <span className="block size-4 shrink-0 rounded-full border border-white/[.14]" />
+                    )}
+                    <span
+                      className={cn(
+                        "font-mono text-xs uppercase tracking-[0.14em]",
+                        done || active ? "text-foreground" : "text-muted-foreground/60"
+                      )}
+                    >
+                      {label}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+
+          {succeeded && createdTab && selectedAgent && (
+            <div key="success" className="flex flex-col items-center py-6 text-center">
+              <motion.div
+                initial={reduceMotion ? undefined : { scale: 0.5, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={
+                  reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 340, damping: 22 }
+                }
+                className="flex h-16 w-16 items-center justify-center rounded-full border border-gold/30 bg-gold/10 text-gold"
+              >
+                <Check className="size-8" strokeWidth={2.5} />
+              </motion.div>
+              <h3 className="mt-5 font-display text-xl font-semibold tracking-tight text-foreground">
+                Capability {createdTab.reference} is active
+              </h3>
+              <p className="mt-2.5">
+                <span className="inline-flex items-center rounded-full border border-gold/25 bg-gold/[.06] px-3 py-1 font-mono text-xs text-gold">
+                  {createdTab.reference}
+                </span>
+              </p>
+              <p className="mt-4 max-w-xs text-sm leading-relaxed text-muted-foreground">
+                {selectedAgent.name} can spend up to {usd(cap)} — expires {relFuture(hours)}.
+              </p>
+            </div>
+          )}
+
+          {phase === "error" && (
+            <div key="error" className="flex flex-col items-center py-8 text-center">
+              <div className="flex h-14 w-14 items-center justify-center rounded-full border border-danger/25 bg-danger/10 text-danger">
+                <CircleAlert className="size-6" />
+              </div>
+              <p className="mt-5 max-w-xs text-sm leading-relaxed text-muted-foreground">{failure}</p>
+              <div className="mt-6 flex items-center gap-2">
+                <Button variant="ghost" className={BTN_GHOST} onClick={finishClose}>
+                  Cancel
+                </Button>
+                <Button className={BTN_GOLD} onClick={startCreation}>
+                  Try again
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        {inWizard && (
+          <div className="shrink-0 border-t border-white/[.06] bg-[#0e1013] px-6 py-4">
+            <div className="flex items-center justify-between gap-3">
+              {step > 1 ? (
+                <Button variant="ghost" className={BTN_GHOST} onClick={goBack}>
+                  <ArrowLeft className="size-4" /> Back
+                </Button>
+              ) : (
+                <Button variant="ghost" className={BTN_GHOST} onClick={requestClose}>
+                  Cancel
+                </Button>
+              )}
+              <div className="flex items-center gap-3">
+                {!canProceed && (
+                  <span className="hidden max-w-[190px] truncate text-xs text-muted-foreground sm:block">
+                    {hint}
+                  </span>
+                )}
+                {step < 5 ? (
+                  <Button className={BTN_GOLD} disabled={!canProceed} onClick={goNext}>
+                    Next <ArrowRight className="size-4" />
+                  </Button>
+                ) : (
+                  <Button className={BTN_GOLD} disabled={!ack} onClick={startCreation}>
+                    Create capability
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {phase === "authorize" && (
+          <div className="shrink-0 border-t border-white/[.06] bg-[#0e1013] px-6 py-4">
+            <div className="flex items-center justify-between gap-3">
+              <Button variant="ghost" className={BTN_GHOST} onClick={() => setPhase("wizard")}>
+                <ArrowLeft className="size-4" /> Back
+              </Button>
+              <Button className={BTN_GOLD} disabled={!prepared || signatureBytes(signature) !== 7856} onClick={submitCreation}>
+                Submit signature
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {phase === "confirming" && !succeeded && (
+          <div className="shrink-0 border-t border-white/[.06] px-6 py-4">
+            <p className="text-center font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+              Waiting for the Arc receipt
+            </p>
+          </div>
+        )}
+
+        {succeeded && (
+          <div className="shrink-0 border-t border-white/[.06] bg-[#0e1013] px-6 py-4">
+            <div className="flex items-center justify-between gap-3">
+              <Button variant="ghost" className={BTN_GHOST} onClick={finishClose}>
+                Done
+              </Button>
+              <Button
+                className={BTN_GOLD}
+                onClick={() => {
+                  setView("tabs");
+                  finishClose();
+                }}
+              >
+                View in Tabs <ArrowRight className="size-4" />
+              </Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+
+      {/* Discard confirmation */}
+      <AlertDialog open={discardOpen} onOpenChange={setDiscardOpen}>
+        <AlertDialogContent className="rounded-xl border-white/[.08] bg-[#0e1013]">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-display tracking-tight">
+              Discard this capability?
+            </AlertDialogTitle>
+            <AlertDialogDescription>Your inputs will be lost.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className={BTN_GHOST}>Keep editing</AlertDialogCancel>
+            <AlertDialogAction className={BTN_GOLD} onClick={finishClose}>
+              Discard
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}

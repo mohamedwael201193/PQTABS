@@ -1,0 +1,585 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { Check, Copy, KeyRound, Loader2, RotateCcw, X } from "lucide-react";
+import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { StatusChip } from "@/components/pqtabs/shared";
+import { relFuture, usd } from "@/data/formatters";
+import { isAddress, parseUsdcRaw } from "@/data/actions";
+import { loadSnapshot, prepareClose, productionProvider, submitPrepared, submitSpend, type PreparedAction } from "@/data/production";
+import { authorizationBlob, recallAgentKey } from "@/data/spend";
+import type { Tab } from "@/data/types";
+import { useActivity, useAgents, useDashboardUi, usePqtabsData, useRecipients, useTabs } from "@/lib/store";
+import { cn } from "@/lib/utils";
+import { ActivityRow } from "./shared/ActivityRow";
+
+const SHEET_CLASS =
+  "w-full gap-0 border-l border-white/[.08] bg-[#0a0b0d] p-0 sm:w-[480px] sm:max-w-[480px]";
+
+/**
+ * TabDrawer — the full anatomy of one capability: holder, balance against
+ * cap, the four bounding policy numbers, who it may pay, its ledger, and
+ * the explicit can / can-never boundary. Close and reclaim are real
+ * provider mutations with confirmations.
+ */
+export default function TabDrawer() {
+  const drawer = useDashboardUi((s) => s.drawer);
+  const closeDrawer = useDashboardUi((s) => s.closeDrawer);
+  const tabs = useTabs();
+
+  const open = drawer?.type === "tab";
+  const liveTab = drawer?.type === "tab" ? tabs.find((t) => t.id === drawer.id) ?? null : null;
+
+  // Freeze the last capability so the sheet keeps its content while it
+  // animates out after a close or drawer switch.
+  const frozenRef = useRef<Tab | null>(null);
+  if (liveTab) frozenRef.current = liveTab;
+  const tab = liveTab ?? (open ? null : frozenRef.current);
+
+  const [closing, setClosing] = useState(false);
+  const [reclaiming, setReclaiming] = useState(false);
+  const [rotating, setRotating] = useState(false);
+
+  const liveId = liveTab?.id ?? null;
+  useEffect(() => {
+    setClosing(false);
+    setReclaiming(false);
+    setRotating(false);
+  }, [liveId]);
+
+  // If the capability disappears while its drawer is open, close gracefully.
+  useEffect(() => {
+    if (open && !liveTab) closeDrawer();
+  }, [open, liveTab, closeDrawer]);
+
+  async function copyText(text: string, message: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(message);
+    } catch {
+      toast.error("Couldn't copy to clipboard.");
+    }
+  }
+
+  async function handleClose(prepared: PreparedAction, signature: string) {
+    if (!liveTab) return;
+    setClosing(true);
+    try {
+      const registrar = usePqtabsData.getState().registrar;
+      const { snapshot } = await submitPrepared(registrar, prepared, signature);
+      const row = snapshot.tabs.find((item) => item.id.toLowerCase() === liveTab.id.toLowerCase());
+      if (!row || row.status !== "closed") {
+        throw new Error("Arc did not show this tab as closed.");
+      }
+      usePqtabsData.getState().replaceSnapshot(snapshot);
+      toast.success("Close confirmed on Arc");
+      closeDrawer();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Couldn't close this capability.");
+    } finally {
+      setClosing(false);
+    }
+  }
+
+  async function handleReclaim() {
+    if (!liveTab) return;
+    setReclaiming(true);
+    try {
+      const store = usePqtabsData.getState();
+      await productionProvider.reclaimCapability(store.snapshot.account.id, liveTab.id);
+      const snapshot = await loadSnapshot(store.registrar);
+      const row = snapshot.tabs.find((item) => item.id.toLowerCase() === liveTab.id.toLowerCase());
+      if (!row || row.status !== "closed") {
+        throw new Error("The receipt succeeded, but this tab is still open.");
+      }
+      store.replaceSnapshot(snapshot);
+      toast.success("Reclaim confirmed on Arc");
+      closeDrawer();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Couldn't reclaim this capability.");
+    } finally {
+      setReclaiming(false);
+    }
+  }
+
+  function handleRotate() {
+    toast.message("This agent key is bound to this tab. Open a new capability for a new key, then close this one.");
+  }
+
+  return (
+    <Sheet open={open} onOpenChange={(o) => !o && closeDrawer()}>
+      <SheetContent side="right" className={SHEET_CLASS}>
+        {tab ? (
+          <TabDrawerBody
+            tab={tab}
+            closing={closing}
+            reclaiming={reclaiming}
+            rotating={rotating}
+            onClose={handleClose}
+            onReclaim={handleReclaim}
+            onRotate={handleRotate}
+            onCopy={copyText}
+          />
+        ) : null}
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function TabDrawerBody({
+  tab,
+  closing,
+  reclaiming,
+  rotating,
+  onClose,
+  onReclaim,
+  onRotate,
+  onCopy,
+}: {
+  tab: Tab;
+  closing: boolean;
+  reclaiming: boolean;
+  rotating: boolean;
+  onClose: (prepared: PreparedAction, signature: string) => void;
+  onReclaim: () => void;
+  onRotate: () => void;
+  onCopy: (text: string, message: string) => void;
+}) {
+  const agents = useAgents();
+  const recipients = useRecipients();
+  const activity = useActivity();
+  const [closeSig, setCloseSig] = useState("");
+  const [closePrep, setClosePrep] = useState<PreparedAction | null>(null);
+  const [spendTo, setSpendTo] = useState("");
+  const [spendAmount, setSpendAmount] = useState("0.000001");
+  const [spendKey, setSpendKey] = useState("");
+  const [paying, setPaying] = useState(false);
+
+  const agent = agents.find((a) => a.id === tab.agentId);
+  const allowed = recipients.filter((r) => tab.policy.allowedRecipients.includes(r.id));
+  const spendHistory = activity.filter(
+    (a) => a.tabId === tab.id && (a.kind === "payment" || a.kind === "policy_blocked")
+  );
+  const spent = Math.max(0, tab.capUsd - tab.balanceUsd);
+  const spentPct = tab.capUsd > 0 ? Math.min(100, (spent / tab.capUsd) * 100) : 0;
+  const expiringSoon = tab.status === "active" && tab.policy.expiresInHours < 24;
+  const statusSentence =
+    tab.status === "active"
+      ? "Within policy"
+      : tab.status === "expired"
+        ? tab.balanceUsd > 0
+          ? "Expired — reclaim ready"
+          : "Expired"
+        : "Closed";
+
+  const canDo = [
+    `Pay the ${allowed.length} approved recipients`,
+    `Spend up to ${usd(tab.policy.maxPerCallUsd)} per payment`,
+    `Draw down to the ${usd(tab.capUsd)} cap`,
+  ];
+  const canNever = [
+    "Touch the root treasury",
+    "Raise its own limits",
+    "Add recipients or extend expiry",
+    "Spend after expiry",
+  ];
+
+  return (
+    <>
+      <SheetHeader className="shrink-0 border-b border-white/[.06] px-5 pb-4 pr-12 pt-5 md:px-6">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <SheetTitle className="font-mono text-sm font-medium tracking-[0.06em] text-foreground">
+            {tab.reference}
+          </SheetTitle>
+          <StatusChip status={tab.status} pulse={tab.status === "active"} />
+        </div>
+        <SheetDescription className="sr-only">
+          Capability {tab.reference} — balance, policy, recipients and spend history.
+        </SheetDescription>
+      </SheetHeader>
+
+      <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
+        <div className="space-y-6 px-5 py-5 md:px-6">
+          {/* Holder */}
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-white/[.06] bg-white/[.02] px-4 py-3">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium text-foreground">
+                {agent?.name ?? "Unknown agent"}
+              </p>
+              <p className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground">
+                {agent?.address ?? tab.agentId}
+              </p>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Copy agent address"
+              onClick={() => agent && onCopy(agent.address, "Address copied")}
+              className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
+            >
+              <Copy className="size-3.5" strokeWidth={1.75} />
+            </Button>
+          </div>
+
+          {/* Balance against cap */}
+          <div>
+            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+              Available
+            </p>
+            <div className="mt-1 flex flex-wrap items-baseline gap-2">
+              <span className="font-display text-3xl font-semibold leading-none tabular text-gold">
+                {usd(tab.balanceUsd)}
+              </span>
+              <span className="font-mono text-xs tabular text-muted-foreground">
+                of {usd(tab.capUsd)} cap
+              </span>
+            </div>
+            <div
+              className="mt-3 h-[5px] w-full overflow-hidden rounded-full bg-white/[.08]"
+              role="progressbar"
+              aria-label={`${usd(spent)} spent of ${usd(tab.capUsd)} cap`}
+              aria-valuenow={Math.round(spentPct)}
+              aria-valuemin={0}
+              aria-valuemax={100}
+            >
+              <div className="h-full rounded-full bg-gold/85" style={{ width: `${spentPct}%` }} />
+            </div>
+            <p className="mt-1.5 font-mono text-[10px] uppercase tracking-[0.14em] tabular text-muted-foreground">
+              {usd(spent)} spent of {usd(tab.capUsd)}
+            </p>
+          </div>
+
+          {/* Policy grid */}
+          <div className="grid grid-cols-2 gap-3">
+            <PolicyCell label="Max per payment" value={usd(tab.policy.maxPerCallUsd)} />
+            <PolicyCell
+              label="Expires"
+              value={relFuture(tab.policy.expiresInHours)}
+              warn={expiringSoon}
+            />
+            <PolicyCell label="Recipients" value={`${allowed.length} approved`} />
+            <PolicyCell label="Status" value={statusSentence} />
+          </div>
+
+          {/* Allowed recipients */}
+          <section aria-label="Allowed recipients" className="space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                Allowed recipients
+              </p>
+              <span className="font-mono text-[10px] tabular text-muted-foreground">
+                {allowed.length} of {recipients.length} known
+              </span>
+            </div>
+            <ScrollArea className="max-h-40 rounded-lg border border-white/[.06]">
+              <ul className="divide-y divide-white/[.05]">
+                {allowed.map((r) => (
+                  <li key={r.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="truncate text-sm text-foreground">{r.name}</p>
+                        <span className="shrink-0 rounded-full border border-white/[.08] px-1.5 py-px font-mono text-[9px] uppercase tracking-[0.12em] text-muted-foreground">
+                          {r.category}
+                        </span>
+                      </div>
+                      <p className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground">
+                        {r.address}
+                      </p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Copy ${r.name} address`}
+                      onClick={() => onCopy(r.address, "Address copied")}
+                      className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
+                    >
+                      <Copy className="size-3" strokeWidth={1.75} />
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            </ScrollArea>
+          </section>
+
+          {/* Spend history */}
+          <section aria-label="Spend history" className="space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                Spend history
+              </p>
+              <span className="font-mono text-[10px] tabular text-muted-foreground">
+                {spendHistory.length} records
+              </span>
+            </div>
+            {spendHistory.length > 0 ? (
+              <div className="max-h-64 overflow-y-auto scrollbar-thin rounded-lg border border-white/[.06]">
+                <ul className="divide-y divide-white/[.05]">
+                  {spendHistory.map((record) => (
+                    <li key={record.id}>
+                      <ActivityRow record={record} />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : (
+              <p className="rounded-lg border border-dashed border-white/[.09] px-4 py-5 text-center text-xs text-muted-foreground">
+                No payments recorded yet.
+              </p>
+            )}
+          </section>
+
+          {/* The boundary, stated plainly */}
+          <section
+            aria-label="Security boundary"
+            className="grid gap-5 rounded-xl border border-white/[.07] bg-white/[.02] p-4 sm:grid-cols-2"
+          >
+            <div>
+              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                What this agent can do
+              </p>
+              <ul className="mt-3 space-y-2">
+                {canDo.map((line) => (
+                  <li key={line} className="flex items-start gap-2 text-xs text-foreground/85">
+                    <Check
+                      className="mt-0.5 h-3 w-3 shrink-0 text-success"
+                      strokeWidth={2.5}
+                      aria-hidden="true"
+                    />
+                    {line}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                What it can never do
+              </p>
+              <ul className="mt-3 space-y-2">
+                {canNever.map((line) => (
+                  <li key={line} className="flex items-start gap-2 text-xs text-foreground/85">
+                    <X
+                      className="mt-0.5 h-3 w-3 shrink-0 text-danger"
+                      strokeWidth={2.5}
+                      aria-hidden="true"
+                    />
+                    {line}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      {tab.status === "active" && tab.expiryUnix && (
+        <div className="border-t border-white/[.06] px-5 py-4 md:px-6">
+          <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Agent payment</p>
+          <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+            The agent key signs this payment. The root key cannot. A recipient outside the list, or an amount above the per-payment limit, is rejected before broadcast.
+          </p>
+          <input
+            value={spendTo}
+            onChange={(event) => setSpendTo(event.target.value.trim())}
+            placeholder="Recipient"
+            spellCheck={false}
+            aria-label="Payment recipient"
+            className="mt-3 h-9 w-full rounded-lg border border-white/10 bg-transparent px-3 font-mono text-[11px] text-foreground outline-none"
+          />
+          <input
+            value={spendAmount}
+            onChange={(event) => setSpendAmount(event.target.value.trim())}
+            placeholder="Amount in USDC"
+            aria-label="Payment amount"
+            className="mt-2 h-9 w-full rounded-lg border border-white/10 bg-transparent px-3 font-mono text-[11px] text-foreground outline-none"
+          />
+          <input
+            value={spendKey}
+            onChange={(event) => setSpendKey(event.target.value.trim())}
+            placeholder={recallAgentKey(tab.agentId) ? "Agent key is in this session" : "Agent private key"}
+            spellCheck={false}
+            aria-label="Agent private key"
+            type="password"
+            className="mt-2 h-9 w-full rounded-lg border border-white/10 bg-transparent px-3 font-mono text-[11px] text-foreground outline-none"
+          />
+          <Button
+            disabled={paying}
+            onClick={() => {
+              const key = (spendKey || recallAgentKey(tab.agentId) || "") as `0x${string}`;
+              const payee = spendTo || tab.policy.allowedRecipients[0] || "";
+              if (!key.startsWith("0x") || !isAddress(payee) || !tab.expiryUnix) {
+                toast.error("Enter the agent key and a recipient address.");
+                return;
+              }
+              setPaying(true);
+              void authorizationBlob(key, tab.id, payee, parseUsdcRaw(spendAmount), BigInt(tab.expiryUnix))
+                .then((signed) =>
+                  submitSpend({
+                    registrar: usePqtabsData.getState().registrar,
+                    tab: tab.id,
+                    to: payee,
+                    value: parseUsdcRaw(spendAmount).toString(),
+                    validBefore: String(tab.expiryUnix),
+                    nonce: signed.nonce,
+                    signature: signed.blob,
+                  }),
+                )
+                .then(({ hash, snapshot }) => {
+                  usePqtabsData.getState().replaceSnapshot(snapshot);
+                  toast.success(`Payment receipt ${hash.slice(0, 10)}…`);
+                })
+                .catch((error: unknown) => {
+                  toast.error(error instanceof Error ? error.message : "The payment was rejected.");
+                })
+                .finally(() => setPaying(false));
+            }}
+            className="mt-3 h-9 bg-gold text-[#171204] hover:bg-[#eec95e]"
+          >
+            {paying ? <Loader2 className="size-4 animate-spin" /> : "Submit payment"}
+          </Button>
+        </div>
+      )}
+
+      {/* Actions */}
+      <div className="shrink-0 border-t border-white/[.06] bg-[#0a0b0d]/95 px-5 py-4 backdrop-blur md:px-6">
+        <div className="flex flex-wrap items-center gap-2">
+          {tab.status === "active" && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  disabled={closing}
+                  onClick={() => {
+                    const root = usePqtabsData.getState().snapshot.account.rootAddress;
+                    if (!root) return;
+                    void prepareClose(root, tab.id).then(setClosePrep).catch((error: unknown) => {
+                      toast.error(error instanceof Error ? error.message : "Could not prepare the close.");
+                    });
+                  }}
+                  className="h-9 min-w-[160px] flex-1 border border-danger/30 bg-transparent text-danger shadow-none hover:bg-danger/10 hover:text-danger"
+                >
+                  {closing ? (
+                    <Loader2 className="size-4 animate-spin" strokeWidth={2} />
+                  ) : (
+                    <X className="size-4" strokeWidth={2} />
+                  )}
+                  Close capability
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent className="border-white/[.08] bg-[#0e1013]">
+                <AlertDialogHeader>
+                  <AlertDialogTitle className="font-display tracking-tight">
+                    Close this capability?
+                  </AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Remaining funds return only after Arc accepts a root signature. Paste that signature here.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                {closePrep ? (
+                  <p className="break-all font-mono text-[10px] leading-relaxed text-muted-foreground">
+                    digest {closePrep.digest}
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Preparing the close from the current nonce.</p>
+                )}
+                <textarea
+                  value={closeSig}
+                  onChange={(event) => setCloseSig(event.target.value.trim())}
+                  spellCheck={false}
+                  aria-label="Root signature for close"
+                  placeholder="7856-byte signature"
+                  className="h-24 w-full rounded-lg border border-white/10 bg-transparent p-3 font-mono text-[10px] text-foreground outline-none"
+                />
+                <AlertDialogFooter>
+                  <AlertDialogCancel className="border-white/10 bg-white/[.03] text-foreground shadow-none hover:bg-white/[.06] hover:text-foreground">
+                    Cancel
+                  </AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => closePrep && onClose(closePrep, closeSig)}
+                    className="bg-danger text-white hover:bg-danger/90"
+                  >
+                    Close capability
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
+
+          {tab.status === "expired" && tab.balanceUsd > 0 && (
+            <Button
+              onClick={onReclaim}
+              disabled={reclaiming}
+              className="h-9 min-w-[160px] flex-1 bg-gold text-[#171204] hover:bg-[#eec95e]"
+            >
+              {reclaiming ? (
+                <Loader2 className="size-4 animate-spin" strokeWidth={2} />
+              ) : (
+                <RotateCcw className="size-4" strokeWidth={2} />
+              )}
+              Reclaim {usd(tab.balanceUsd)}
+            </Button>
+          )}
+
+          <Button
+            onClick={onRotate}
+            disabled={rotating}
+            className="h-9 border border-white/10 bg-white/[.03] text-foreground shadow-none hover:bg-white/[.06] hover:text-foreground"
+          >
+            {rotating ? (
+              <Loader2 className="size-4 animate-spin" strokeWidth={2} />
+            ) : (
+              <KeyRound className="size-4" strokeWidth={1.75} />
+            )}
+            Rotate credentials
+          </Button>
+
+          <Button
+            variant="outline"
+            size="icon"
+            aria-label="Copy reference"
+            onClick={() => onCopy(tab.reference, "Reference copied")}
+            className="h-9 w-9 border-white/10 bg-white/[.03] shadow-none hover:bg-white/[.06] hover:text-foreground"
+          >
+            <Copy className="size-4" strokeWidth={1.75} />
+          </Button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function PolicyCell({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
+  return (
+    <div className="rounded-lg border border-white/[.06] bg-white/[.02] p-3">
+      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+        {label}
+      </p>
+      <p
+        className={cn(
+          "mt-1.5 font-mono text-xs tabular",
+          warn ? "text-warning" : "text-foreground"
+        )}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}

@@ -1,0 +1,411 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { cn } from "@/lib/utils";
+import { Activity as ActivityIcon, ChevronDown, CircleAlert, Search } from "lucide-react";
+import { usd } from "@/data/formatters";
+import type {
+  ActivityKind,
+  ActivityRecord,
+  ActivityStatus,
+  Agent,
+  Recipient,
+  Tab,
+} from "@/data/types";
+import { useActivity, useAgents, useRecipients, useTabs } from "@/lib/store";
+import { useAccountData } from "@/hooks/use-account-data";
+import { EmptyState, StatusChip } from "@/components/pqtabs/shared";
+import { ActivityRow } from "@/components/pqtabs/dashboard/shared/ActivityRow";
+import { ViewSkeleton } from "@/components/pqtabs/dashboard/shared/ViewSkeleton";
+
+/**
+ * ActivityView — the ledger under your root.
+ *
+ * Every event (payments, policy blocks, lifecycle) is filterable, grouped by
+ * recency and expandable inline for its full detail.
+ */
+
+const MICRO = "font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground";
+const BTN_GHOST = "border border-white/10 bg-white/[.03] text-foreground shadow-none hover:bg-white/[.06]";
+
+const STATUS_OPTIONS: { value: ActivityStatus; label: string }[] = [
+  { value: "authorized", label: "Authorized" },
+  { value: "settling", label: "Settling" },
+  { value: "completed", label: "Completed" },
+  { value: "reverted", label: "Reverted" },
+  { value: "expired", label: "Expired" },
+  { value: "reclaimed", label: "Reclaimed" },
+];
+
+type TypeFilter = "payments" | "policy" | "lifecycle";
+
+const TYPE_OPTIONS: { value: TypeFilter; label: string }[] = [
+  { value: "payments", label: "Payments" },
+  { value: "policy", label: "Policy blocks" },
+  { value: "lifecycle", label: "Lifecycle" },
+];
+
+const TYPE_KINDS: Record<TypeFilter, ActivityKind[]> = {
+  payments: ["payment"],
+  policy: ["policy_blocked"],
+  lifecycle: [
+    "capability_opened",
+    "capability_closed",
+    "capability_expired",
+    "reclaim",
+    "agent_added",
+    "key_rotated",
+  ],
+};
+
+const PERIODS = ["TODAY", "YESTERDAY", "EARLIER"] as const;
+type Period = (typeof PERIODS)[number];
+
+function periodOf(hoursAgo: number): Period {
+  if (hoursAgo < 24) return "TODAY";
+  if (hoursAgo < 48) return "YESTERDAY";
+  return "EARLIER";
+}
+
+function RecipientDetail({ recipient }: { recipient: Recipient | undefined }) {
+  if (!recipient) return <span className="text-sm text-muted-foreground">—</span>;
+  return (
+    <span className="block">
+      <span className="block text-sm text-foreground">{recipient.name}</span>
+      <span className="mt-0.5 block font-mono text-[10px] text-muted-foreground">
+        {recipient.address}
+      </span>
+    </span>
+  );
+}
+
+function ActivityDetail({
+  record,
+  agentsById,
+  tabsById,
+  recipientsById,
+}: {
+  record: ActivityRecord;
+  agentsById: Map<string, Agent>;
+  tabsById: Map<string, Tab>;
+  recipientsById: Map<string, Recipient>;
+}) {
+  return (
+    <div className="ml-3 animate-in fade-in slide-in-from-top-1 border-l border-white/[.08] py-3 pl-10 pr-2 duration-200">
+      <p className="max-w-2xl text-sm leading-relaxed text-foreground/90">{record.summary}</p>
+      <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3.5 sm:grid-cols-3">
+        <div>
+          <dt className={MICRO}>Agent</dt>
+          <dd className="mt-1 text-sm text-foreground">
+            {record.agentId ? (agentsById.get(record.agentId)?.name ?? "—") : "—"}
+          </dd>
+        </div>
+        <div>
+          <dt className={MICRO}>Tab</dt>
+          <dd className="mt-1 font-mono text-xs text-foreground">
+            {record.tabId ? (tabsById.get(record.tabId)?.reference ?? "—") : "—"}
+          </dd>
+        </div>
+        <div>
+          <dt className={MICRO}>Recipient</dt>
+          <dd className="mt-1">
+            <RecipientDetail recipient={recipientsById.get(record.recipientId ?? "")} />
+          </dd>
+        </div>
+        <div>
+          <dt className={MICRO}>Amount</dt>
+          <dd className="mt-1 font-mono text-xs tabular text-foreground">
+            {record.amountUsd != null ? usd(record.amountUsd) : "—"}
+          </dd>
+        </div>
+        <div>
+          <dt className={MICRO}>Status</dt>
+          <dd className="mt-1">
+            <StatusChip status={record.status} />
+          </dd>
+        </div>
+      </dl>
+    </div>
+  );
+}
+
+export default function ActivityView() {
+  const activity = useActivity();
+  const agents = useAgents();
+  const tabs = useTabs();
+  const recipients = useRecipients();
+  const { snapshot, error, retry } = useAccountData();
+
+  const [agentFilter, setAgentFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState<TypeFilter | "all">("all");
+  const [query, setQuery] = useState("");
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  const agentsById = useMemo(() => new Map(agents.map((a) => [a.id, a])), [agents]);
+  const tabsById = useMemo(() => new Map(tabs.map((t) => [t.id, t])), [tabs]);
+  const recipientsById = useMemo(
+    () => new Map(recipients.map((r) => [r.id, r])),
+    [recipients]
+  );
+
+  const activeCount =
+    (agentFilter !== "all" ? 1 : 0) +
+    (statusFilter !== "all" ? 1 : 0) +
+    (typeFilter !== "all" ? 1 : 0) +
+    (query.trim() !== "" ? 1 : 0);
+
+  const clearFilters = () => {
+    setAgentFilter("all");
+    setStatusFilter("all");
+    setTypeFilter("all");
+    setQuery("");
+  };
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return [...activity]
+      .sort((a, b) => a.hoursAgo - b.hoursAgo)
+      .filter((r) => agentFilter === "all" || r.agentId === agentFilter)
+      .filter((r) => statusFilter === "all" || r.status === statusFilter)
+      .filter((r) => typeFilter === "all" || TYPE_KINDS[typeFilter].includes(r.kind))
+      .filter((r) => {
+        if (!q) return true;
+        const recipientName = recipientsById.get(r.recipientId ?? "")?.name.toLowerCase();
+        const agentName = agentsById.get(r.agentId ?? "")?.name.toLowerCase();
+        return (
+          r.summary.toLowerCase().includes(q) ||
+          (recipientName?.includes(q) ?? false) ||
+          (agentName?.includes(q) ?? false)
+        );
+      });
+  }, [activity, agentFilter, statusFilter, typeFilter, query, recipientsById, agentsById]);
+
+  const grouped = useMemo(() => {
+    const map: Record<Period, ActivityRecord[]> = { TODAY: [], YESTERDAY: [], EARLIER: [] };
+    filtered.forEach((r) => map[periodOf(r.hoursAgo)].push(r));
+    return map;
+  }, [filtered]);
+
+  const toggleExpanded = (id: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  // ----- initial load gate ---------------------------------------------------
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <header>
+          <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">
+            Activity
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Every event under your root — payments, policy decisions, lifecycle.
+          </p>
+        </header>
+        <EmptyState
+          icon={<CircleAlert className="size-5" />}
+          title="Couldn’t load activity"
+          body="We couldn’t reach the data provider. Nothing was changed."
+          action={
+            <Button variant="ghost" className={BTN_GHOST} onClick={retry}>
+              Try again
+            </Button>
+          }
+        />
+      </div>
+    );
+  }
+
+  if (!snapshot) {
+    return <ViewSkeleton variant="activity" />;
+  }
+
+  return (
+    <div className="min-w-0">
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">
+            Activity
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Every event under your root — payments, policy decisions, lifecycle.
+          </p>
+        </div>
+        <span className="rounded-full border border-white/[.08] bg-white/[.03] px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+          {activity.length} events
+        </span>
+      </header>
+
+      {/* Filter bar */}
+      <div className="sticky top-16 z-10 mt-6 flex flex-wrap items-center gap-2 rounded-xl border border-white/[.07] bg-[#0e1013]/95 p-3 backdrop-blur md:top-2">
+        <Select value={agentFilter} onValueChange={setAgentFilter}>
+          <SelectTrigger aria-label="Filter by agent" className="w-[148px] text-xs">
+            <SelectValue placeholder="All agents" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All agents</SelectItem>
+            {agents.map((a) => (
+              <SelectItem key={a.id} value={a.id}>
+                {a.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger aria-label="Filter by status" className="w-[142px] text-xs">
+            <SelectValue placeholder="All statuses" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All statuses</SelectItem>
+            {STATUS_OPTIONS.map((s) => (
+              <SelectItem key={s.value} value={s.value}>
+                {s.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select
+          value={typeFilter}
+          onValueChange={(v) => setTypeFilter(v as TypeFilter | "all")}
+        >
+          <SelectTrigger aria-label="Filter by event type" className="w-[134px] text-xs">
+            <SelectValue placeholder="All events" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All events</SelectItem>
+            {TYPE_OPTIONS.map((t) => (
+              <SelectItem key={t.value} value={t.value}>
+                {t.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <div className="relative min-w-[180px] flex-1">
+          <Search
+            aria-hidden="true"
+            className="absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-muted-foreground"
+          />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            aria-label="Search summary or recipient"
+            placeholder="Search summary or recipient…"
+            className="h-9 pl-9 text-xs"
+          />
+        </div>
+
+        {activeCount > 0 && (
+          <div className="flex items-center gap-1.5">
+            <span className="inline-flex h-9 items-center rounded-md border border-gold/25 bg-gold/[.06] px-2.5 font-mono text-[10px] uppercase tracking-[0.14em] text-gold">
+              {activeCount} {activeCount === 1 ? "filter" : "filters"}
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-9 px-2 text-xs text-muted-foreground hover:text-foreground"
+              onClick={clearFilters}
+            >
+              Clear
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {/* Ledger */}
+      <div className="mt-4 max-h-[calc(100vh-320px)] overflow-y-auto scrollbar-thin pr-1">
+        {filtered.length === 0 ? (
+          activeCount > 0 ? (
+            <EmptyState
+              icon={<Search className="size-5" />}
+              title="No activity matches these filters"
+              body="Try a different agent, status, or search."
+              action={
+                <Button variant="ghost" className={BTN_GHOST} onClick={clearFilters}>
+                  Clear filters
+                </Button>
+              }
+            />
+          ) : (
+            <EmptyState
+              icon={<ActivityIcon className="size-5" />}
+              title="No activity yet"
+              body="Events appear here as agents act."
+            />
+          )
+        ) : (
+          PERIODS.map((period) => {
+            const records = grouped[period];
+            if (records.length === 0) return null;
+            return (
+              <section key={period} aria-label={period.toLowerCase()}>
+                <div className="flex items-center gap-3 pb-1 pt-3 first:pt-0">
+                  <span className={cn(MICRO, "tracking-[0.2em]")}>{period}</span>
+                  <div className="h-px flex-1 bg-white/[.06]" />
+                </div>
+                <div>
+                  {records.map((record) => {
+                    const isExpanded = expanded.has(record.id);
+                    return (
+                      <div key={record.id} className="rounded-lg">
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          aria-expanded={isExpanded}
+                          onClick={() => toggleExpanded(record.id)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              toggleExpanded(record.id);
+                            }
+                          }}
+                          className="group -mx-2 flex cursor-pointer items-center gap-2 rounded-lg px-2 transition-colors hover:bg-white/[.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <ActivityRow record={record} />
+                          </div>
+                          <ChevronDown
+                            aria-hidden="true"
+                            className={cn(
+                              "size-4 shrink-0 text-muted-foreground transition-transform duration-200",
+                              isExpanded && "rotate-180 text-gold"
+                            )}
+                          />
+                        </div>
+                        {isExpanded && (
+                          <ActivityDetail
+                            record={record}
+                            agentsById={agentsById}
+                            tabsById={tabsById}
+                            recipientsById={recipientsById}
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+}

@@ -1,7 +1,7 @@
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import type { Address, Hex } from "viem";
-import { assertOurRoot, type Clients, factoryAbi, loadClients, relay, rootAbi, tabAbi, usdcAbi } from "./chain.js";
+import { assertOurRoot, type Clients, factoryAbi, loadClients, readPortfolio, relay, rootAbi, tabAbi, usdcAbi } from "./chain.js";
 import { BARKEEP, CHAIN_ID, EXPLORER, MAX_BODY_BYTES, USDC } from "./constants.js";
 import { RateLimiter } from "./limit.js";
 import { log } from "./log.js";
@@ -44,7 +44,7 @@ export function createApp(clients: Clients = loadClients()) {
       result: "error",
       error: code,
     });
-    return c.json({ error: code, requestId: c.get("requestId") }, status);
+    return c.json({ error: code, detail: error.message, requestId: c.get("requestId") }, status);
   });
 
   app.get("/health", (c) => c.json({ ok: true }));
@@ -109,6 +109,13 @@ export function createApp(clients: Clients = loadClients()) {
       openExposure: openExposure.toString(),
       usdc: balance.toString(),
     });
+  });
+
+  app.get("/v1/roots/:address/portfolio", async (c) => {
+    const root = asAddress(c.req.param("address"), "root");
+    await assertOurRoot(clients, root);
+    const portfolio = await readPortfolio(clients, root);
+    return c.json({ root, ...portfolio });
   });
 
   app.get("/v1/roots/:root/tabs/:tab", async (c) => {

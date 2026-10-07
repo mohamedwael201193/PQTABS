@@ -117,3 +117,13 @@ Forensic timeline for the production PQTABS build. Times are UTC.
 - No frontend directory. `pq-keys/` remains gitignored.
 - `POST /v1/relay/execute` on the live service submitted a 1-unit root A transfer. Receipt `0x205114d24dcb3c894aa82a394d3709f26c07ffb3ea6dcb40a465546a091db33d` is status success, block 24627943. Balance 139,998 to 139,997. Nonce 4 to 5.
 - GitHub Actions run 37537713043 passed: contracts, signer, backend, pins and secret scan, and the filtered Slither job. Two earlier runs failed because Slither was counting forge-std. That scope is fixed in `fa611c9`.
+
+## Phase 10 — frontend integration
+
+- Start: 2026-10-07T00:05:00Z
+- The designed Next.js app was reading a local dataset (`frontend/src/data/seed/account.ts`, treasury 24820.47). That file is deleted. The dashboard now loads `GET /v1/config`, the registrar's roots, and `GET /v1/roots/:address/portfolio`.
+- Arc `eth_getLogs` from factory block 24623258 to latest returns `-32012 requested range too large`. A 10,000-block span fails. A 5,000-block span succeeds. The portfolio reader walks 4,000-block windows, one event stream at a time, after a parallel scan hit HTTP 429. `node --test dist/test/live.test.js` then passed: chain 5042, factory bytecode, root A `openExposure` 0, USDC balance 139997, tab `0xE3051e8173fDBEC33B826352CB177a306B9d5109` closed and owned by root A, and a spend event.
+- Open and close build the same ABI action and `PQTABS_V2` digest as `signer/src/digest.rs`. A Node check of the golden vector matched action bytes and digest `0xb89923a0c10a21a5d6fc2de3558799654b0de9621028cdbf4c05bca63ca251bf`. The browser does not hold the PQ seed. It shows the digest and relays a 7856-byte signature. Success is a receipt plus the tab appearing, or disappearing, in the next portfolio read.
+- Reclaim is the permissionless relay. The screen reloads the portfolio and reports success only if that tab is closed.
+- Agent payments pack the 213-byte Barkeep blob and post `/v1/relay/spend`. A failed simulation stays an error. The agent key is not written to disk by the page.
+- The hosted Render process does not have `/v1/roots/:address/portfolio` until this commit is deployed. Chrome and Vercel are not done in this entry.

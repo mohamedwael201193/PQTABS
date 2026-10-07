@@ -25,6 +25,8 @@ ABIs generated from the compiler are in `abi/PQRoot.json` and `abi/RootFactory.j
 
 `GET /v1/roots/:address` reads `pqVk`, `registrar`, `nextNonce`, `maxOpenExposure`, `openExposure`, and the USDC balance. Unknown addresses return `unknown_root`.
 
+`GET /v1/roots/:address/portfolio` reads every tab opened by that root and the root's open, close, transfer, rotation, and tab-spend logs. Log queries are split into 4,000-block windows because the Arc RPC rejects a wider `eth_getLogs` range. Unknown addresses return `unknown_root`.
+
 `GET /v1/roots/:root/tabs/:tab` reads the root's `tabs` record plus the tab's `owner`, `agent`, `maxPerCall`, `expiry`, and USDC balance.
 
 `GET /v1/tx/:hash` returns the receipt status, block, and gas used.

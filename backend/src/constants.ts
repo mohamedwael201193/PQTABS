@@ -10,3 +10,5 @@ export const SPEND_BLOB_LEN = 213;
 export const MIN_FEE = 20_000_000_000n;
 export const READS_PER_MINUTE = 60;
 export const RELAYS_PER_MINUTE = 8;
+/** Factory deployment block. Log scans start here. */
+export const FACTORY_BLOCK = 24_623_258n;
