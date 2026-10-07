@@ -110,7 +110,7 @@ function ActivityDetail({
           </dd>
         </div>
         <div>
-          <dt className={MICRO}>Tab</dt>
+          <dt className={MICRO}>Capability</dt>
           <dd className="mt-1 font-mono text-xs text-foreground">
             {record.tabId ? (tabsById.get(record.tabId)?.reference ?? "—") : "—"}
           </dd>

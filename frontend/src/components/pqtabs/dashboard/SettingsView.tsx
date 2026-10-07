@@ -58,7 +58,7 @@ const SHORTCUTS: { action: string; keys: ReactNode }[] = [
 
 const DATA_MAPPINGS = [
   { surface: "Treasury", source: "USDC balance" },
-  { surface: "Tabs", source: "Barkeep tab state" },
+  { surface: "Capabilities", source: "Barkeep tab state" },
   { surface: "Activity", source: "chain + backend events" },
   { surface: "Security", source: "contract reads" },
 ] as const;
@@ -138,7 +138,7 @@ export default function SettingsView() {
             </span>
           </div>
           <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
-            Balances, tabs, and activity are reads from chain {account.chainId ?? 5042}. The backend relays signed actions. It does not decide whether they are allowed.
+            Balances, capabilities, and activity are reads from chain {account.chainId ?? 5042}. The backend relays signed actions. It does not decide whether they are allowed.
           </p>
           <dl className="mt-4 space-y-2 font-mono text-[11px] text-muted-foreground">
             <div className="flex justify-between gap-3"><dt>Root</dt><dd className="truncate text-foreground">{account.rootAddress || "none"}</dd></div>
@@ -166,7 +166,7 @@ export default function SettingsView() {
           <p className={MICRO}>Data controls</p>
           <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
             <p className="max-w-md text-sm leading-relaxed text-muted-foreground">
-              Read this registrar&apos;s root, tabs, and receipts from Arc again.
+              Read this registrar&apos;s root, capabilities, and receipts from Arc again.
             </p>
             <Button variant="ghost" className={BTN_DANGER} onClick={() => setResetOpen(true)}>
               <RotateCcw className="size-4" />

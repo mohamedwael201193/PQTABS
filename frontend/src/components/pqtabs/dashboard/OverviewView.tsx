@@ -290,7 +290,7 @@ export default function OverviewView() {
             className="bg-gold text-[#171204] hover:bg-[#eec95e]"
           >
             <Plus className="size-4" strokeWidth={2} />
-            Create tab
+            Create capability
           </Button>
           <Button
             variant="outline"

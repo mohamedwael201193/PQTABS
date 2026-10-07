@@ -120,7 +120,7 @@ export default function CommandMenu() {
               </CommandItem>
               <CommandItem className={ITEM} onSelect={() => run(() => setView("tabs"))}>
                 <Wallet />
-                Tabs
+                Capabilities
               </CommandItem>
               <CommandItem className={ITEM} onSelect={() => run(() => setView("agents"))}>
                 <Bot />
