@@ -5,6 +5,7 @@ import { assertOurRoot, type Clients, factoryAbi, loadClients, readPortfolio, re
 import { BARKEEP, CHAIN_ID, EXPLORER, MAX_BODY_BYTES, USDC } from "./constants.js";
 import { readRegistrarRoots, readRootState } from "./index/account.js";
 import { startIngest } from "./index/ingest.js";
+import { indexHealth } from "./index/lane.js";
 import { readIndexedPortfolio } from "./index/portfolio.js";
 import { openIndex, type Sql } from "./index/sql.js";
 import { RateLimiter } from "./limit.js";
@@ -52,6 +53,19 @@ export function createApp(clients: Clients = loadClients(), getIndex?: () => Sql
   });
 
   app.get("/health", (c) => c.json({ ok: true }));
+
+  app.get("/v1/index", (c) => {
+    const health = indexHealth();
+    const lag = health.chainHead != null && health.indexedBlock != null ? (health.chainHead - health.indexedBlock).toString() : null;
+    return c.json({
+      indexedBlock: health.indexedBlock?.toString() ?? null,
+      chainHead: health.chainHead?.toString() ?? null,
+      lag,
+      lastSuccessfulIndex: health.lastSuccessAt,
+      lastError: health.lastError,
+      queueDepth: health.busy ? 1 : 0,
+    });
+  });
 
   app.get("/ready", async (c) => {
     const chainId = await clients.public.getChainId();

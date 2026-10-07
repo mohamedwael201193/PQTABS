@@ -1,6 +1,37 @@
 /** True while the backfill is inside an Arc read. Portfolio reads skip the chain then. */
 let ingestActive = 0;
 let livePausedUntil = 0;
+let indexedBlock: bigint | null = null;
+let chainHead: bigint | null = null;
+let chainTime = "";
+let lastSuccessAt: string | null = null;
+let lastError: string | null = null;
+
+export function noteIndexHead(head: bigint, timestamp: string): void {
+  chainHead = head;
+  chainTime = timestamp;
+}
+
+export function noteIndexCursor(block: bigint): void {
+  indexedBlock = block;
+  lastSuccessAt = new Date().toISOString();
+  lastError = null;
+}
+
+export function noteIndexError(message: string): void {
+  lastError = message.replace(/postgres(?:ql)?:\/\/\S+/gi, "postgres://redacted").slice(0, 180);
+}
+
+export function indexHealth(): {
+  indexedBlock: bigint | null;
+  chainHead: bigint | null;
+  chainTime: string;
+  lastSuccessAt: string | null;
+  lastError: string | null;
+  busy: boolean;
+} {
+  return { indexedBlock, chainHead, chainTime, lastSuccessAt, lastError, busy: ingestActive > 0 };
+}
 
 export function ingestRpcInFlight(): boolean {
   return ingestActive > 0;

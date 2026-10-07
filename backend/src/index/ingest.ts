@@ -2,7 +2,8 @@ import { type Address, decodeEventLog, type Hex, type PublicClient, parseAbiItem
 import { withRpcRetry } from "../chain.js";
 import { FACTORY_BLOCK, USDC } from "../constants.js";
 import { applyEvents, type IndexEvent, readCursor } from "./apply.js";
-import { ingestRead } from "./lane.js";
+import { ingestRead, noteIndexCursor, noteIndexError, noteIndexHead } from "./lane.js";
+import { reconcileVolatile } from "./portfolio.js";
 import type { Sql } from "./sql.js";
 
 const PAGE = 2_000n;
@@ -36,17 +37,23 @@ export function startIngest(sql: Sql, client: PublicClient, factory: Address): v
       try {
         const head = await ingestRead(() => withRpcRetry(() => client.getBlock({ blockTag: "latest" }), 1));
         if (head.number == null) throw new Error("Arc did not return a block number.");
+        noteIndexHead(head.number, head.timestamp.toString());
         const cursor = await readCursor(sql);
         const from = cursor == null ? FACTORY_BLOCK : cursor + 1n;
         if (from > head.number) {
+          noteIndexCursor(cursor ?? head.number);
+          await reconcileVolatile(sql, client);
           await sleep(2_000);
           continue;
         }
         const to = from + PAGE - 1n > head.number ? head.number : from + PAGE - 1n;
         await indexWindow(sql, client, factory, from, to, times);
+        noteIndexCursor(to);
+        await reconcileVolatile(sql, client);
         await sleep(2_000);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
+        noteIndexError(message);
         const limited = message.includes("429") || message.includes("rate limit") || message.includes("-32005");
         await sleep(limited ? 4_000 + Math.floor(Math.random() * 1_500) : 2_000);
       }

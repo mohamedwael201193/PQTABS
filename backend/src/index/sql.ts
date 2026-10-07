@@ -1,6 +1,6 @@
 import { PGlite } from "@electric-sql/pglite";
 import pg from "pg";
-import { SCHEMA } from "./schema.js";
+import { MIGRATIONS, SCHEMA } from "./schema.js";
 
 export type Sql = {
   query<T extends Record<string, unknown>>(text: string, params?: readonly unknown[]): Promise<T[]>;
@@ -30,6 +30,7 @@ function wrapPglite(db: Queryable & { transaction?: PGlite["transaction"]; close
 export async function openMemory(): Promise<Sql> {
   const db = new PGlite();
   await db.exec(SCHEMA);
+  for (const statement of MIGRATIONS) await db.exec(statement);
   return wrapPglite(db);
 }
 
@@ -37,12 +38,18 @@ export async function openIndex(env: NodeJS.ProcessEnv = process.env): Promise<S
   if (env.DATABASE_URL) return openPg(env.DATABASE_URL);
   const db = new PGlite(env.INDEX_PATH || (env.RENDER_SERVICE_ID ? "/tmp/pqtabs-index" : ".pqtabs-index"));
   await db.exec(SCHEMA);
+  for (const statement of MIGRATIONS) await db.exec(statement);
   return wrapPglite(db);
 }
 
 async function openPg(connectionString: string): Promise<Sql> {
-  const pool = new pg.Pool({ connectionString, max: 4 });
+  const pool = new pg.Pool({
+    connectionString,
+    max: 4,
+    ssl: connectionString.includes("supabase.com") ? { rejectUnauthorized: false } : undefined,
+  });
   await pool.query(SCHEMA);
+  for (const statement of MIGRATIONS) await pool.query(statement);
   const root: Sql = {
     query: async (text, params) => asRows((await pool.query(text, params ? [...params] : undefined)).rows),
     tx: async (run) => {

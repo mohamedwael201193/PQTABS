@@ -52,3 +52,14 @@ CREATE TABLE IF NOT EXISTS activity (
 CREATE INDEX IF NOT EXISTS activity_root ON activity (root, block_number, log_index);
 CREATE INDEX IF NOT EXISTS capabilities_root ON capabilities (root);
 `;
+
+/** Columns added after the first production database. Safe to run on every boot. */
+export const MIGRATIONS = [
+  "ALTER TABLE roots ADD COLUMN IF NOT EXISTS usdc_balance text",
+  "ALTER TABLE roots ADD COLUMN IF NOT EXISTS open_exposure text",
+  "ALTER TABLE roots ADD COLUMN IF NOT EXISTS next_nonce text",
+  "ALTER TABLE capabilities ADD COLUMN IF NOT EXISTS usdc_balance text",
+  "ALTER TABLE capabilities ADD COLUMN IF NOT EXISTS max_per_call text",
+  "ALTER TABLE capabilities ADD COLUMN IF NOT EXISTS payees text",
+  "UPDATE capabilities SET usdc_balance = '0' WHERE swept IS TRUE AND usdc_balance IS NULL",
+];

@@ -4,7 +4,7 @@ import { assertOurRoot, rootAbi, tabAbi, usdcAbi, withRpcRetry } from "../chain.
 import { USDC } from "../constants.js";
 import { RequestError } from "../validate.js";
 import { readCursor } from "./apply.js";
-import { liveReadsPaused, noteRateLimit } from "./lane.js";
+import { indexHealth, noteIndexError, noteRateLimit } from "./lane.js";
 import type { Sql } from "./sql.js";
 
 export type Freshness = "live" | "recent" | "indexing" | "degraded";
@@ -30,6 +30,9 @@ type CapabilityRow = {
   opened_at: string;
   close_block: string | number | null;
   swept: boolean | null;
+  usdc_balance?: string | null;
+  max_per_call?: string | null;
+  payees?: string | null;
 };
 
 type ActivityRow = {
@@ -45,15 +48,14 @@ type ActivityRow = {
   swept: boolean | null;
 };
 
-const liveCache = new Map<string, { at: number; value: IndexedPortfolio }>();
 const inflight = new Map<string, Promise<IndexedPortfolio>>();
-const confirmedTabs = new Map<string, PortfolioTab>();
 
 export function tabFromStored(root: Address, row: CapabilityRow): PortfolioTab {
-  const cached = confirmedTabs.get(`${root.toLowerCase()}:${row.tab.toLowerCase()}`);
-  if (cached) return { ...cached, balanceKnown: true, limitKnown: true };
   const closed = row.close_block != null && row.close_block !== "";
   const swept = row.swept === true;
+  const storedBalance = row.usdc_balance;
+  const balanceKnown = swept || (storedBalance != null && storedBalance !== "");
+  const limitKnown = row.max_per_call != null && row.max_per_call !== "";
   return {
     tab: row.tab as Address,
     agent: row.agent as Address,
@@ -62,19 +64,26 @@ export function tabFromStored(root: Address, row: CapabilityRow): PortfolioTab {
     open: !closed,
     needsSweep: closed && !swept,
     owner: root,
-    maxPerCall: "0",
-    usdc: swept ? "0" : "0",
-    payees: [],
+    maxPerCall: limitKnown ? String(row.max_per_call) : "0",
+    usdc: swept ? "0" : storedBalance || "0",
+    payees: storedPayees(row.payees),
     openedTx: row.opened_tx as PortfolioTab["openedTx"],
     openedBlock: String(row.opened_block),
     openedAt: row.opened_at,
-    balanceKnown: swept,
-    limitKnown: false,
+    balanceKnown,
+    limitKnown,
   };
 }
 
-export function rememberConfirmedTabs(root: Address, tabs: readonly PortfolioTab[]): void {
-  for (const tab of tabs) confirmedTabs.set(`${root.toLowerCase()}:${tab.tab.toLowerCase()}`, tab);
+function storedPayees(value: string | null | undefined): Address[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((item): item is Address => typeof item === "string");
+  } catch {
+    return [];
+  }
 }
 
 export async function readIndexedPortfolio(sql: Sql, client: PublicClient, factory: Address, root: Address): Promise<IndexedPortfolio> {
@@ -87,15 +96,12 @@ export async function readIndexedPortfolio(sql: Sql, client: PublicClient, facto
 }
 
 async function readIndexedPortfolioBody(sql: Sql, client: PublicClient, factory: Address, root: Address): Promise<IndexedPortfolio> {
-  const key = root.toLowerCase();
-  const cached = liveCache.get(key);
-  if (cached && Date.now() - cached.at < 2_000) return cached.value;
   const cursor = await readCursor(sql);
   const through = cursor ?? 0n;
   const [membership, capabilityRows, activityRows] = await Promise.all([
     sql.query<{ address: string }>("SELECT address FROM roots WHERE lower(address) = lower($1)", [root]),
     sql.query<CapabilityRow>(
-      "SELECT tab, agent, cap, expiry, opened_block, opened_tx, opened_at, close_block, swept FROM capabilities WHERE lower(root) = lower($1) ORDER BY opened_block, opened_log_index",
+      "SELECT tab, agent, cap, expiry, opened_block, opened_tx, opened_at, close_block, swept, usdc_balance, max_per_call, payees FROM capabilities WHERE lower(root) = lower($1) ORDER BY opened_block, opened_log_index",
       [root],
     ),
     sql.query<ActivityRow>(
@@ -105,104 +111,100 @@ async function readIndexedPortfolioBody(sql: Sql, client: PublicClient, factory:
       [root],
     ),
   ]);
-  const stored = () => storedPortfolio(root, through, capabilityRows, activityRows, null, "");
-  if (liveReadsPaused()) return stored();
-  let headNumber: bigint | null = null;
-  let headTimestamp = "";
-  try {
-    const head = await client.getBlock({ blockTag: "latest" });
-    headNumber = head.number ?? null;
-    headTimestamp = head.timestamp.toString();
-  } catch (error) {
-    if (!isRateLimit(error)) throw error;
-    noteRateLimit();
-    return storedPortfolio(root, through, capabilityRows, activityRows, null, "");
-  }
-  const gap = headNumber == null ? 2_001n : headNumber - through;
-  if (headNumber == null || gap > 2_000n) {
-    return storedPortfolio(root, through, capabilityRows, activityRows, headNumber, headTimestamp, "indexing");
-  }
-  try {
-    if (membership.length === 0 && capabilityRows.length === 0) {
+  if (membership.length === 0 && capabilityRows.length === 0) {
+    try {
       await assertOurRoot({ public: client, relayer: null, relayerAddress: null, factory }, root, 1);
+    } catch (error) {
+      if (isRateLimit(error)) {
+        noteRateLimit();
+        throw new RequestError(503, "unavailable", "Arc is temporarily unavailable. Your funds are safe. Try again.");
+      }
+      throw error;
     }
-    const tabs = await liveTabs(client, root, capabilityRows);
-    const behind = headNumber - through;
-    const value: IndexedPortfolio = {
-      tabs,
-      activity: activityFrom(activityRows),
-      asOf: headTimestamp,
-      freshness: behind <= 2n ? "live" : behind <= 120n ? "recent" : "indexing",
-      indexedThrough: through.toString(),
-      head: headNumber.toString(),
-    };
-    if (value.freshness === "live" || value.freshness === "recent") liveCache.set(key, { at: Date.now(), value });
-    return value;
-  } catch (error) {
-    if (!isRateLimit(error)) throw error;
-    noteRateLimit();
-    return storedPortfolio(root, through, capabilityRows, activityRows, headNumber, headTimestamp);
   }
-}
-
-function storedPortfolio(
-  root: Address,
-  through: bigint,
-  capabilityRows: readonly CapabilityRow[],
-  activityRows: readonly ActivityRow[],
-  headNumber: bigint | null,
-  headTimestamp: string,
-  freshness: Freshness = "degraded",
-): IndexedPortfolio {
+  const health = indexHealth();
+  const headNumber = health.chainHead;
+  const gap = headNumber == null ? null : headNumber - through;
+  const freshness: Freshness =
+    gap == null ? "degraded" : gap <= 2n ? "live" : gap <= 120n ? "recent" : health.lastError ? "degraded" : "indexing";
   const stamps = activityRows.map((row) => row.observed_at).filter((stamp) => stamp && stamp !== "0");
   return {
     tabs: capabilityRows.map((row) => tabFromStored(root, row)),
     activity: activityFrom(activityRows),
-    asOf: headTimestamp || stamps[0] || "0",
+    asOf: health.chainTime || stamps[0] || "0",
     freshness,
     indexedThrough: through.toString(),
     head: (headNumber ?? through).toString(),
   };
 }
 
-async function liveTabs(client: PublicClient, root: Address, capabilityRows: readonly CapabilityRow[]): Promise<PortfolioTab[]> {
-  if (capabilityRows.length === 0) return [];
-  const calls = capabilityRows.flatMap((row) => {
-    const tab = row.tab as Address;
-    return [
-      { address: root, abi: rootAbi, functionName: "tabs", args: [tab] as const },
-      { address: tab, abi: tabAbi, functionName: "owner" },
-      { address: tab, abi: tabAbi, functionName: "agent" },
-      { address: tab, abi: tabAbi, functionName: "maxPerCall" },
-      { address: tab, abi: tabAbi, functionName: "expiry" },
-      { address: USDC as Address, abi: usdcAbi, functionName: "balanceOf", args: [tab] as const },
-      { address: tab, abi: tabAbi, functionName: "payees" },
-    ];
-  });
-  const details = (await withRpcRetry(() => client.multicall({ contracts: calls, allowFailure: true }), 1)) as readonly CallResult[];
-  const tabs = capabilityRows.map((row, index) => {
-    const base = index * 7;
-    const state = callValue(details, base, "tabs") as readonly [bigint, bigint, boolean, boolean];
-    return {
-      tab: row.tab as Address,
-      agent: callValue(details, base + 2, "agent") as Address,
-      cap: state[0].toString(),
-      expiry: (callValue(details, base + 4, "expiry") as bigint).toString(),
-      open: state[2],
-      needsSweep: state[3],
-      owner: callValue(details, base + 1, "owner") as Address,
-      maxPerCall: (callValue(details, base + 3, "maxPerCall") as bigint).toString(),
-      usdc: (callValue(details, base + 5, "balance") as bigint).toString(),
-      payees: payeeList(details, base + 6),
-      openedTx: row.opened_tx as PortfolioTab["openedTx"],
-      openedBlock: String(row.opened_block),
-      openedAt: row.opened_at,
-      balanceKnown: true,
-      limitKnown: true,
-    };
-  });
-  rememberConfirmedTabs(root, tabs);
-  return tabs;
+let lastReconcile = 0;
+
+/** Background check of volatile balances. Portfolio reads do not call this. */
+export async function reconcileVolatile(sql: Sql, client: PublicClient): Promise<void> {
+  if (Date.now() - lastReconcile < 30_000) return;
+  const health = indexHealth();
+  if (health.busy) return;
+  const cursor = await readCursor(sql);
+  if (health.chainHead != null && cursor != null && health.chainHead - cursor > 2_000n) return;
+  lastReconcile = Date.now();
+  const roots = await sql.query<{ address: string }>("SELECT address FROM roots");
+  const tabs = await sql.query<{ tab: string; root: string }>("SELECT tab, root FROM capabilities");
+  const calls = [
+    ...roots.flatMap((row) => {
+      const account = row.address as Address;
+      return [
+        { address: account, abi: rootAbi, functionName: "openExposure" },
+        { address: account, abi: rootAbi, functionName: "nextNonce" },
+        { address: USDC as Address, abi: usdcAbi, functionName: "balanceOf", args: [account] as const },
+      ];
+    }),
+    ...tabs.flatMap((row) => {
+      const tab = row.tab as Address;
+      const account = row.root as Address;
+      return [
+        { address: account, abi: rootAbi, functionName: "tabs", args: [tab] as const },
+        { address: tab, abi: tabAbi, functionName: "maxPerCall" },
+        { address: USDC as Address, abi: usdcAbi, functionName: "balanceOf", args: [tab] as const },
+        { address: tab, abi: tabAbi, functionName: "payees" },
+      ];
+    }),
+  ];
+  if (calls.length === 0) return;
+  try {
+    const details = (await withRpcRetry(() => client.multicall({ contracts: calls, allowFailure: true }), 1)) as readonly CallResult[];
+    let index = 0;
+    for (const row of roots) {
+      const openExposure = (callValue(details, index, "openExposure") as bigint).toString();
+      const nextNonce = (callValue(details, index + 1, "nextNonce") as bigint).toString();
+      const usdc = (callValue(details, index + 2, "usdc") as bigint).toString();
+      index += 3;
+      await sql.query("UPDATE roots SET open_exposure = $2, next_nonce = $3, usdc_balance = $4 WHERE lower(address) = lower($1)", [
+        row.address,
+        openExposure,
+        nextNonce,
+        usdc,
+      ]);
+    }
+    for (const row of tabs) {
+      const maxPerCall = (callValue(details, index + 1, "maxPerCall") as bigint).toString();
+      const usdc = (callValue(details, index + 2, "usdc") as bigint).toString();
+      const payees = JSON.stringify(payeeList(details, index + 3));
+      index += 4;
+      await sql.query("UPDATE capabilities SET usdc_balance = $2, max_per_call = $3, payees = $4 WHERE lower(tab) = lower($1)", [
+        row.tab,
+        usdc,
+        maxPerCall,
+        payees,
+      ]);
+    }
+  } catch (error) {
+    if (!isRateLimit(error)) noteIndexError(error instanceof Error ? error.message : "reconcile_failed");
+    else {
+      noteRateLimit();
+      noteIndexError("Arc is rate limiting reads.");
+    }
+  }
 }
 
 function activityFrom(activityRows: readonly ActivityRow[]): PortfolioEvent[] {

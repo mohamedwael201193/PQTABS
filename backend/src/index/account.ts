@@ -21,6 +21,9 @@ type RootRow = {
   registrar: string;
   verifying_key: string;
   max_exposure: string;
+  usdc_balance: string | null;
+  open_exposure: string | null;
+  next_nonce: string | null;
 };
 
 type CachedRoot = Omit<RootView, "root" | "balancesConfirmed">;
@@ -73,39 +76,39 @@ export async function readRegistrarRoots(sql: Sql, client: PublicClient, factory
 export async function readRootState(sql: Sql, client: PublicClient, factory: Address, root: Address): Promise<RootView> {
   const key = root.toLowerCase();
   const [rows, rotated] = await Promise.all([
-    sql.query<RootRow>("SELECT registrar, verifying_key, max_exposure FROM roots WHERE lower(address) = lower($1)", [root]),
+    sql.query<RootRow>(
+      "SELECT registrar, verifying_key, max_exposure, usdc_balance, open_exposure, next_nonce FROM roots WHERE lower(address) = lower($1)",
+      [root],
+    ),
     sql.query<{ kind: string }>("SELECT kind FROM activity WHERE lower(root) = lower($1) AND kind = 'rotated' LIMIT 1", [root]),
   ]);
   const row = rows[0];
-  const cached = rootCache.get(key);
-  if (liveReadsPaused()) {
-    if (row || cached) return viewFrom(root, row, cached, rotated.length > 0);
-    throw unavailable();
-  }
+  if (row) return viewFrom(root, row, rotated.length > 0);
   try {
-    const live = await liveRoot(client, factory, root, Boolean(row));
+    const live = await liveRoot(client, factory, root, false);
     rootCache.set(key, live);
     return { root, ...live, balancesConfirmed: true };
   } catch (error) {
     if (error instanceof RequestError && error.code === "unknown_root") throw error;
     if (!isRateLimit(error)) throw error;
     noteRateLimit();
-    if (row || cached) return viewFrom(root, row, cached, rotated.length > 0);
+    const cached = rootCache.get(key);
+    if (cached) return { root, ...cached, balancesConfirmed: false };
     throw unavailable();
   }
 }
 
-function viewFrom(root: Address, row: RootRow | undefined, cached: CachedRoot | undefined, rotated: boolean): RootView {
-  if (cached) return { root, ...cached, balancesConfirmed: false };
+function viewFrom(root: Address, row: RootRow, rotated: boolean): RootView {
+  const confirmed = row.usdc_balance != null && row.usdc_balance !== "";
   return {
     root,
-    pqVk: rotated ? "" : (row?.verifying_key ?? ""),
-    registrar: row?.registrar ?? "",
-    nextNonce: "",
-    maxOpenExposure: row?.max_exposure ?? "",
-    openExposure: "",
-    usdc: "",
-    balancesConfirmed: false,
+    pqVk: rotated ? "" : row.verifying_key,
+    registrar: row.registrar,
+    nextNonce: row.next_nonce ?? "",
+    maxOpenExposure: row.max_exposure,
+    openExposure: row.open_exposure ?? "",
+    usdc: row.usdc_balance ?? "",
+    balancesConfirmed: confirmed,
   };
 }
 
