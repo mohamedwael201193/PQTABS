@@ -121,8 +121,8 @@ export interface ActivityRecord {
 export interface SecurityState {
   rootScheme: string;
   rootStatus: "secured" | "rotation_due";
-  /** Hours since the last root key rotation. */
-  lastRotationHoursAgo: number;
+  /** Hours since the last recorded root key rotation. Null when Arc has no KeyRotated event. */
+  lastRotationHoursAgo: number | null;
   /** Scheduled rotation interval. */
   rotationIntervalDays: number;
   recoveryConfigured: boolean;

@@ -410,7 +410,7 @@ function CreateFlow() {
             : "Couldn’t create this capability"
           : STEP_META[step - 1].title;
   const description = succeeded
-    ? "Arc accepted the signature and the tab is in this root's portfolio."
+    ? "Arc accepted the signature and the capability is in this root's portfolio."
     : phase === "authorize"
       ? "Authorize with your security key. The signature is created on this device and checked by Arc."
       : phase === "confirming"

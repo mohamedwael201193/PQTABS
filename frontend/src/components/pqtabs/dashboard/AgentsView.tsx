@@ -123,7 +123,10 @@ export default function AgentsView() {
 
                   {/* Live state */}
                   <span className="hidden shrink-0 items-center gap-2.5 lg:flex">
-                    <StatusChip status={agent.status} pulse={canSign && agent.status === "active" && !keyGone} />
+                    <StatusChip
+                      status={agent.status === "revoked" ? "revoked" : activeTabs.length > 0 ? "active" : "paused"}
+                      pulse={canSign && activeTabs.length > 0 && !keyGone}
+                    />
                     <span className="font-mono text-[11px] tabular text-muted-foreground">
                       {activeTabs.length} active {activeTabs.length === 1 ? "capability" : "capabilities"}
                     </span>

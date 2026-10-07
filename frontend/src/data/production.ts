@@ -263,8 +263,8 @@ function mapSnapshot(
       id: tab.agentId,
       name: short(tab.agentId),
       address: tab.agentId,
-      status: active ? "active" : "revoked",
-      role: "ECDSA key bound to a Barkeep tab",
+      status: active ? "active" : "paused",
+      role: "Spends only inside a capability.",
       addedHoursAgo: Math.min(...related.map((item) => item.openedHoursAgo)),
       lastActiveHoursAgo: related[0]?.openedHoursAgo ?? null,
     });
@@ -318,7 +318,7 @@ function securityState(rotatedAt: number | null): SecurityState {
   return {
     rootScheme: "SLH-DSA-SHA2-128s",
     rootStatus: "secured",
-    lastRotationHoursAgo: rotatedAt ? hoursBetween(rotatedAt, now) : 0,
+    lastRotationHoursAgo: rotatedAt ? hoursBetween(rotatedAt, now) : null,
     rotationIntervalDays: 0,
     recoveryConfigured: false,
     enforcement: "onchain-policy",

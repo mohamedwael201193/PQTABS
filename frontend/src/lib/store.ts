@@ -31,7 +31,7 @@ const EMPTY_SNAPSHOT: AccountSnapshot = {
   security: {
     rootScheme: "SLH-DSA-SHA2-128s",
     rootStatus: "secured",
-    lastRotationHoursAgo: 0,
+    lastRotationHoursAgo: null,
     rotationIntervalDays: 0,
     recoveryConfigured: false,
     enforcement: "onchain-policy",

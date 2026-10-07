@@ -15,7 +15,7 @@ const STATUS_STYLES: Record<ChipStatus, { dot: string; label: string }> = {
   active: { dot: "bg-success", label: "Active" },
   closed: { dot: "bg-muted-foreground", label: "Closed" },
   // Agents
-  paused: { dot: "bg-warning", label: "Paused" },
+  paused: { dot: "bg-muted-foreground", label: "No capability" },
   revoked: { dot: "bg-muted-foreground", label: "Revoked" },
 };
 

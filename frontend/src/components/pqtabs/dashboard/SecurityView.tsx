@@ -1,20 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Button } from "@/components/ui/button";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { useMemo } from "react";
 import { cn } from "@/lib/utils";
-import { KeyRound } from "lucide-react";
-import { toast } from "sonner";
 import { pct, relFuture, relTime, usd } from "@/data/formatters";
 import type { ActivityKind } from "@/data/types";
 import {
@@ -38,8 +25,6 @@ import ExposureMeter from "@/components/pqtabs/visuals/ExposureMeter";
  */
 
 const MICRO = "font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground";
-const BTN_GOLD = "bg-gold text-[#171204] shadow-none hover:bg-[#eec95e]";
-const BTN_GHOST = "border border-white/10 bg-white/[.03] text-foreground shadow-none hover:bg-white/[.06]";
 
 const SECURITY_EVENT_KINDS: ActivityKind[] = ["policy_blocked", "key_rotated", "capability_expired"];
 
@@ -92,8 +77,6 @@ export default function SecurityView() {
   const account = usePqtabsData((state) => state.snapshot.account);
   const setView = useDashboardUi((s) => s.setView);
 
-  const [rotateOpen, setRotateOpen] = useState(false);
-
   const activeTabs = useMemo(() => tabs.filter((t) => t.status === "active"), [tabs]);
   const agentsById = useMemo(() => new Map(agents.map((a) => [a.id, a])), [agents]);
 
@@ -110,7 +93,7 @@ export default function SecurityView() {
 
   const nextRotationHours = Math.max(
     0,
-    security.rotationIntervalDays * 24 - security.lastRotationHoursAgo
+    security.rotationIntervalDays * 24 - (security.lastRotationHoursAgo ?? 0)
   );
   const rotationImminent = nextRotationHours < 24 * 7;
 
@@ -190,7 +173,7 @@ export default function SecurityView() {
               <div className="flex items-center justify-between gap-4 py-3">
                 <dt className="text-sm text-muted-foreground">Last rotation</dt>
                 <dd className="font-mono text-xs tabular text-foreground">
-                  {relTime(security.lastRotationHoursAgo)}
+                  {security.lastRotationHoursAgo == null ? "Not recorded" : relTime(security.lastRotationHoursAgo)}
                 </dd>
               </div>
               <div className="flex items-center justify-between gap-4 py-3">
@@ -215,12 +198,9 @@ export default function SecurityView() {
               </div>
               )}
             </dl>
-            <div className="mt-5">
-              <Button variant="ghost" className={BTN_GHOST} onClick={() => setRotateOpen(true)}>
-                <KeyRound className="size-4" />
-                Rotate root key
-              </Button>
-            </div>
+            <p className="mt-5 text-sm leading-relaxed text-muted-foreground">
+              This screen does not rotate the root key. A rotation is a signed root action, and the new backup has to exist before that signature is sent.
+            </p>
           </div>
         </section>
 
@@ -262,17 +242,19 @@ export default function SecurityView() {
         <div className="flex items-center justify-between gap-3">
           <p className={MICRO}>Active capability bounds</p>
           <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-            {activeTabs.length} active
+            {portfolioReady ? `${activeTabs.length} active` : "list not loaded"}
           </span>
         </div>
-        {activeTabs.length === 0 ? (
+        {!portfolioReady ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">The capability list has not finished.</p>
+        ) : activeTabs.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">No active capabilities.</p>
         ) : (
           <div className="mt-4 overflow-x-auto scrollbar-thin">
             <table className="w-full min-w-[620px] text-left">
               <thead>
                 <tr className="border-b border-white/[.08]">
-                  {["Tab", "Agent", "Cap", "Per call", "Recipients", "Expires"].map((h) => (
+                  {["Capability", "Agent", "Cap", "Per call", "Recipients", "Expires"].map((h) => (
                     <th
                       key={h}
                       scope="col"
@@ -361,32 +343,6 @@ export default function SecurityView() {
         </div>
       </section>
 
-      {/* Rotate root key confirmation */}
-      <AlertDialog open={rotateOpen} onOpenChange={setRotateOpen}>
-        <AlertDialogContent className="rounded-xl border-white/[.08] bg-[#0e1013]">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="font-display tracking-tight">
-              Rotate the root key?
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              A new SLH-DSA key pair becomes active for all future capability signatures. Existing
-              capabilities keep their policy.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className={BTN_GHOST}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className={BTN_GOLD}
-              onClick={() => {
-                toast.message("A rotation is recorded only after Arc accepts a signed ROTATE_KEY action.");
-                setRotateOpen(false);
-              }}
-            >
-              Keep current key
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }
