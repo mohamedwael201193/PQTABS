@@ -3,7 +3,9 @@
 import { create } from "zustand";
 import type { AccountSnapshot, ActivityRecord, Agent, Tab } from "@/data/types";
 import { labelsFor, saveAgentLabel, type AgentLabel } from "@/data/agent-labels";
+import { lockRoot } from "@/data/pq-vault";
 import { totalsFrom } from "@/data/production";
+import { forgetAgentKeys } from "@/data/spend";
 
 /**
  * Application state stores.
@@ -80,6 +82,10 @@ export const usePqtabsData = create<PqtabsDataState>((set) => ({
   setRegistrar: (address) =>
     set((state) => {
       const same = address.toLowerCase() === state.registrar.toLowerCase();
+      if (!same) {
+        forgetAgentKeys();
+        lockRoot();
+      }
       const agentLabels = same ? state.agentLabels : labelsFor(address);
       return {
         registrar: address,

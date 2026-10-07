@@ -13,6 +13,10 @@ export function recallAgentKey(address: string): Hex | null {
   return agentKeys.get(address.toLowerCase()) ?? null;
 }
 
+export function forgetAgentKeys(): void {
+  agentKeys.clear();
+}
+
 export function createAgentKey(): { address: Hex; privateKey: Hex } {
   const privateKey = generatePrivateKey();
   const address = privateKeyToAccount(privateKey).address;
