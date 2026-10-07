@@ -13,6 +13,7 @@ Facts used by the current build. Status is VERIFIED when this environment observ
 | Render free web service disks are ephemeral | Render docs, service `srv-db2mqpvavr4c73elkt60` | 2026-10-07 | DOCUMENTED. The embedded database is not started on Render. |
 | Production derived state is Supabase Postgres 17 through the session pooler | This environment's connection check and row copy | 2026-10-07 | VERIFIED. 2 roots, 6 capabilities, 27 activity rows, 1 cursor. The password is not in the repo. |
 | A known-root portfolio read does not call Arc | `backend/src/index/portfolio.ts` on `fbbd232`, measured HTTP 200 | 2026-10-07 | VERIFIED. 0.62s and 0.96s. Not a P50. |
+| Arc mainnet accepts `eth_subscribe("newHeads")` on `wss://rpc.mainnet.arc.io` | One subscription from this environment | 2026-10-07 | VERIFIED. The acknowledgement returned a subscription id, then a head arrived with `number` and `timestamp`. |
 | Barkeep owner can drain the treasury. The agent spends only the tab. | https://github.com/barbarosalagoz/barkeep-arc `60f4b608` | 2026-10-07 | DOCUMENTED. `Tab.sol` is not vendored here. Tests use `MockBarkeep`. |
 | arc-guard uses a PQ vault and a 7-day wallet exit | https://github.com/Jayanthkoppala/arc-guard | 2026-10-07 | DOCUMENTED. It is not a spending capability. |
 | Pigeonhole pages logs and keeps no database | https://github.com/edycutjong/pigeonhole | 2026-10-07 | DOCUMENTED. |

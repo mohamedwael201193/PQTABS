@@ -156,7 +156,7 @@ Not stronger yet: Pigeonhole and PoolLens answer a read without scanning factory
 ## Not decided yet
 
 - Supabase Postgres is the derived store. Render's disk is not. The free Render web service can still sleep, so the first request after idle is a hosting delay, not an index scan.
-- The indexer polls `eth_getLogs`. It does not subscribe to `newHeads`.
+- The indexer polls `eth_getLogs` for history. When the cursor is caught up it also listens for `newHeads` and the poll remains the fallback.
 - The encrypted root backup is still a file the user holds. The decrypted signing key is not stored.
 - On-chain rotate and treasury transfer exist on `PQRoot` and are not product actions.
 - A Chrome proof that an agent pays after refresh, and a fresh-wallet mainnet journey, are still open.

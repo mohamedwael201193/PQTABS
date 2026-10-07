@@ -1,8 +1,9 @@
 import { type Address, decodeEventLog, type Hex, type PublicClient, parseAbiItem } from "viem";
 import { withRpcRetry } from "../chain.js";
-import { FACTORY_BLOCK, USDC } from "../constants.js";
+import { FACTORY_BLOCK, RPC_URL, USDC } from "../constants.js";
 import { applyEvents, type IndexEvent, readCursor } from "./apply.js";
-import { ingestRead, noteIndexCursor, noteIndexError, noteIndexHead } from "./lane.js";
+import { startHeadFeed, headSocketOpen } from "./heads.js";
+import { indexHealth, ingestRead, noteIndexCursor, noteIndexError, noteIndexHead } from "./lane.js";
 import { reconcileVolatile } from "./portfolio.js";
 import type { Sql } from "./sql.js";
 
@@ -32,26 +33,42 @@ type RawLog = {
 
 export function startIngest(sql: Sql, client: PublicClient, factory: Address): void {
   const times = new Map<string, string>();
+  let waitingForNextHead = false;
+  startHeadFeed(process.env.ARC_RPC_URL || RPC_URL, (number, timestamp) => {
+    noteIndexHead(number, timestamp);
+    if (waitingForNextHead) wakeWait?.();
+  });
   const run = async () => {
     while (true) {
       try {
-        const head = await ingestRead(() => withRpcRetry(() => client.getBlock({ blockTag: "latest" }), 1));
-        if (head.number == null) throw new Error("Arc did not return a block number.");
-        noteIndexHead(head.number, head.timestamp.toString());
+        const known = indexHealth();
+        const subscribed = headSocketOpen() && known.chainHead != null;
+        let headNumber = known.chainHead;
+        let headTime = known.chainTime;
+        if (!subscribed || headNumber == null) {
+          const head = await ingestRead(() => withRpcRetry(() => client.getBlock({ blockTag: "latest" }), 1));
+          if (head.number == null) throw new Error("Arc did not return a block number.");
+          headNumber = head.number;
+          headTime = head.timestamp.toString();
+          noteIndexHead(headNumber, headTime);
+        }
         const cursor = await readCursor(sql);
         const from = cursor == null ? FACTORY_BLOCK : cursor + 1n;
-        if (from > head.number) {
-          noteIndexCursor(cursor ?? head.number);
+        if (from > headNumber) {
+          waitingForNextHead = true;
+          noteIndexCursor(cursor ?? headNumber);
           await reconcileVolatile(sql, client);
-          await sleep(2_000);
+          await waitForHead(subscribed ? 20_000 : 2_000);
           continue;
         }
-        const to = from + PAGE - 1n > head.number ? head.number : from + PAGE - 1n;
+        waitingForNextHead = false;
+        const to = from + PAGE - 1n > headNumber ? headNumber : from + PAGE - 1n;
         await indexWindow(sql, client, factory, from, to, times);
         noteIndexCursor(to);
         await reconcileVolatile(sql, client);
         await sleep(2_000);
       } catch (error) {
+        waitingForNextHead = false;
         const message = error instanceof Error ? error.message : String(error);
         noteIndexError(message);
         const limited = message.includes("429") || message.includes("rate limit") || message.includes("-32005");
@@ -200,4 +217,20 @@ function uniqueAddresses(values: readonly Address[]): Address[] {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+let wakeWait: (() => void) | null = null;
+
+function waitForHead(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      wakeWait = null;
+      resolve();
+    }, ms);
+    wakeWait = () => {
+      clearTimeout(timer);
+      wakeWait = null;
+      resolve();
+    };
+  });
 }

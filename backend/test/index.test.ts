@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import type { Address, Hex, PublicClient } from "viem";
 import { applyEvents, type IndexEvent, readCursor, resetIndex, writeEvents } from "../src/index/apply.js";
 import { readRegistrarRoots } from "../src/index/account.js";
+import { headFromSubscription, httpToWebSocket } from "../src/index/heads.js";
 import { indexCoversHead, noteIndexCursor, noteIndexHead, noteRateLimit } from "../src/index/lane.js";
 import { tabFromStored } from "../src/index/portfolio.js";
 import { openMemory, type Sql } from "../src/index/sql.js";
@@ -206,5 +207,14 @@ describe("derived index", () => {
     noteIndexHead(2_000n, "1790001000");
     await assert.rejects(readRegistrarRoots(sql, silent, rootA, "0xBDfCee82bd42fefa58ee850b3709636a8b6b0034"), /temporarily unavailable/);
     await sql.close();
+  });
+
+  it("reads a newHeads notification and ignores the subscription acknowledgement", () => {
+    assert.equal(httpToWebSocket("https://rpc.mainnet.arc.io"), "wss://rpc.mainnet.arc.io");
+    assert.equal(headFromSubscription('{"jsonrpc":"2.0","id":1,"result":"0xabc"}'), null);
+    const head = headFromSubscription('{"params":{"result":{"number":"0x17a268c","timestamp":"0x6ac6a21c"}}}');
+    assert.equal(head?.number, 24782476n);
+    assert.equal(head?.timestamp, "1791402524");
+    assert.equal(headFromSubscription("not-json"), null);
   });
 });
