@@ -11,9 +11,7 @@ Measured against production after the portfolio read stopped calling Arc. Two sa
 
 The 0.52s sample is one request, not a percentile. The handler finished in 193ms. The rest is the path from this machine to Frankfurt. The warm target under 500ms is still not shown by a series. The typical target under 1s includes this sample.
 
-Earlier reads on the previous deploys: 2.15s then 0.39s while live Arc calls were paused (`ab2ece0`), 1.64s stored (`9cc4040`), 3.46s HTTP 429 (`18984cc`), and a 25s timeout when the request waited on the backfill (`9eb8dbf`). Those paths are not what `fbbd232` serves.
-
-The warm target under 500ms is not met by the 0.62s and 0.96s samples. The typical target under 1s is met by those two samples only. No P50 or P95 series exists yet.
+Earlier reads on the previous deploys: 2.15s then 0.39s while live Arc calls were paused (`ab2ece0`), 1.64s stored (`9cc4040`), 3.46s HTTP 429 (`18984cc`), and a 25s timeout when the request waited on the backfill (`9eb8dbf`). Those paths are not what the current deploy serves. No P50 or P95 series exists yet.
 
 What a normal portfolio request does now:
 
