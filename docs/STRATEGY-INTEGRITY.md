@@ -6,6 +6,6 @@ A spend is allowed only by `decideSpend` in `backend/src/index/decide.ts`. Chang
 
 `backend/test/decide.test.ts` checks allow, over max, over balance, wrong payee, expiry, wrong agent, closed capability, unavailable service, and exposure. Those are local inputs. They are not a mainnet payment.
 
-The relay calls `decideSpend` before `eth_sendRawTransaction`. A refusal returns `policy_refused` and does not broadcast. The signer is not recovered in that route, so `agent_matches` is not claimed there. The tab contract still checks the agent signature during simulation. On Render `dep-db3dig8473hc73bdqt50`, closed tab `0x5637…3837` with amount `1000000000` returned `capability_inactive,max_per_call,balance`. No transaction hash exists for that call.
+The relay recovers the ECDSA signer from the 213-byte blob and compares that address with the tab's agent before it reads Arc. A blob whose payee, amount, window, or nonce differs from the request returns `tampered_action` and does not call Arc. A signature that does not recover returns `invalid_signature`. `backend/test/spend-blob.test.ts` signs a throwaway key and checks both cases. That test is local. It is not a mainnet payment.
 
 What is not proven: a real HTTP 402, a paid resource, a decision record stored for a mainnet payment, or an agent continuing a task without a person clicking pay. Those are absent, not simulated.

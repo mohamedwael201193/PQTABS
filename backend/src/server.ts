@@ -8,6 +8,7 @@ import { startIngest } from "./index/ingest.js";
 import { indexHealth } from "./index/lane.js";
 import { readIndexedPortfolio } from "./index/portfolio.js";
 import { decideSpend } from "./index/decide.js";
+import { parseSpendBlob, recoverSpendSigner, sameSpendTerms } from "./index/spend-blob.js";
 import { openIndex, type Sql } from "./index/sql.js";
 import { RateLimiter } from "./limit.js";
 import { log } from "./log.js";
@@ -231,6 +232,21 @@ export function createApp(clients: Clients = loadClients(), getIndex?: () => Sql
     const tab = asAddress(body.tab, "tab");
     const to = asAddress(body.to, "to");
     const value = asUint(body.value, "value");
+    const validAfter = asUint(body.validAfter, "validAfter");
+    const validBefore = asUint(body.validBefore, "validBefore");
+    const nonce = asHex(body.nonce, "nonce");
+    const signature = asHex(body.signature, "signature");
+    const blob = parseSpendBlob(signature);
+    if (!blob) throw new RequestError(400, "bad_signature_length", "spend blob must be 213 bytes");
+    if (!sameSpendTerms(blob, { to, value, validAfter, validBefore, nonce })) {
+      throw new RequestError(400, "policy_refused", "tampered_action");
+    }
+    let signer;
+    try {
+      signer = await recoverSpendSigner(tab, blob);
+    } catch {
+      throw new RequestError(400, "policy_refused", "invalid_signature");
+    }
     const owner = await withRpcRetry(
       () => clients.public.readContract({ address: tab, abi: tabAbi, functionName: "owner" }),
       1,
@@ -253,7 +269,7 @@ export function createApp(clients: Clients = loadClients(), getIndex?: () => Sql
       now: head.timestamp,
       amount: value,
       payee: to,
-      signer: null,
+      signer,
       tabAgent: String(agent),
       payees,
       maxPerCall,
@@ -265,15 +281,7 @@ export function createApp(clients: Clients = loadClients(), getIndex?: () => Sql
     if (decision.decision !== "ALLOW") {
       throw new RequestError(400, "policy_refused", decision.reason.join(","));
     }
-    const data = encodeSpend({
-      tab,
-      to,
-      value,
-      validAfter: asUint(body.validAfter, "validAfter"),
-      validBefore: asUint(body.validBefore, "validBefore"),
-      nonce: asHex(body.nonce, "nonce"),
-      signature: asHex(body.signature, "signature"),
-    });
+    const data = encodeSpend({ tab, to, value, validAfter, validBefore, nonce, signature });
     const result = await relay(clients, USDC, data, seen);
     log({ route: "/v1/relay/spend", root: owner, tab, tx: result.hash });
     return c.json({ ...result, decision });
