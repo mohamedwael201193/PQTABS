@@ -104,6 +104,33 @@ describe("derived index", () => {
     await sql.close();
   });
 
+  it("counts a replayed spend once and keeps a second log as a separate movement", async () => {
+    const sql = await openMemory();
+    await applyEvents(sql, [opened(rootA, tabA, 1)], 100n);
+    const spend = {
+      block: 101n,
+      logIndex: 4,
+      tx: "0xfcbbe662e18c9f726381e90067ebd40df0c1d739407dccbf481d6cad8315b2cf" as const,
+      timestamp: "1790000001",
+      root: rootA,
+      kind: "spend" as const,
+      tab: tabA,
+      payee,
+      amount: "7",
+    };
+    await applyEvents(sql, [spend], 101n);
+    await applyEvents(sql, [spend], 101n);
+    await applyEvents(sql, [{ ...spend, logIndex: 5, amount: "3" }], 101n);
+    const rows = await sql.query<{ amount: string }>(
+      "SELECT amount FROM activity WHERE lower(root) = lower($1) AND kind = 'spend' ORDER BY log_index",
+      [rootA],
+    );
+    assert.deepEqual(rows.map((row) => row.amount), ["7", "3"]);
+    const total = rows.reduce((sum, row) => sum + Number(row.amount), 0);
+    assert.equal(total, 10);
+    await sql.close();
+  });
+
   it("drops a spend whose capability was never opened", async () => {
     const sql = await openMemory();
     await applyEvents(
