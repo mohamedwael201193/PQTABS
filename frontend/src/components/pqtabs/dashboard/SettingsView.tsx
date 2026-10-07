@@ -30,7 +30,6 @@ import { Kbd } from "@/components/pqtabs/shared";
 
 const MICRO = "font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground";
 const BTN_GHOST = "border border-white/10 bg-white/[.03] text-foreground shadow-none hover:bg-white/[.06]";
-const BTN_DANGER = "border-danger/30 bg-transparent text-danger shadow-none hover:bg-danger/10 hover:text-danger";
 
 const SHORTCUTS: { action: string; keys: ReactNode }[] = [
   {
@@ -65,13 +64,20 @@ const DATA_MAPPINGS = [
 
 export default function SettingsView() {
   const account = usePqtabsData((s) => s.snapshot.account);
-  const reload = async () => {
-    const store = usePqtabsData.getState();
-    store.replaceSnapshot(await loadSnapshot(store.registrar));
-  };
   const setView = useDashboardUi((s) => s.setView);
 
   const [resetOpen, setResetOpen] = useState(false);
+  const [reloading, setReloading] = useState(false);
+
+  const reload = async () => {
+    const registrar = usePqtabsData.getState().registrar;
+    if (!registrar) throw new Error("Connect a wallet before reading Arc.");
+    const snapshot = await loadSnapshot(registrar);
+    if (usePqtabsData.getState().registrar.toLowerCase() !== registrar.toLowerCase()) {
+      throw new Error("The wallet changed. This screen was not updated.");
+    }
+    usePqtabsData.getState().acceptPortfolio(snapshot);
+  };
 
   return (
     <div className="min-w-0 max-w-3xl">
@@ -168,7 +174,7 @@ export default function SettingsView() {
             <p className="max-w-md text-sm leading-relaxed text-muted-foreground">
               Read this registrar&apos;s root, capabilities, and receipts from Arc again.
             </p>
-            <Button variant="ghost" className={BTN_DANGER} onClick={() => setResetOpen(true)}>
+            <Button variant="ghost" className={BTN_GHOST} onClick={() => setResetOpen(true)} disabled={reloading}>
               <RotateCcw className="size-4" />
               Reload from Arc
             </Button>
@@ -190,15 +196,25 @@ export default function SettingsView() {
           <AlertDialogFooter>
             <AlertDialogCancel className={BTN_GHOST}>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-danger text-white shadow-none hover:bg-[#ec6a6e]"
-              onClick={() => {
-                void reload();
-                toast.success("Reloaded from Arc");
-                setResetOpen(false);
-                setView("overview");
+              className="bg-gold text-[#171204] shadow-none hover:bg-[#eec95e]"
+              disabled={reloading}
+              onClick={(event) => {
+                event.preventDefault();
+                if (reloading) return;
+                setReloading(true);
+                void reload()
+                  .then(() => {
+                    toast.success("Reloaded from Arc");
+                    setResetOpen(false);
+                    setView("overview");
+                  })
+                  .catch((reason: unknown) => {
+                    toast.error(reason instanceof Error ? reason.message : "Arc did not return this account.");
+                  })
+                  .finally(() => setReloading(false));
               }}
             >
-              Reload
+              {reloading ? "Reading Arc" : "Reload"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

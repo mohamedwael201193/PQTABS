@@ -46,14 +46,21 @@ export default function TabsView() {
     setPendingReclaimId(tab.id);
     try {
       const store = usePqtabsData.getState();
-      const root = store.snapshot.account.id;
+      const root = store.snapshot.account.rootAddress;
+      if (!root || !store.registrar) throw new Error("The wallet changed. Nothing was submitted.");
       if (path === "reclaim") await productionProvider.reclaimCapability(root, tab.id);
       else await productionProvider.retrySweep(root, tab.id);
+      if (usePqtabsData.getState().registrar.toLowerCase() !== store.registrar.toLowerCase()) {
+        throw new Error("The wallet changed. The receipt belongs to the previous wallet.");
+      }
       const snapshot = await loadSnapshot(store.registrar);
       const row = snapshot.tabs.find((item) => item.id.toLowerCase() === tab.id.toLowerCase());
       const returned = row && row.balanceUsd === 0 && (path === "reclaim" ? row.status === "closed" : !row.needsSweep);
       if (!returned) throw new Error("The receipt succeeded, but the capability still holds USDC.");
-      store.replaceSnapshot(snapshot);
+      if (usePqtabsData.getState().registrar.toLowerCase() !== store.registrar.toLowerCase()) {
+        throw new Error("The wallet changed. The receipt belongs to the previous wallet.");
+      }
+      usePqtabsData.getState().acceptPortfolio(snapshot);
       toast.success(
         tab.balanceUsd > 0 ? `${usd(tab.balanceUsd)} returned to the treasury` : "The exposure limit was released.",
       );

@@ -111,7 +111,7 @@ export default function TabDrawer() {
       if (!row || row.status !== "closed") {
         throw new Error("Arc did not show this capability as closed.");
       }
-      now.replaceSnapshot(snapshot);
+      now.acceptPortfolio(snapshot);
       if (row.needsSweep || row.balanceUsd > 0) {
         toast.message("The capability is closed. USDC is still on it until Return funds succeeds.");
       } else {
@@ -141,7 +141,7 @@ export default function TabDrawer() {
       if (!row || row.status !== "closed") {
         throw new Error("The receipt succeeded, but this capability is still open.");
       }
-      store.replaceSnapshot(snapshot);
+      usePqtabsData.getState().acceptPortfolio(snapshot);
       toast.success("Reclaim confirmed on Arc");
       closeDrawer();
     } catch (error) {
@@ -477,8 +477,11 @@ function TabDrawerBody({
                 })
                 .then(({ hash, snapshot }) => {
                   const now = usePqtabsData.getState();
-                  if (now.registrar.toLowerCase() !== registrar.toLowerCase()) return;
-                  now.replaceSnapshot(snapshot);
+                  if (now.registrar.toLowerCase() !== registrar.toLowerCase()) {
+                    toast.message("The wallet changed. The receipt belongs to the previous wallet.");
+                    return;
+                  }
+                  now.acceptPortfolio(snapshot);
                   toast.success(`Payment receipt ${hash.slice(0, 10)}…`);
                 })
                 .catch((error: unknown) => {

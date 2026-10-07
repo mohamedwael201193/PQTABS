@@ -320,7 +320,7 @@ function CreateFlow() {
         if (!tab) {
           throw new Error(`Arc included ${hash}, but the portfolio does not list the new tab.`);
         }
-        usePqtabsData.getState().replaceSnapshot(await loadSnapshot(registrar));
+        usePqtabsData.getState().acceptPortfolio(await loadSnapshot(registrar));
         setCreatedTab(tab);
         setStage(4);
       })

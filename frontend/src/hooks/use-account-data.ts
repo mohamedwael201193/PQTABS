@@ -101,7 +101,7 @@ export function useAccountData(): {
     })
       .then((data) => {
         if (cancelled || !stillHere()) return;
-        replaceSnapshot(data);
+        usePqtabsData.getState().acceptPortfolio(data);
         setSnapshot(data);
         setPortfolioReady(true);
         setPortfolioError(null);

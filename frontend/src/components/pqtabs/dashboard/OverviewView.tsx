@@ -23,7 +23,7 @@ import { TabCard } from "./shared/TabCard";
 function FundNotice() {
   const root = usePqtabsData((s) => s.snapshot.account.rootAddress);
   const registrar = usePqtabsData((s) => s.registrar);
-  const replaceSnapshot = usePqtabsData((s) => s.replaceSnapshot);
+  const acceptPortfolio = usePqtabsData((s) => s.acceptPortfolio);
   const [amount, setAmount] = useState("0.5");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -42,8 +42,17 @@ function FundNotice() {
       const receipt = await arcClient().waitForTransactionReceipt({ hash });
       if (receipt.status !== "success") throw new Error("The deposit reverted.");
       const after = usePqtabsData.getState();
-      if (after.registrar.toLowerCase() !== registrar.toLowerCase()) return;
-      replaceSnapshot(await loadSnapshot(after.registrar));
+      if (after.registrar.toLowerCase() !== registrar.toLowerCase()) {
+        setMessage("The wallet changed. The deposit receipt belongs to the previous wallet.");
+        return;
+      }
+      try {
+        acceptPortfolio(await loadSnapshot(after.registrar));
+      } catch (reason: unknown) {
+        const detail = reason instanceof Error ? reason.message : "The balance refresh did not finish.";
+        setMessage(`Arc included the deposit. ${detail}`);
+        return;
+      }
       setMessage("Confirmed. The treasury balance is the onchain USDC balance.");
     } catch (reason: unknown) {
       setMessage(reason instanceof Error ? reason.message : "The deposit was not confirmed.");

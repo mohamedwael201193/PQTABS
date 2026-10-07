@@ -62,6 +62,7 @@ interface PqtabsDataState {
   setPortfolioError: (message: string | null) => void;
   addLocalAgent: (agent: Agent) => void;
   replaceSnapshot: (snapshot: AccountSnapshot) => void;
+  acceptPortfolio: (snapshot: AccountSnapshot) => void;
   createCapability: () => never;
   closeCapability: () => never;
   reclaimCapability: () => never;
@@ -120,6 +121,18 @@ export const usePqtabsData = create<PqtabsDataState>((set) => ({
       if (!current || !owner || owner !== current) return state;
       return {
         accountReady: true,
+        snapshot: { ...snapshot, totals: totalsFrom(snapshot.account, snapshot.tabs) },
+      };
+    }),
+  acceptPortfolio: (snapshot) =>
+    set((state) => {
+      const owner = snapshot.account.registrar?.toLowerCase() ?? "";
+      const current = state.registrar.toLowerCase();
+      if (!current || !owner || owner !== current) return state;
+      return {
+        accountReady: true,
+        portfolioReady: true,
+        portfolioError: null,
         snapshot: { ...snapshot, totals: totalsFrom(snapshot.account, snapshot.tabs) },
       };
     }),
