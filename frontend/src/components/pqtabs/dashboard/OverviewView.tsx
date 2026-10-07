@@ -80,10 +80,8 @@ export default function OverviewView() {
     .filter((t) => t.status === "active")
     .sort((a, b) => a.policy.expiresInHours - b.policy.expiresInHours);
   const recent = activity.slice(0, 6);
-  const exposurePct =
-    totals.treasuryTotalUsd > 0
-      ? (totals.allocatedUsd / totals.treasuryTotalUsd) * 100
-      : 0;
+  const held = totals.treasuryTotalUsd + totals.exposureUsd + totals.reclaimableUsd;
+  const exposurePct = held > 0 ? (totals.exposureUsd / held) * 100 : 0;
 
   const securityStrip = [
     { label: "Root protection", value: "Post-quantum · Secured", dot: "bg-success" },

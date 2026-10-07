@@ -351,7 +351,7 @@ export function totalsFrom(account: UserAccount, tabs: Tab[]): TreasuryTotals {
   return {
     treasuryTotalUsd: account.treasuryTotalUsd,
     allocatedUsd: account.openExposureUsd ?? active.reduce((sum, tab) => sum + tab.capUsd, 0),
-    exposureUsd: account.openExposureUsd ?? active.reduce((sum, tab) => sum + tab.balanceUsd, 0),
+    exposureUsd: active.reduce((sum, tab) => sum + tab.balanceUsd, 0),
     availableUsd: Math.max(0, (account.maxExposureUsd ?? 0) - (account.openExposureUsd ?? 0)),
     reclaimableUsd: reclaimable.reduce((sum, tab) => sum + tab.balanceUsd, 0),
     activeTabCount: active.length,

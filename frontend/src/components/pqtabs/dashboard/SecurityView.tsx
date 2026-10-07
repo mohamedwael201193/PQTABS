@@ -104,10 +104,8 @@ export default function SecurityView() {
     [activity]
   );
 
-  const allocatedPct =
-    totals.treasuryTotalUsd > 0
-      ? (totals.allocatedUsd / totals.treasuryTotalUsd) * 100
-      : 0;
+  const held = totals.treasuryTotalUsd + totals.exposureUsd + totals.reclaimableUsd;
+  const allocatedPct = held > 0 ? (totals.exposureUsd / held) * 100 : 0;
 
   const nextRotationHours = Math.max(
     0,

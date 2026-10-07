@@ -135,7 +135,7 @@ export interface TreasuryTotals {
   allocatedUsd: number;
   /** Remaining balances across active tabs. */
   exposureUsd: number;
-  /** Funds neither allocated nor awaiting reclaim. */
+  /** Room left under the root's exposure ceiling. */
   availableUsd: number;
   /** Remaining balances on expired tabs awaiting reclaim. */
   reclaimableUsd: number;

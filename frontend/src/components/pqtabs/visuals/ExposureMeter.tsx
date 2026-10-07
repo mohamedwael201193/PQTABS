@@ -19,28 +19,26 @@ export function ExposureMeter({
   className?: string;
 }) {
   const reduced = useReducedMotion();
-  const total = totals.treasuryTotalUsd;
-  const base = total > 0 ? total : 0;
-
-  const allocated = Math.max(0, totals.allocatedUsd);
+  const inRoot = Math.max(0, totals.treasuryTotalUsd);
+  const reach = Math.max(0, totals.exposureUsd);
   const reclaimable = Math.max(0, totals.reclaimableUsd);
-  const available = Math.max(0, total - allocated - reclaimable);
+  const held = inRoot + reach + reclaimable;
 
-  const share = (n: number) => (base > 0 ? (n / base) * 100 : 0);
-  const allocatedPct = share(allocated);
+  const share = (n: number) => (held > 0 ? (n / held) * 100 : 0);
+  const reachPct = share(reach);
 
   const segments = [
     {
       key: "available",
-      value: available,
-      share: share(available),
+      value: inRoot,
+      share: share(inRoot),
       bar: "bg-white/[.06]",
       text: "text-muted-foreground",
     },
     {
       key: "allocated",
-      value: allocated,
-      share: allocatedPct,
+      value: reach,
+      share: reachPct,
       bar: "bg-gold/85",
       text: "text-[#171204]",
     },
@@ -62,11 +60,11 @@ export function ExposureMeter({
             Treasury
           </p>
           <p className="mt-1 font-display text-xl font-semibold leading-none tabular text-foreground">
-            {usd(totals.treasuryTotalUsd)}
+            {usd(held)}
           </p>
         </div>
         <p className="font-mono text-[11px] tabular text-muted-foreground">
-          {pct(allocatedPct)} allocated
+          {pct(reachPct)} an agent can reach
         </p>
       </div>
 
@@ -74,7 +72,7 @@ export function ExposureMeter({
       <div
         className="relative mt-3 flex h-14 overflow-hidden rounded-xl border border-white/[.08] bg-[#0e1013] md:h-16"
         role="img"
-        aria-label={`Treasury of ${usd(total)}: ${usd(available)} still in the root, ${usd(allocated)} allocated to capabilities, ${usd(reclaimable)} awaiting reclaim`}
+        aria-label={`Funds held ${usd(held)}: ${usd(inRoot)} still in the root, ${usd(reach)} an agent can reach, ${usd(reclaimable)} awaiting reclaim`}
       >
         {segments.map((s, i) => (
           <motion.div
@@ -114,16 +112,17 @@ export function ExposureMeter({
 
       {/* Legend */}
       <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2">
-        <LegendRow dot="bg-white/25" label="Still in the root" value={usd(available)} />
-        <LegendRow
-          dot="bg-gold"
-          label="Allocated to capabilities"
-          value={usd(allocated)}
-        />
+        <LegendRow dot="bg-white/25" label="Still in the root" value={usd(inRoot)} />
+        <LegendRow dot="bg-gold" label="An agent can reach" value={usd(reach)} />
         {reclaimable > 0 && (
           <LegendRow dot="bg-warning" label="Awaiting reclaim" value={usd(reclaimable)} />
         )}
       </div>
+      <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
+        {reach > 0
+          ? `An agent can reach ${usd(reach)}. The ${usd(inRoot)} still in the root is outside that capability.`
+          : "No capability is open, so an agent cannot spend this treasury."}
+      </p>
     </div>
   );
 }
