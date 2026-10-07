@@ -37,9 +37,12 @@ export default function TabsView() {
   const historyWhen = (tab: Tab) => {
     if (tab.status === "expired") return `expired ${relTime(tab.expiredHoursAgo)}`;
     const closed = activity.find(
-      (record) => record.kind === "capability_closed" && record.tabId?.toLowerCase() === tab.id.toLowerCase(),
+      (record) =>
+        (record.kind === "capability_closed" || record.kind === "reclaim") &&
+        record.tabId?.toLowerCase() === tab.id.toLowerCase(),
     );
-    return closed ? `closed ${relTime(closed.hoursAgo)}` : `opened ${relTime(tab.openedHoursAgo)}`;
+    if (!closed) return `opened ${relTime(tab.openedHoursAgo)}`;
+    return `${closed.kind === "reclaim" ? "reclaimed" : "closed"} ${relTime(closed.hoursAgo)}`;
   };
 
   async function confirmReturn(tab: Tab, path: "reclaim" | "sweep") {

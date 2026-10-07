@@ -40,7 +40,7 @@ type TypeFilter = "payments" | "lifecycle" | "keys";
 
 const TYPE_OPTIONS: { value: TypeFilter; label: string }[] = [
   { value: "payments", label: "Payments" },
-  { value: "lifecycle", label: "Opens and closes" },
+  { value: "lifecycle", label: "Opens, closes, and reclaims" },
   { value: "keys", label: "Key rotations" },
 ];
 

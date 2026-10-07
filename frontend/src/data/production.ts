@@ -83,6 +83,8 @@ type PortfolioEvent = {
   agent?: string;
   amount?: string;
   to?: string;
+  permissionless?: boolean;
+  swept?: boolean;
 };
 
 function readableError(detail: string | undefined, fallback: string): string {
@@ -295,7 +297,7 @@ function mapSnapshot(
 
   const activity: ActivityRecord[] = events.map((event) => ({
     id: `${event.kind}:${event.tx}:${event.tab ?? ""}`,
-    kind: activityKind(event.kind),
+    kind: activityKind(event),
     status: "completed" as ActivityStatus,
     hoursAgo: hoursBetween(Number(event.timestamp), now),
     agentId:
@@ -349,18 +351,24 @@ function securityState(rotatedAt: number | null, now = Date.now() / 1000): Secur
   };
 }
 
-function activityKind(kind: PortfolioEvent["kind"]): ActivityKind {
-  if (kind === "opened") return "capability_opened";
-  if (kind === "closed") return "capability_closed";
-  if (kind === "spend") return "payment";
-  if (kind === "rotated") return "key_rotated";
-  if (kind === "transfer") return "payment";
+function activityKind(event: PortfolioEvent): ActivityKind {
+  if (event.kind === "opened") return "capability_opened";
+  if (event.kind === "closed") return event.permissionless ? "reclaim" : "capability_closed";
+  if (event.kind === "spend") return "payment";
+  if (event.kind === "rotated") return "key_rotated";
+  if (event.kind === "transfer") return "payment";
   return "reclaim";
 }
 
 function activitySummary(event: PortfolioEvent, root: string): string {
   const amount = event.amount ? usdc(event.amount).toFixed(6) : "";
   if (event.kind === "opened") return `Opened a capability for ${amount} USDC.`;
+  if (event.kind === "closed" && event.permissionless && event.swept === false) {
+    return "Reclaimed the capability after expiry. USDC is still on it until a return succeeds.";
+  }
+  if (event.kind === "closed" && event.permissionless) {
+    return `Reclaimed the capability after expiry and released its ${amount} USDC limit.`;
+  }
   if (event.kind === "closed") return `Closed a capability and released its ${amount} USDC limit.`;
   if (event.kind === "spend" && event.to?.toLowerCase() === root.toLowerCase()) {
     return `The capability returned ${amount} USDC to the treasury.`;

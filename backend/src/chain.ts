@@ -173,6 +173,8 @@ export type PortfolioEvent = {
   agent?: Address;
   amount?: string;
   to?: Address;
+  permissionless?: boolean;
+  swept?: boolean;
 };
 
 function sleep(ms: number): Promise<void> {
@@ -370,6 +372,8 @@ async function readPortfolioOnce(clients: Clients, root: Address): Promise<Portf
       timestamp: await blockTime(client, log.blockNumber, times),
       tab: log.args.tab,
       amount: log.args.capReleased?.toString(),
+      permissionless: log.args.permissionless === true,
+      swept: log.args.swept === true,
     });
   }
   for (const log of moved) {
