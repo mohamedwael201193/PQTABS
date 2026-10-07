@@ -34,10 +34,15 @@ export function arcClient() {
 }
 
 export async function existingAccount(): Promise<Address | null> {
-  const ethereum = (window as Window & { ethereum?: EthereumProvider }).ethereum;
+  const ethereum = (window as Window & { ethereum?: EthereumProvider & { selectedAddress?: string } }).ethereum;
   if (!ethereum) return null;
   const accounts = (await ethereum.request({ method: "eth_accounts" })) as string[];
-  return accounts[0] ? (accounts[0] as Address) : null;
+  const selected = ethereum.selectedAddress;
+  const match = selected
+    ? accounts.find((item) => item.toLowerCase() === selected.toLowerCase())
+    : undefined;
+  const chosen = match ?? accounts[0];
+  return chosen ? getAddress(chosen as Address) : null;
 }
 
 export async function connectWallet(): Promise<{ address: Address; chainId: number }> {
@@ -119,8 +124,9 @@ const usdcAbi = [
 
 /** The connected wallet is the registrar. It creates the root. It is not the PQ authority. */
 export async function createSecurityDomain(vk: Hex, maxOpenExposure: bigint, userSalt: Hex): Promise<Hex> {
+  const account = await existingAccount();
+  if (!account) throw new Error("Connect a wallet before creating a security domain.");
   const client = walletClient();
-  const [account] = await client.getAddresses();
   return client.writeContract({
     account,
     address: FACTORY,
@@ -140,8 +146,9 @@ export async function waitForRoot(hash: Hex): Promise<Address> {
 }
 
 export async function fundRoot(root: Address, amountRaw: bigint): Promise<Hex> {
+  const account = await existingAccount();
+  if (!account) throw new Error("Connect a wallet before depositing.");
   const client = walletClient();
-  const [account] = await client.getAddresses();
   return client.writeContract({
     account,
     address: USDC,

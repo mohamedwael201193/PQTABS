@@ -7,7 +7,7 @@ import { EmptyState } from "@/components/pqtabs/shared";
 import { parseUsdcRaw } from "@/data/actions";
 import { rememberRoot } from "@/data/production";
 import { createRootKey, rootUnlocked, verifyingKey } from "@/data/pq-vault";
-import { createSecurityDomain, waitForRoot } from "@/data/wallet";
+import { createSecurityDomain, existingAccount, waitForRoot } from "@/data/wallet";
 import { usePqtabsData } from "@/lib/store";
 import { keccak256, toHex } from "viem";
 
@@ -34,6 +34,10 @@ export function DomainSetup({ onExit, onReady }: { onExit: () => void; onReady: 
       const maxOpenExposure = parseUsdcRaw(ceiling);
       if (maxOpenExposure <= BigInt(0)) throw new Error("Set an exposure ceiling above zero.");
       if (!registrar) throw new Error("Connect a wallet before creating a security domain.");
+      const live = await existingAccount();
+      if (!live || live.toLowerCase() !== registrar.toLowerCase()) {
+        throw new Error("The wallet changed. The security domain was not created.");
+      }
       let vk = verifyingKey(registrar);
       if (!vk) {
         if (passphrase.length < 8) throw new Error("Choose a passphrase of at least 8 characters.");
