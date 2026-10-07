@@ -2,7 +2,7 @@
 
 Arc remains the authority. The database is a replay of logs.
 
-`GET /v1/roots/:root/portfolio` reads those rows and then one multicall for balances, open flags, payees, and the per-payment limit. It does not scan factory history. A gap of 30 blocks or fewer is ingested inside that request, then one multicall reads balances and open flags. A larger gap does not call Arc again. It returns `freshness: "indexing"` and `indexedThrough` immediately, including when Arc answers 429. The list is not presented as current until the cursor is within 30 blocks.
+`GET /v1/roots/:root/portfolio` does not scan factory history. When the cursor is within 120 blocks, that request ingests the gap and then one multicall reads balances, open flags, payees, and the per-payment limit. When the cursor is within 2,000 blocks, the stored capabilities are returned with that live check and `freshness` of `live`, `recent`, or `indexing`. A larger gap returns `indexing` immediately and does not pretend the list is empty because of a rate limit.
 
 The background loop pages `eth_getLogs` at 2,000 blocks, under the public 9,999-block cap documented at https://docs.arc.io/arc/references/rpc-endpoints. Committed blocks are not rolled back. Ordering is block number, then log index. USDC spends are the ERC-20 `Transfer` from `0x3600…0000` only. The system emitter is not indexed, because that would double-count. The sender of a spend is the token log `from`, which is the capability, not the relayer.
 

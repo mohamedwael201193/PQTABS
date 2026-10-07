@@ -55,8 +55,8 @@ export async function readIndexedPortfolio(sql: Sql, client: PublicClient, facto
   } catch {
     headNumber = null;
   }
-  const gap = headNumber == null ? 31n : headNumber - through;
-  if (headNumber == null || gap > 30n) {
+  const gap = headNumber == null ? 2_001n : headNumber - through;
+  if (headNumber == null || gap > 2_000n) {
     return {
       tabs: [],
       activity: [],
@@ -68,13 +68,17 @@ export async function readIndexedPortfolio(sql: Sql, client: PublicClient, facto
   }
   await assertOurRoot({ public: client, relayer: null, relayerAddress: null, factory }, root);
   let next = cursor;
-  if (next != null && gap > 0n) {
-    await indexWindow(sql, client, factory, next + 1n, headNumber, new Map());
-    next = await readCursor(sql);
+  if (next != null && gap > 0n && gap <= 120n) {
+    try {
+      await indexWindow(sql, client, factory, next + 1n, headNumber, new Map());
+      next = await readCursor(sql);
+    } catch {
+      next = cursor;
+    }
   }
   const caughtUp = next ?? 0n;
   const behind = headNumber - caughtUp;
-  const freshness: Freshness = behind <= 2n ? "live" : behind <= 30n ? "recent" : "indexing";
+  const freshness: Freshness = behind <= 2n ? "live" : behind <= 120n ? "recent" : "indexing";
   const capabilityRows = await sql.query<CapabilityRow>(
     "SELECT tab, agent, cap, expiry, opened_block, opened_tx, opened_at, close_block FROM capabilities WHERE lower(root) = lower($1) ORDER BY opened_block, opened_log_index",
     [root],

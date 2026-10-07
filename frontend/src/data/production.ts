@@ -199,7 +199,7 @@ const ROOT_KEY = "pqtabs.root";
 async function waitForPortfolio(root: string, gate?: { cancelled: boolean; onIndex?: (note: string) => void }): Promise<PortfolioJson> {
   for (;;) {
     const portfolio = await getJson<PortfolioJson>(`/v1/roots/${root}/portfolio`);
-    if (portfolio.freshness !== "indexing" || gate?.cancelled) return portfolio;
+    if (portfolio.freshness !== "indexing" || portfolio.tabs.length > 0 || gate?.cancelled) return portfolio;
     gate?.onIndex?.(`Updating through Arc block ${portfolio.indexedThrough ?? "0"}`);
     await new Promise((resolve) => setTimeout(resolve, 3_000));
   }

@@ -102,8 +102,11 @@ export function useAccountData(): {
     }, gate)
       .then((data) => {
         if (cancelled || !stillHere()) return;
-        if (data.indexFreshness === "indexing") return;
+        if (data.indexFreshness === "indexing" && data.tabs.length === 0) return;
         usePqtabsData.getState().acceptPortfolio(data);
+        if (data.indexFreshness && data.indexFreshness !== "live" && data.indexedThrough) {
+          usePqtabsData.getState().setIndexNote(`Updated through Arc block ${data.indexedThrough}`);
+        }
         setSnapshot(data);
         setPortfolioReady(true);
         setPortfolioError(null);
