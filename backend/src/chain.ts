@@ -11,6 +11,7 @@ import {
 } from "viem";
 import { type PrivateKeyAccount, privateKeyToAccount } from "viem/accounts";
 import { CHAIN_ID, FACTORY, FACTORY_BLOCK, MIN_FEE, RPC_URL, USDC } from "./constants.js";
+import { erc20SpendRaw } from "./index/usdc-event.js";
 import { RequestError } from "./validate.js";
 
 export const arc = defineChain({
@@ -400,6 +401,9 @@ async function readPortfolioOnce(clients: Clients, root: Address): Promise<Portf
     });
   }
   for (const log of spends) {
+    if (log.args.value == null) continue;
+    const amount = erc20SpendRaw(log.address, log.args.value);
+    if (amount == null) continue;
     activity.push({
       kind: "spend",
       tx: log.transactionHash,
@@ -407,7 +411,7 @@ async function readPortfolioOnce(clients: Clients, root: Address): Promise<Portf
       timestamp: await blockTime(client, log.blockNumber, times),
       tab: log.args.from,
       to: log.args.to,
-      amount: log.args.value?.toString(),
+      amount,
     });
   }
   activity.sort((a, b) => Number(b.block) - Number(a.block));

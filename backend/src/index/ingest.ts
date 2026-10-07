@@ -6,6 +6,7 @@ import { startHeadFeed, headSocketOpen } from "./heads.js";
 import { indexHealth, ingestRead, noteIndexCursor, noteIndexError, noteIndexHead } from "./lane.js";
 import { reconcileVolatile } from "./portfolio.js";
 import type { Sql } from "./sql.js";
+import { erc20SpendRaw } from "./usdc-event.js";
 
 const PAGE = 2_000n;
 
@@ -123,7 +124,9 @@ async function indexWindowBody(
           withRpcRetry(() => client.getLogs({ address: USDC, event: spent, args: { from: tabs }, fromBlock: from, toBlock: to }), 1),
         );
   const spends = spendLogs.flatMap((log) => {
-    if (log.blockNumber == null || log.logIndex == null || log.transactionHash == null || !log.args.from || !log.args.to) return [];
+    if (log.blockNumber == null || log.logIndex == null || log.transactionHash == null || !log.args.from || !log.args.to || log.args.value == null) return [];
+    const amount = erc20SpendRaw(log.address, log.args.value);
+    if (amount == null) return [];
     return [
       {
         block: log.blockNumber,
@@ -134,7 +137,7 @@ async function indexWindowBody(
         kind: "spend" as const,
         tab: log.args.from,
         payee: log.args.to,
-        amount: log.args.value?.toString(),
+        amount,
       },
     ];
   });
