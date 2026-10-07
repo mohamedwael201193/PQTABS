@@ -85,6 +85,7 @@ function PostureTile({
 export default function SecurityView() {
   const security = useSecurity();
   const totals = useTotals();
+  const portfolioReady = usePqtabsData((state) => state.portfolioReady);
   const tabs = useTabs();
   const agents = useAgents();
   const activity = useActivity();
@@ -154,7 +155,7 @@ export default function SecurityView() {
         />
       </div>
 
-      <ExposureMeter totals={totals} />
+      <ExposureMeter totals={totals} capabilitiesKnown={portfolioReady} />
 
       {/* Root authority + custody */}
       <div className="grid gap-4 lg:grid-cols-3">

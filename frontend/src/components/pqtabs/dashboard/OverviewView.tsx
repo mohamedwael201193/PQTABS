@@ -134,7 +134,7 @@ export default function OverviewView() {
           label="Open exposure"
           icon={<Wallet strokeWidth={1.75} />}
           value={<CountUp value={totals.allocatedUsd} format={usd} />}
-          sub={`${totals.activeTabCount} active tabs`}
+          sub={portfolioReady ? `${totals.activeTabCount} active capabilities` : "capability list not loaded"}
         />
         <StatCard
           delay={0.12}
@@ -145,17 +145,19 @@ export default function OverviewView() {
         />
         <StatCard
           delay={0.18}
-          label="Active tabs"
+          label="Active capabilities"
           icon={<Layers strokeWidth={1.75} />}
           accent="teal"
-          value={<span>{totals.activeTabCount}</span>}
+          value={<span>{portfolioReady ? totals.activeTabCount : "—"}</span>}
           sub={
-            totals.reclaimableUsd > 0 ? (
+            !portfolioReady ? (
+              "list not loaded"
+            ) : totals.reclaimableUsd > 0 ? (
               <span className="text-warning">
                 {totals.reclaimableTabCount} ready to reclaim
               </span>
             ) : (
-              "none expired"
+              "none ready to reclaim"
             )
           }
         />
@@ -201,7 +203,7 @@ export default function OverviewView() {
             Where every dollar can reach
           </p>
           <div className="mt-5">
-            <ExposureMeter totals={totals} />
+            <ExposureMeter totals={totals} capabilitiesKnown={portfolioReady} />
           </div>
         </section>
       </Reveal>

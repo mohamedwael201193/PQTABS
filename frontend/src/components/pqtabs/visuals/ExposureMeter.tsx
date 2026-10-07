@@ -13,9 +13,11 @@ import { cn } from "@/lib/utils";
  */
 export function ExposureMeter({
   totals,
+  capabilitiesKnown = true,
   className,
 }: {
   totals: TreasuryTotals;
+  capabilitiesKnown?: boolean;
   className?: string;
 }) {
   const reduced = useReducedMotion();
@@ -72,7 +74,11 @@ export function ExposureMeter({
       <div
         className="relative mt-3 flex h-14 overflow-hidden rounded-xl border border-white/[.08] bg-[#0e1013] md:h-16"
         role="img"
-        aria-label={`Funds held ${usd(held)}: ${usd(inRoot)} still in the root, ${usd(reach)} an agent can reach, ${usd(reclaimable)} awaiting reclaim`}
+        aria-label={
+          capabilitiesKnown
+            ? `Funds held ${usd(held)}: ${usd(inRoot)} still in the root, ${usd(reach)} an agent can reach, ${usd(reclaimable)} awaiting reclaim`
+            : `Root balance ${usd(inRoot)}. What an agent can reach is not loaded yet.`
+        }
       >
         {segments.map((s, i) => (
           <motion.div
@@ -113,15 +119,17 @@ export function ExposureMeter({
       {/* Legend */}
       <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2">
         <LegendRow dot="bg-white/25" label="Still in the root" value={usd(inRoot)} />
-        <LegendRow dot="bg-gold" label="An agent can reach" value={usd(reach)} />
+        <LegendRow dot="bg-gold" label="An agent can reach" value={capabilitiesKnown ? usd(reach) : "not loaded"} />
         {reclaimable > 0 && (
           <LegendRow dot="bg-warning" label="Awaiting reclaim" value={usd(reclaimable)} />
         )}
       </div>
       <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
-        {reach > 0
-          ? `An agent can reach ${usd(reach)}. The ${usd(inRoot)} still in the root is outside that capability.`
-          : "No capability is open, so an agent cannot spend this treasury."}
+        {!capabilitiesKnown
+          ? "The capability list has not finished, so what an agent can reach is not shown yet."
+          : reach > 0
+            ? `An agent can reach ${usd(reach)}. The ${usd(inRoot)} still in the root is outside that capability.`
+            : "No capability is open, so an agent cannot spend this treasury."}
       </p>
     </div>
   );
