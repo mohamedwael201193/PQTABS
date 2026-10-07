@@ -23,10 +23,9 @@ export function useAccountData(): {
   const setPortfolioError = usePqtabsData((state) => state.setPortfolioError);
   const replaceSnapshot = usePqtabsData((state) => state.replaceSnapshot);
   const [snapshot, setSnapshot] = useState<AccountSnapshot | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [hydrated, setHydrated] = useState(false);
+  const [settled, setSettled] = useState<{ key: string; error: string | null }>({ key: "", error: null });
 
   useEffect(() => {
     let cancelled = false;
@@ -83,19 +82,13 @@ export function useAccountData(): {
     return stop;
   }, [registrar, setChainId]);
 
+  const requestKey = registrar ? `${registrar.toLowerCase()}:${attempt}` : "";
+
   useEffect(() => {
-    if (!hydrated) return;
-    if (!registrar) {
-      setSnapshot(null);
-      setLoading(false);
-      setError(null);
-      return;
-    }
+    if (!hydrated || !registrar) return;
     let cancelled = false;
     let treasuryShown = false;
-    setLoading(true);
-    setError(null);
-    setSnapshot(null);
+    const key = `${registrar.toLowerCase()}:${attempt}`;
     setPortfolioReady(false);
     setPortfolioError(null);
     loadAccount(registrar, (treasury) => {
@@ -103,7 +96,7 @@ export function useAccountData(): {
       treasuryShown = true;
       replaceSnapshot(treasury);
       setSnapshot(treasury);
-      setLoading(false);
+      setSettled({ key, error: null });
     })
       .then((data) => {
         if (cancelled) return;
@@ -111,28 +104,26 @@ export function useAccountData(): {
         setSnapshot(data);
         setPortfolioReady(true);
         setPortfolioError(null);
-        setLoading(false);
-        setError(null);
+        setSettled({ key, error: null });
       })
       .catch((reason: unknown) => {
         if (cancelled) return;
         const message = reason instanceof Error ? reason.message : "Couldn't load your treasury.";
-        setError(message);
-        setLoading(false);
         if (treasuryShown) setPortfolioError(message);
         if (!treasuryShown) setSnapshot(null);
+        setSettled({ key, error: message });
       });
     return () => {
       cancelled = true;
     };
   }, [attempt, hydrated, registrar, replaceSnapshot, setPortfolioError, setPortfolioReady]);
 
-  const retry = () => {
-    setError(null);
-    setAttempt((value) => value + 1);
-  };
+  const retry = () => setAttempt((value) => value + 1);
+  const settledHere = settled.key === requestKey;
+  const loading = !hydrated || (requestKey !== "" && !settledHere);
+  const error = settledHere ? settled.error : null;
 
-  return { snapshot, loading, error, retry };
+  return { snapshot: requestKey === "" ? null : settledHere ? snapshot : null, loading, error, retry };
 }
 
 export function switchRegistrar(address: string): void {
