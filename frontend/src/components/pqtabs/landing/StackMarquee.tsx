@@ -13,7 +13,7 @@ import { Reveal } from "@/components/pqtabs/shared";
 
 const ITEMS = [
   "SLH-DSA",
-  "FIPS 204",
+  "FIPS 205",
   "ARC",
   "BARKEEP",
   "USDC",

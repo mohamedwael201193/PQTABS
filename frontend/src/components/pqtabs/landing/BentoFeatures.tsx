@@ -19,7 +19,7 @@ import {
  * the ledger card closes the grid full-width — no orphan cells.
  */
 
-const CHIPS = ["FIPS 204", "SLH-DSA", "ARC"] as const;
+const CHIPS = ["FIPS 205", "SLH-DSA", "ARC"] as const;
 
 const CARDS: { icon: Icon3DName; kicker: string; title: string; body: string }[] =
   [
@@ -82,7 +82,7 @@ export default function BentoFeatures() {
                     Assume breach
                   </p>
                   <h3 className="mt-4 font-display text-2xl font-semibold leading-[1.12] tracking-tight text-foreground md:text-3xl">
-                    Nothing leaves without a signature.
+                    Nothing is reachable beyond the cap.
                   </h3>
                 </div>
                 <span className="mt-1 block shrink-0 origin-top-right scale-[.6] sm:scale-90 lg:scale-100">
