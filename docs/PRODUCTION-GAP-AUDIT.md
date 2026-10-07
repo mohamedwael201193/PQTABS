@@ -89,17 +89,17 @@ Verified, and not to be re-derived unless the cited file or live behavior change
 
 ### Agent key continuity
 
-- Current behavior: the agent key exists only until reload. The name survives. After reload the UI says the agent cannot spend. There is no export of an encrypted agent key.
-- Expected behavior: the user never pastes a private key. If the agent is supposed to keep paying after refresh, a secure continuity path exists and is explained before creation. If it is device-session-only, that is stated before Create, not after the key is already gone.
-- Root cause: the key was kept out of `localStorage` on purpose. The product then still says “create an agent” as if the agent outlives the tab.
-- Security impact: writing the raw key to `localStorage` would expose it to any script on the origin.
-- UX impact: a created agent becomes unable to pay, with the explanation after the fact.
-- Performance impact: none.
+- Current behavior: creating an agent encrypts the ECDSA key in IndexedDB with a non-extractable AES-GCM key that stays in this browser. The Agents page says that before creation. A passphrase file in format `PQTABS-AGENT-1` can move the key to another device. `localStorage` still stores only the name, purpose, and address. A registrar change drops the in-memory copies and loads only that registrar's vault. This reload path has not been exercised in Chrome on the production origin yet.
+- Expected behavior: the user never pastes a private key. The agent can sign again after a refresh in the same browser. Another device needs the encrypted backup.
+- Root cause: a module `Map` died with the page, so a created agent stopped being able to pay.
+- Security impact: the raw key is not written to `localStorage`. Any script that already runs on this origin can still ask IndexedDB to decrypt, because the wrap key is origin-bound and has no passphrase.
+- UX impact: the copy now says the key stays encrypted in this browser, and the agent drawer can export or restore a backup.
+- Performance impact: none on portfolio reads.
 - Competitor comparison: Barkeep keeps the agent key in the MCP process and the owner key in a separate process. A-Identity’s operator is often a server signer. AgentPay’s suggested limits are off-chain; a stolen signer can pay any recipient the allowance allows. https://github.com/barbarosalagoz/barkeep-arc and https://github.com/enstest1/arc-agentpay
 - Arc relevance: the spend is an EIP-3009 signature over USDC, relayed by the backend. The backend does not hold the agent key. The activity row must use the token log’s `from`, not `tx.from`.
-- Required change: choose one model after this audit is complete: encrypted browser vault with unlock, or an explicit session-only agent with a real export. Do not store a raw key.
-- Risk: a vault passphrase that is the same as the root passphrase widens a single theft. A vault that cannot be restored makes the agent as fragile as the session map.
-- Test required: create agent, reload, and either spend still signs or the pre-create copy already said it would not.
+- Required change: prove create, reload, and sign on the production origin. Do not store a raw key.
+- Risk: a stolen browser profile can unwrap the key without a passphrase. The exported file still needs its passphrase.
+- Test required: `npm run test:agent-vault` in `frontend/` checks that the backup ciphertext does not contain the key and that the wrong passphrase fails. A Chrome reload spend is still open.
 - Deployment impact: frontend. No contract deploy. Agent identity is not on `PQRoot`.
 
 ### Contract surface
@@ -155,7 +155,8 @@ Not stronger yet: Pigeonhole and PoolLens answer a read without scanning factory
 
 ## Not decided yet
 
-- Database host. Postgres is the store the indexer should use. This environment has no database URL, so production cannot switch off the scan until one is set on Render and nowhere in `NEXT_PUBLIC_*`.
-- Whether the encrypted root backup may live in the browser. The decrypted signing key must not.
-- Whether agent continuity is an encrypted vault or a stated session limit.
-- Whether on-chain rotate should become a product action against the current `PQRoot` ABI.
+- Supabase Postgres is the derived store. Render's disk is not. The free Render web service can still sleep, so the first request after idle is a hosting delay, not an index scan.
+- The indexer polls `eth_getLogs`. It does not subscribe to `newHeads`.
+- The encrypted root backup is still a file the user holds. The decrypted signing key is not stored.
+- On-chain rotate and treasury transfer exist on `PQRoot` and are not product actions.
+- A Chrome proof that an agent pays after refresh, and a fresh-wallet mainnet journey, are still open.

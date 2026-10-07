@@ -53,7 +53,7 @@ Key rotation and old signatures: I19.
 
 User A against user B, agent A against agent B: I11 and I12.
 
-Database corruption: there is no database. A restart rereads the chain.
+Database corruption: Postgres holds derived rows only. A wrong balance is replaced on the next reconciliation, and `scripts/rebuild-index.mjs` can delete the rows and read Arc again. The chain is not rewritten from the database.
 
 RPC inconsistency or a dropped transaction: the backend returns the receipt it actually fetched. A transaction with `maxFeePerGas` below 20 gwei can be dropped by Arc with no receipt. The relayer uses at least 20 gwei.
 

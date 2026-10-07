@@ -1,6 +1,6 @@
 # API and signing contract
 
-The backend is a stateless reader and relayer. It does not hold a PQ seed, an agent key, or the deployer key. Chain state is authoritative. There is no database.
+The backend relays prepared actions and serves a derived index. It does not hold a PQ seed, an agent key, or the deployer key. Chain state is authoritative. Postgres stores rebuildable rows. It is not an authority.
 
 Public configuration, also returned by `GET /v1/config`:
 
@@ -25,7 +25,9 @@ ABIs generated from the compiler are in `abi/PQRoot.json` and `abi/RootFactory.j
 
 `GET /v1/roots/:address` reads `pqVk`, `registrar`, `nextNonce`, `maxOpenExposure`, `openExposure`, and the USDC balance. Unknown addresses return `unknown_root`.
 
-`GET /v1/roots/:address/portfolio` reads the derived index for that root, then one multicall for current tab state. It does not scan factory history. The body includes `freshness` and `indexedThrough`. `freshness: "indexing"` means the cursor is still behind Arc and the rows are incomplete. Unknown addresses return `unknown_root`.
+`GET /v1/roots/:address/portfolio` reads stored rows for that root. It does not call Arc and it does not scan factory history. Balances and per-payment limits are whatever the background reconciliation last wrote. The body includes `freshness` and `indexedThrough`. `freshness` is `live`, `recent`, `indexing`, `degraded`, or `unavailable`. A missing stored balance is not reported as zero. Unknown addresses return `unknown_root`.
+
+`GET /v1/index` returns `indexedBlock`, `chainHead`, `lag`, `lastSuccessfulIndex`, `lastError`, and `queueDepth`. It does not return secrets.
 
 `GET /v1/roots/:root/tabs/:tab` reads the root's `tabs` record plus the tab's `owner`, `agent`, `maxPerCall`, `expiry`, and USDC balance.
 

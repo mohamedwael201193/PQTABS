@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChevronDown, Copy, Plus, ShieldOff } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/sheet";
 import { StatusChip } from "@/components/pqtabs/shared";
 import { relFuture, relTime, usd } from "@/data/formatters";
-import { recallAgentKey } from "@/data/spend";
+import { downloadAgentBackup, importAgentBackup, recallAgentKey } from "@/data/spend";
 import type { Agent } from "@/data/types";
 import { useActivity, useAgents, useDashboardUi, usePqtabsData, useTabs } from "@/lib/store";
 import { ActivityRow } from "./shared/ActivityRow";
@@ -81,7 +81,8 @@ function AgentDrawerBody({ agent }: { agent: Agent }) {
   const setCreateOpen = useDashboardUi((s) => s.setCreateOpen);
 
   const labels = usePqtabsData((state) => state.agentLabels);
-  const keyGone = Boolean(labels[agent.id.toLowerCase()]) && !recallAgentKey(agent.id);
+  const vaultEpoch = usePqtabsData((state) => state.agentVaultEpoch);
+  const keyGone = Boolean(labels[agent.id.toLowerCase()]) && vaultEpoch >= 0 && !recallAgentKey(agent.id);
   const activeTabs = tabs.filter(
     (t) => t.agentId.toLowerCase() === agent.id.toLowerCase() && t.status === "active",
   );
@@ -267,10 +268,10 @@ function AgentDrawerBody({ agent }: { agent: Agent }) {
       <div className="shrink-0 border-t border-white/[.06] bg-[#0a0b0d]/95 px-5 py-4 backdrop-blur md:px-6">
         <div className="flex flex-wrap items-center gap-2">
           {keyGone ? (
-            <p className="text-xs leading-relaxed text-muted-foreground">
-              The signing key was only kept for the session that created it. Create a new agent to give it a capability.
-            </p>
+            <AgentBackup address={agent.id} mode="restore" />
           ) : (
+          <>
+          <AgentBackup address={agent.id} mode="export" />
           <Button
             onClick={() => {
               setCreateOpen(true, agent.id);
@@ -281,6 +282,7 @@ function AgentDrawerBody({ agent }: { agent: Agent }) {
             <Plus className="size-4" strokeWidth={2} />
             Create capability
           </Button>
+          </>
           )}
           <AlertDialog>
             {activeTabs.length > 0 ? (
@@ -325,5 +327,73 @@ function AgentDrawerBody({ agent }: { agent: Agent }) {
         </div>
       </div>
     </>
+  );
+}
+
+function AgentBackup({ address, mode }: { address: string; mode: "export" | "restore" }) {
+  const registrar = usePqtabsData((state) => state.registrar);
+  const [passphrase, setPassphrase] = useState("");
+  const [note, setNote] = useState("");
+
+  async function exportBackup() {
+    setNote("");
+    try {
+      await downloadAgentBackup(address, passphrase);
+      setPassphrase("");
+      setNote("Encrypted backup downloaded. It does not contain a readable key.");
+    } catch (error) {
+      setNote(error instanceof Error ? error.message : "The backup was not created.");
+    }
+  }
+
+  async function restore(file: File | undefined) {
+    if (!file || !registrar) return;
+    setNote("");
+    try {
+      const opened = await importAgentBackup(registrar, await file.text(), passphrase);
+      if (opened.toLowerCase() !== address.toLowerCase()) {
+        setNote("That backup belongs to a different agent.");
+        return;
+      }
+      usePqtabsData.getState().noteAgentVault();
+      setPassphrase("");
+      setNote("This browser can sign for this agent again.");
+    } catch (error) {
+      setNote(error instanceof Error ? error.message : "The backup was not restored.");
+    }
+  }
+
+  return (
+    <div className="w-full space-y-2">
+      <p className="text-xs leading-relaxed text-muted-foreground">
+        {mode === "export"
+          ? "Export an encrypted backup before you use this agent on another device. The file is not a private key."
+          : "Restore the encrypted backup for this agent. The passphrase never leaves this browser."}
+      </p>
+      <input
+        type="password"
+        value={passphrase}
+        onChange={(event) => setPassphrase(event.target.value)}
+        placeholder="Backup passphrase"
+        autoComplete="new-password"
+        className="h-9 w-full rounded-lg border border-white/10 bg-transparent px-3 text-sm text-foreground outline-none"
+      />
+      {mode === "export" ? (
+        <Button type="button" onClick={() => void exportBackup()} disabled={passphrase.length < 8} className="h-9 bg-transparent text-foreground">
+          Download encrypted backup
+        </Button>
+      ) : (
+        <label className="inline-flex h-9 cursor-pointer items-center rounded-lg border border-white/10 px-3 text-sm text-foreground">
+          Choose backup file
+          <input
+            type="file"
+            accept="application/json,.json"
+            className="sr-only"
+            onChange={(event) => void restore(event.target.files?.[0])}
+          />
+        </label>
+      )}
+      {note ? <p className="text-xs text-muted-foreground">{note}</p> : null}
+    </div>
   );
 }

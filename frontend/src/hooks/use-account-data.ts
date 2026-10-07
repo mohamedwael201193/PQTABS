@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { AccountSnapshot } from "@/data/types";
 import { loadAccount, rememberRegistrar } from "@/data/production";
+import { restoreAgentKeys } from "@/data/spend";
 import { existingAccount, watchChain, watchWallet, walletClient } from "@/data/wallet";
 import { usePqtabsData } from "@/lib/store";
 
@@ -47,6 +48,21 @@ export function useAccountData(): {
       cancelled = true;
     };
   }, [registrar, setRegistrar]);
+
+  useEffect(() => {
+    if (!registrar) return;
+    let cancelled = false;
+    restoreAgentKeys(registrar)
+      .then(() => {
+        if (!cancelled) usePqtabsData.getState().noteAgentVault();
+      })
+      .catch(() => {
+        if (!cancelled) usePqtabsData.getState().noteAgentVault();
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [registrar]);
 
   useEffect(() => {
     let stop = () => {};

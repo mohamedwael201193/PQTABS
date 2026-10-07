@@ -18,27 +18,35 @@ export default function AgentsView() {
   const portfolioError = usePqtabsData((state) => state.portfolioError);
   const agents = useAgents();
   const labels = usePqtabsData((state) => state.agentLabels);
+  const vaultEpoch = usePqtabsData((state) => state.agentVaultEpoch);
   const tabs = useTabs();
   const openDrawer = useDashboardUi((s) => s.openDrawer);
   const setCreateOpen = useDashboardUi((s) => s.setCreateOpen);
   const [name, setName] = useState("");
   const [purpose, setPurpose] = useState("");
+  const [keyError, setKeyError] = useState("");
 
   function createAgent() {
     const label = name.trim();
     if (!label) return;
-    const created = createAgentKey();
-    usePqtabsData.getState().addLocalAgent({
-      id: created.address,
-      name: label,
-      address: created.address,
-      status: "active",
-      role: purpose.trim() || "Created in this browser session. No treasury access until you give it a capability.",
-      addedHoursAgo: 0,
-      lastActiveHoursAgo: null,
-    });
-    setName("");
-    setPurpose("");
+    setKeyError("");
+    void createAgentKey()
+      .then((created) => {
+        usePqtabsData.getState().addLocalAgent({
+        id: created.address,
+        name: label,
+        address: created.address,
+        status: "active",
+        role: purpose.trim() || "This browser holds the encrypted signing key. No treasury access until you give it a capability.",
+        addedHoursAgo: 0,
+        lastActiveHoursAgo: null,
+      });
+      setName("");
+      setPurpose("");
+      })
+      .catch((error: unknown) => {
+        setKeyError(error instanceof Error ? error.message : "This browser could not store the agent key.");
+      });
   }
 
   return (
@@ -50,8 +58,8 @@ export default function AgentsView() {
           <h1 className="mt-2 font-display text-2xl font-semibold tracking-tight md:text-3xl">
             Agents
           </h1>
-          <p className="mt-1.5 text-sm text-muted-foreground">
-            Who can act, and under which capabilities.
+          <p className="mt-1.5 max-w-xl text-sm text-muted-foreground">
+            Who can act, and under which capabilities. The signing key stays encrypted in this browser. It can pay after a reload. Another device needs an encrypted backup.
           </p>
         </div>
         <Button onClick={createAgent} disabled={!name.trim()} className="bg-gold text-[#171204] hover:bg-[#eec95e]">
@@ -78,6 +86,7 @@ export default function AgentsView() {
           />
         </label>
       </div>
+      {keyError ? <p className="text-sm text-danger">{keyError}</p> : null}
 
       {agents.length > 0 ? (
         <ul className="space-y-3">
@@ -86,7 +95,7 @@ export default function AgentsView() {
               (t) => t.agentId.toLowerCase() === agent.id.toLowerCase() && t.status === "active",
             );
             const authorized = activeTabs.reduce((s, t) => s + t.capUsd, 0);
-            const canSign = Boolean(recallAgentKey(agent.id));
+            const canSign = vaultEpoch >= 0 && Boolean(recallAgentKey(agent.id));
             const keyGone = Boolean(labels[agent.id.toLowerCase()]) && !canSign;
             return (
               <li key={agent.id}>
@@ -113,7 +122,7 @@ export default function AgentsView() {
                     {activeTabs.length === 0 && (
                       <span className="mt-2 block text-xs text-muted-foreground">
                         {keyGone
-                          ? "The signing key was only kept for the session that created it. This agent cannot spend from this browser."
+                          ? "This browser does not hold this agent's encrypted key. Restore its backup before it can pay from here."
                           : "This agent has no treasury access by itself."}
                       </span>
                     )}

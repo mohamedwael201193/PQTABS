@@ -130,6 +130,7 @@ function CreateFlow() {
   const setView = useDashboardUi((s) => s.setView);
   const agents = useAgents();
   const labels = usePqtabsData((state) => state.agentLabels);
+  const vaultEpoch = usePqtabsData((state) => state.agentVaultEpoch);
   const recipients = useRecipients();
   const totals = useTotals();
   const rootBalance = usePqtabsData((state) => state.snapshot.account.treasuryTotalUsd);
@@ -145,6 +146,7 @@ function CreateFlow() {
   const [perCall, setPerCall] = useState(0.01);
   const [agentDraft, setAgentDraft] = useState("");
   const [agentName, setAgentName] = useState("");
+  const [agentKeyError, setAgentKeyError] = useState("");
   const [agentNote, setAgentNote] = useState<string | null>(null);
   const [payeeDraft, setPayeeDraft] = useState("");
   const [payeeNote, setPayeeNote] = useState<string | null>(null);
@@ -174,10 +176,10 @@ function CreateFlow() {
       agents.filter((agent) => {
         if (agent.status === "revoked") return false;
         const namedHere = Boolean(labels[agent.id.toLowerCase()]);
-        if (namedHere && !recallAgentKey(agent.id)) return false;
+        if (namedHere && vaultEpoch >= 0 && !recallAgentKey(agent.id)) return false;
         return true;
       }),
-    [agents, labels],
+    [agents, labels, vaultEpoch],
   );
   const directory = useMemo(() => [...recipients, ...extraRecipients], [recipients, extraRecipients]);
   const typedAgent = isAddress(agentDraft) ? agentDraft : null;
@@ -527,26 +529,33 @@ function CreateFlow() {
                   onClick={() => {
                     const name = agentName.trim();
                     if (!name) return;
-                    const created = createAgentKey();
-                    usePqtabsData.getState().addLocalAgent({
-                      id: created.address,
-                      name,
-                      address: created.address,
-                      status: "active",
-                      role: "Created in this browser session. No treasury access until you give it a capability.",
-                      addedHoursAgo: 0,
-                      lastActiveHoursAgo: null,
-                    });
-                    setAgentId(created.address);
-                    setAgentDraft("");
-                    setAgentName("");
+                    setAgentKeyError("");
+                    void createAgentKey()
+                      .then((created) => {
+                      usePqtabsData.getState().addLocalAgent({
+                        id: created.address,
+                        name,
+                        address: created.address,
+                        status: "active",
+                        role: "This browser holds the encrypted signing key. No treasury access until you give it a capability.",
+                        addedHoursAgo: 0,
+                        lastActiveHoursAgo: null,
+                      });
+                      setAgentId(created.address);
+                      setAgentDraft("");
+                      setAgentName("");
+                      })
+                      .catch((error: unknown) => {
+                        setAgentKeyError(error instanceof Error ? error.message : "This browser could not store the agent key.");
+                      });
                   }}
                 >
                   Create agent
                 </Button>
                 <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                  The signing key stays in this browser session. It is not saved and it is not shown. After a refresh, this agent cannot spend.
+                  The signing key is encrypted in this browser and is not shown. This agent can pay after a reload. It cannot pay from another device unless you export an encrypted backup.
                 </p>
+                {agentKeyError ? <p className="mt-2 text-xs text-danger">{agentKeyError}</p> : null}
                 <details className="mt-3 text-xs text-muted-foreground">
                   <summary className="cursor-pointer">Use an agent already on this device</summary>
                   <Input

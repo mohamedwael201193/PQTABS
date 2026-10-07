@@ -201,6 +201,8 @@ function TabDrawerBody({
   const amountCheck = paymentRaw(spendAmount, tab);
 
   const agent = agents.find((a) => a.id === tab.agentId);
+  const vaultEpoch = usePqtabsData((state) => state.agentVaultEpoch);
+  const canPay = vaultEpoch >= 0 && Boolean(recallAgentKey(tab.agentId));
   const allowed = recipients.filter((r) => tab.policy.allowedRecipients.includes(r.id));
   const spendHistory = activity.filter(
     (a) => a.tabId === tab.id && (a.kind === "payment" || a.kind === "policy_blocked")
@@ -444,13 +446,13 @@ function TabDrawerBody({
           {"error" in amountCheck && (
             <p className="mt-2 text-xs text-danger">{amountCheck.error}</p>
           )}
-          {!recallAgentKey(tab.agentId) && (
+          {!canPay && (
             <p className="mt-2 text-xs text-muted-foreground">
-              This browser session does not hold this agent's signing key, so it cannot sign a payment.
+              This browser does not hold this agent's encrypted key, so it cannot sign a payment until you restore the backup.
             </p>
           )}
           <Button
-            disabled={paying || !recallAgentKey(tab.agentId) || "error" in amountCheck}
+            disabled={paying || !canPay || "error" in amountCheck}
             onClick={() => {
               if (payLock.current || "error" in amountCheck) return;
               const key = (recallAgentKey(tab.agentId) || "") as `0x${string}`;
