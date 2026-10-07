@@ -1,4 +1,5 @@
 import { digestFor, encodeClose, encodeOpen, signatureBytes } from "./actions";
+import { usd } from "./formatters";
 import { arcClient } from "./wallet";
 import type { Hex } from "viem";
 import type {
@@ -236,7 +237,9 @@ function mapSnapshot(
   asOf?: string,
 ): AccountSnapshot {
   const chainNow = asOf ? Number(asOf) : Number.NaN;
-  const now = Number.isFinite(chainNow) && chainNow > 0 ? chainNow : Date.now() / 1000;
+  const timed = Number.isFinite(chainNow) && chainNow > 0;
+  if (!timed && rows.length > 0) throw new Error("Could not read Arc's clock.");
+  const now = timed ? chainNow : 0;
   const recipients = new Map<string, Recipient>();
   const tabs: Tab[] = rows.map((row) => {
     for (const payee of row.payees) {
@@ -365,6 +368,34 @@ function activitySummary(event: PortfolioEvent, root: string): string {
   if (event.kind === "spend") return `Agent paid ${amount} USDC to ${event.to ? short(event.to) : "a recipient"}.`;
   if (event.kind === "rotated") return "Root verifying key rotated. Older signatures no longer verify.";
   return `Root transferred ${amount} USDC.`;
+}
+
+export function describeReturn(
+  path: "reclaim" | "sweep",
+  row: Pick<Tab, "status" | "balanceUsd" | "needsSweep"> | undefined,
+  priorBalanceUsd: number,
+): { settled: boolean; leftover: boolean; message: string } {
+  if (path === "sweep") {
+    if (!row || row.needsSweep || row.balanceUsd > 0) {
+      return { settled: false, leftover: true, message: "The receipt succeeded, but the capability still holds USDC." };
+    }
+    return {
+      settled: true,
+      leftover: false,
+      message: priorBalanceUsd > 0 ? `${usd(priorBalanceUsd)} returned to the treasury` : "The capability no longer holds USDC.",
+    };
+  }
+  if (!row || row.status !== "closed") {
+    return { settled: false, leftover: false, message: "Arc did not show this capability as closed." };
+  }
+  if (row.needsSweep || row.balanceUsd > 0) {
+    return { settled: true, leftover: true, message: "The capability is closed. USDC is still on it until Return funds succeeds." };
+  }
+  return {
+    settled: true,
+    leftover: false,
+    message: priorBalanceUsd > 0 ? `${usd(priorBalanceUsd)} returned to the treasury` : "The exposure limit was released.",
+  };
 }
 
 export function totalsFrom(account: UserAccount, tabs: Tab[]): TreasuryTotals {

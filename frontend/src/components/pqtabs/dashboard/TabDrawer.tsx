@@ -26,7 +26,7 @@ import {
 import { StatusChip } from "@/components/pqtabs/shared";
 import { relFuture, usd } from "@/data/formatters";
 import { isAddress, parseUsdcRaw } from "@/data/actions";
-import { loadSnapshot, prepareClose, productionProvider, submitPrepared, submitSpend, type PreparedAction } from "@/data/production";
+import { describeReturn, loadSnapshot, prepareClose, productionProvider, submitPrepared, submitSpend, type PreparedAction } from "@/data/production";
 import { authorizationBlob, recallAgentKey } from "@/data/spend";
 import { rootUnlocked, signRootDigest, unlockBackup } from "@/data/pq-vault";
 import type { Tab } from "@/data/types";
@@ -138,11 +138,14 @@ export default function TabDrawer() {
       }
       const snapshot = await loadSnapshot(store.registrar);
       const row = snapshot.tabs.find((item) => item.id.toLowerCase() === liveTab.id.toLowerCase());
-      if (!row || row.status !== "closed") {
-        throw new Error("The receipt succeeded, but this capability is still open.");
+      const outcome = describeReturn("reclaim", row, liveTab.balanceUsd);
+      if (usePqtabsData.getState().registrar.toLowerCase() !== store.registrar.toLowerCase()) {
+        throw new Error("The wallet changed. The receipt belongs to the previous wallet.");
       }
+      if (!outcome.settled) throw new Error(outcome.message);
       usePqtabsData.getState().acceptPortfolio(snapshot);
-      toast.success("Reclaim confirmed on Arc");
+      if (outcome.leftover) toast.message(outcome.message);
+      else toast.success(outcome.message);
       closeDrawer();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Couldn't reclaim this capability.");

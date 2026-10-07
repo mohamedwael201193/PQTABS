@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { EmptyState, StatusChip } from "@/components/pqtabs/shared";
 import { relTime, usd } from "@/data/formatters";
-import { loadSnapshot, productionProvider } from "@/data/production";
+import { describeReturn, loadSnapshot, productionProvider } from "@/data/production";
 import type { Tab } from "@/data/types";
 import { useAgents, useActivity, useDashboardUi, usePqtabsData, useTabs } from "@/lib/store";
 import { TabCard } from "./shared/TabCard";
@@ -55,15 +55,14 @@ export default function TabsView() {
       }
       const snapshot = await loadSnapshot(store.registrar);
       const row = snapshot.tabs.find((item) => item.id.toLowerCase() === tab.id.toLowerCase());
-      const returned = row && row.balanceUsd === 0 && (path === "reclaim" ? row.status === "closed" : !row.needsSweep);
-      if (!returned) throw new Error("The receipt succeeded, but the capability still holds USDC.");
+      const outcome = describeReturn(path, row, tab.balanceUsd);
       if (usePqtabsData.getState().registrar.toLowerCase() !== store.registrar.toLowerCase()) {
         throw new Error("The wallet changed. The receipt belongs to the previous wallet.");
       }
+      if (!outcome.settled) throw new Error(outcome.message);
       usePqtabsData.getState().acceptPortfolio(snapshot);
-      toast.success(
-        tab.balanceUsd > 0 ? `${usd(tab.balanceUsd)} returned to the treasury` : "The exposure limit was released.",
-      );
+      if (outcome.leftover) toast.message(outcome.message);
+      else toast.success(outcome.message);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Couldn't return these funds.");
     } finally {
