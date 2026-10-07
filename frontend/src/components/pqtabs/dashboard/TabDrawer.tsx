@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, Copy, KeyRound, Loader2, RotateCcw, X } from "lucide-react";
+import { Check, Copy, Loader2, RotateCcw, X } from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -59,13 +59,11 @@ export default function TabDrawer() {
 
   const [closing, setClosing] = useState(false);
   const [reclaiming, setReclaiming] = useState(false);
-  const [rotating, setRotating] = useState(false);
 
   const liveId = liveTab?.id ?? null;
   useEffect(() => {
     setClosing(false);
     setReclaiming(false);
-    setRotating(false);
   }, [liveId]);
 
   // If the capability disappears while its drawer is open, close gracefully.
@@ -123,10 +121,6 @@ export default function TabDrawer() {
     }
   }
 
-  function handleRotate() {
-    toast.message("This agent key is bound to this tab. Open a new capability for a new key, then close this one.");
-  }
-
   return (
     <Sheet open={open} onOpenChange={(o) => !o && closeDrawer()}>
       <SheetContent side="right" className={SHEET_CLASS}>
@@ -135,10 +129,8 @@ export default function TabDrawer() {
             tab={tab}
             closing={closing}
             reclaiming={reclaiming}
-            rotating={rotating}
             onClose={handleClose}
             onReclaim={handleReclaim}
-            onRotate={handleRotate}
             onCopy={copyText}
           />
         ) : null}
@@ -151,19 +143,15 @@ function TabDrawerBody({
   tab,
   closing,
   reclaiming,
-  rotating,
   onClose,
   onReclaim,
-  onRotate,
   onCopy,
 }: {
   tab: Tab;
   closing: boolean;
   reclaiming: boolean;
-  rotating: boolean;
   onClose: (prepared: PreparedAction, signature: string) => void;
   onReclaim: () => void;
-  onRotate: () => void;
   onCopy: (text: string, message: string) => void;
 }) {
   const agents = useAgents();
@@ -553,7 +541,7 @@ function TabDrawerBody({
             </AlertDialog>
           )}
 
-          {tab.status === "expired" && tab.balanceUsd > 0 && (
+          {tab.status === "expired" && (
             <Button
               onClick={onReclaim}
               disabled={reclaiming}
@@ -564,22 +552,9 @@ function TabDrawerBody({
               ) : (
                 <RotateCcw className="size-4" strokeWidth={2} />
               )}
-              Reclaim {usd(tab.balanceUsd)}
+              {tab.balanceUsd > 0 ? `Reclaim ${usd(tab.balanceUsd)}` : "Release limit"}
             </Button>
           )}
-
-          <Button
-            onClick={onRotate}
-            disabled={rotating}
-            className="h-9 border border-white/10 bg-white/[.03] text-foreground shadow-none hover:bg-white/[.06] hover:text-foreground"
-          >
-            {rotating ? (
-              <Loader2 className="size-4 animate-spin" strokeWidth={2} />
-            ) : (
-              <KeyRound className="size-4" strokeWidth={1.75} />
-            )}
-            Rotate credentials
-          </Button>
 
           <Button
             variant="outline"

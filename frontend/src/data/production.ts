@@ -351,7 +351,7 @@ function activitySummary(event: PortfolioEvent, root: string): string {
 export function totalsFrom(account: UserAccount, tabs: Tab[]): TreasuryTotals {
   const active = tabs.filter((tab) => tab.status === "active");
   const reclaimable = tabs.filter(
-    (tab) => tab.balanceUsd > 0 && (tab.status === "expired" || tab.needsSweep),
+    (tab) => tab.status === "expired" || (Boolean(tab.needsSweep) && tab.balanceUsd > 0),
   );
   return {
     treasuryTotalUsd: account.treasuryTotalUsd,

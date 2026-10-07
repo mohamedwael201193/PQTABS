@@ -92,7 +92,7 @@ export default function OverviewView() {
   const securityStrip = [
     { label: "Root protection", value: "Post-quantum · Secured", dot: "bg-success" },
     { label: "Agent capabilities", value: "Bounded by policy", dot: "bg-success" },
-    { label: "Treasury exposure", value: `${pct(exposurePct)} of funds`, dot: "bg-gold" },
+    { label: "Treasury exposure", value: portfolioReady ? `${pct(exposurePct)} of funds` : "list not loaded", dot: "bg-gold" },
     { label: "Enforcement", value: "Onchain policy", dot: "bg-success" },
   ];
 
@@ -152,7 +152,7 @@ export default function OverviewView() {
           sub={
             !portfolioReady ? (
               "list not loaded"
-            ) : totals.reclaimableUsd > 0 ? (
+            ) : totals.reclaimableTabCount > 0 ? (
               <span className="text-warning">
                 {totals.reclaimableTabCount} ready to reclaim
               </span>
@@ -215,7 +215,7 @@ export default function OverviewView() {
             Active capabilities
           </p>
           <span className="rounded-full border border-white/[.08] bg-white/[.03] px-2 py-0.5 font-mono text-[10px] tabular text-muted-foreground">
-            {activeTabs.length}
+            {portfolioReady ? activeTabs.length : "—"}
           </span>
         </div>
         <Reveal y={12}>
@@ -272,13 +272,19 @@ export default function OverviewView() {
               View all
             </button>
           </div>
-          <ul className="p-2">
-            {recent.map((record) => (
-              <li key={record.id}>
-                <ActivityRow record={record} onOpen={() => setView("activity")} />
-              </li>
-            ))}
-          </ul>
+          {recent.length > 0 ? (
+            <ul className="p-2">
+              {recent.map((record) => (
+                <li key={record.id}>
+                  <ActivityRow record={record} onOpen={() => setView("activity")} />
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="px-4 py-6 text-center text-sm text-muted-foreground md:px-5">
+              {portfolioReady ? "No activity yet." : portfolioError ? "Couldn't read activity." : "Loading activity."}
+            </p>
+          )}
         </section>
       </Reveal>
 

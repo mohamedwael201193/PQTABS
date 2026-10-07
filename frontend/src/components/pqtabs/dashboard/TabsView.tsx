@@ -25,7 +25,7 @@ export default function TabsView() {
   const setCreateOpen = useDashboardUi((s) => s.setCreateOpen);
   const [pendingReclaimId, setPendingReclaimId] = useState<string | null>(null);
 
-  const reclaimable = tabs.filter((t) => t.status === "expired" && t.balanceUsd > 0);
+  const reclaimable = tabs.filter((t) => t.status === "expired");
   const stuck = tabs.filter((t) => t.needsSweep && t.balanceUsd > 0);
   const active = tabs.filter((t) => t.status === "active");
   const history = tabs.filter(
@@ -54,7 +54,9 @@ export default function TabsView() {
       const returned = row && row.balanceUsd === 0 && (path === "reclaim" ? row.status === "closed" : !row.needsSweep);
       if (!returned) throw new Error("The receipt succeeded, but the capability still holds USDC.");
       store.replaceSnapshot(snapshot);
-      toast.success(`${usd(tab.balanceUsd)} returned to the treasury`);
+      toast.success(
+        tab.balanceUsd > 0 ? `${usd(tab.balanceUsd)} returned to the treasury` : "The exposure limit was released.",
+      );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Couldn't return these funds.");
     } finally {
@@ -123,7 +125,7 @@ export default function TabsView() {
                       ) : (
                         <RotateCcw className="size-3.5" strokeWidth={1.75} />
                       )}
-                      Reclaim
+                      {tab.balanceUsd > 0 ? "Reclaim" : "Release limit"}
                     </Button>
                   </li>
                 );

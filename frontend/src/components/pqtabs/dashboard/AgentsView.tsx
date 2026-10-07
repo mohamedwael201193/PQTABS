@@ -128,7 +128,9 @@ export default function AgentsView() {
                       pulse={canSign && activeTabs.length > 0 && !keyGone}
                     />
                     <span className="font-mono text-[11px] tabular text-muted-foreground">
-                      {activeTabs.length} active {activeTabs.length === 1 ? "capability" : "capabilities"}
+                      {portfolioReady
+                        ? `${activeTabs.length} active ${activeTabs.length === 1 ? "capability" : "capabilities"}`
+                        : "list not loaded"}
                     </span>
                   </span>
 
