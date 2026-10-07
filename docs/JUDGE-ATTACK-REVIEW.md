@@ -23,3 +23,7 @@ A user who wants an agent to pay for things without handing it the whole balance
 The user signs root actions locally. The backend at `docs/API.md` reads chain state and relays a signed payload. It cannot raise the cap. Raising exposure is action kind 5, and `test_set_exposure_cannot_undercut_open_caps` shows the ceiling cannot move below open caps. The same signature path is required to raise it.
 
 Two users do not share a key. Registrar A and registrar B are different addresses, the roots are different contracts, and a signature from A failed on B. That is the product boundary: one compromised agent, or one compromised root, stops at that user's own clone.
+
+## Current limits
+
+The database is derived. A row that says a capability is open does not authorize a spend. `decideSpend` reads the tab, the root, the USDC balance, and the latest block before `POST /v1/relay/spend` broadcasts. If Arc rate-limits those reads, the response is a retry and no transaction is sent. The signer is not recovered on that route, so the response does not claim `agent_matches`. The tab contract still checks the agent signature when a payload is simulated. There is no x402 402 in this process. A closed-tab probe on `caa7aea` hit a 429 and did not produce a policy record.

@@ -1,5 +1,7 @@
 # Production gap audit
 
+The matrix below is the 2026-10-07 reading. It is not the current production path. As of 2026-10-08 the portfolio read for a known root is stored rows, the database is Supabase Postgres, and `decideSpend` runs before a spend is broadcast. A rate-limited Arc read on that spend path is a retry response, not a payment. x402 is still absent. The older rows stay here so those conclusions are not overwritten.
+
 Code-verified 2026-10-07 from the current tree and `HISTORY.md`. This file is the gate before implementation. No indexer, contract, or frontend change is authorized by this document alone.
 
 Arc documentation and competitor mechanisms below were read on 2026-10-07 from the live pages and repositories named in each row. Firecrawl could not fetch those pages. The text used here came from the pages themselves and from raw GitHub files.

@@ -50,7 +50,8 @@ export function createApp(clients: Clients = loadClients(), getIndex?: () => Sql
       result: "error",
       error: code,
     });
-    return c.json({ error: code, detail: error.message, requestId: c.get("requestId") }, status);
+    const detail = error instanceof RequestError ? error.message : "The request could not be completed.";
+    return c.json({ error: code, detail, requestId: c.get("requestId") }, status);
   });
 
   app.get("/health", (c) => c.json({ ok: true }));
@@ -230,17 +231,24 @@ export function createApp(clients: Clients = loadClients(), getIndex?: () => Sql
     const tab = asAddress(body.tab, "tab");
     const to = asAddress(body.to, "to");
     const value = asUint(body.value, "value");
-    const owner = await clients.public.readContract({ address: tab, abi: tabAbi, functionName: "owner" });
+    const owner = await withRpcRetry(
+      () => clients.public.readContract({ address: tab, abi: tabAbi, functionName: "owner" }),
+      1,
+    );
     await assertOurRoot(clients, owner);
-    const [agent, maxPerCall, expiry, payees, balance, tabState, head] = await Promise.all([
-      clients.public.readContract({ address: tab, abi: tabAbi, functionName: "agent" }),
-      clients.public.readContract({ address: tab, abi: tabAbi, functionName: "maxPerCall" }),
-      clients.public.readContract({ address: tab, abi: tabAbi, functionName: "expiry" }),
-      clients.public.readContract({ address: tab, abi: tabAbi, functionName: "payees" }),
-      clients.public.readContract({ address: USDC, abi: usdcAbi, functionName: "balanceOf", args: [tab] }),
-      clients.public.readContract({ address: owner, abi: rootAbi, functionName: "tabs", args: [tab] }),
-      clients.public.getBlock({ blockTag: "latest" }),
-    ]);
+    const [agent, maxPerCall, expiry, payees, balance, tabState, head] = await withRpcRetry(
+      () =>
+        Promise.all([
+          clients.public.readContract({ address: tab, abi: tabAbi, functionName: "agent" }),
+          clients.public.readContract({ address: tab, abi: tabAbi, functionName: "maxPerCall" }),
+          clients.public.readContract({ address: tab, abi: tabAbi, functionName: "expiry" }),
+          clients.public.readContract({ address: tab, abi: tabAbi, functionName: "payees" }),
+          clients.public.readContract({ address: USDC, abi: usdcAbi, functionName: "balanceOf", args: [tab] }),
+          clients.public.readContract({ address: owner, abi: rootAbi, functionName: "tabs", args: [tab] }),
+          clients.public.getBlock({ blockTag: "latest" }),
+        ]),
+      1,
+    );
     const decision = decideSpend({
       now: head.timestamp,
       amount: value,
