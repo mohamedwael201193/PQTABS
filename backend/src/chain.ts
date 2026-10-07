@@ -97,10 +97,10 @@ export async function fee(client: PublicClient): Promise<{ maxFeePerGas: bigint;
   return { maxFeePerGas, maxPriorityFeePerGas };
 }
 
-export async function assertOurRoot(clients: Clients, root: Address): Promise<void> {
+export async function assertOurRoot(clients: Clients, root: Address, attempts = 8): Promise<void> {
   const [registrar, factory] = await Promise.all([
-    withRpcRetry(() => clients.public.readContract({ address: clients.factory, abi: factoryAbi, functionName: "registrarOf", args: [root] })),
-    withRpcRetry(() => clients.public.readContract({ address: root, abi: rootAbi, functionName: "factory" })),
+    withRpcRetry(() => clients.public.readContract({ address: clients.factory, abi: factoryAbi, functionName: "registrarOf", args: [root] }), attempts),
+    withRpcRetry(() => clients.public.readContract({ address: root, abi: rootAbi, functionName: "factory" }), attempts),
   ]);
   if (registrar === "0x0000000000000000000000000000000000000000" || factory.toLowerCase() !== clients.factory.toLowerCase()) {
     throw new RequestError(400, "unknown_root", "that address is not a root of this factory");

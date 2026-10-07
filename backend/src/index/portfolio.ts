@@ -3,7 +3,6 @@ import type { PortfolioEvent, PortfolioTab } from "../chain.js";
 import { assertOurRoot, rootAbi, tabAbi, usdcAbi, withRpcRetry } from "../chain.js";
 import { USDC } from "../constants.js";
 import { readCursor } from "./apply.js";
-import { indexWindow } from "./ingest.js";
 import type { Sql } from "./sql.js";
 
 export type Freshness = "live" | "recent" | "indexing" | "degraded";
@@ -66,17 +65,8 @@ export async function readIndexedPortfolio(sql: Sql, client: PublicClient, facto
       head: (headNumber ?? through).toString(),
     };
   }
-  await assertOurRoot({ public: client, relayer: null, relayerAddress: null, factory }, root);
-  let next = cursor;
-  if (next != null && gap > 0n && gap <= 120n) {
-    try {
-      await indexWindow(sql, client, factory, next + 1n, headNumber, new Map());
-      next = await readCursor(sql);
-    } catch {
-      next = cursor;
-    }
-  }
-  const caughtUp = next ?? 0n;
+  await assertOurRoot({ public: client, relayer: null, relayerAddress: null, factory }, root, 2);
+  const caughtUp = through;
   const behind = headNumber - caughtUp;
   const freshness: Freshness = behind <= 2n ? "live" : behind <= 120n ? "recent" : "indexing";
   const capabilityRows = await sql.query<CapabilityRow>(
@@ -104,7 +94,7 @@ export async function readIndexedPortfolio(sql: Sql, client: PublicClient, facto
   const details =
     calls.length === 0
       ? []
-      : ((await withRpcRetry(() => client.multicall({ contracts: calls, allowFailure: true }))) as readonly CallResult[]);
+      : ((await withRpcRetry(() => client.multicall({ contracts: calls, allowFailure: true }), 2)) as readonly CallResult[]);
   const tabs: PortfolioTab[] = capabilityRows.map((row, index) => {
     const base = index * 7;
     const state = callValue(details, base, "tabs") as readonly [bigint, bigint, boolean, boolean];
