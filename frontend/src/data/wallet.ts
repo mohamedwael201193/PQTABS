@@ -86,10 +86,24 @@ export function watchChain(onChange: (chainId: number) => void): () => void {
 
 export function watchWallet(onChange: (address: Address | null) => void): () => void {
   const ethereum = provider();
+  let ticket = 0;
   const accounts = (value: unknown) => {
-    const list = Array.isArray(value) ? value : [];
-    const next = typeof list[0] === "string" ? (list[0] as Address) : null;
-    onChange(next);
+    const list = Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+    const hinted = list[0] ?? null;
+    const mine = ++ticket;
+    void (async () => {
+      for (let attempt = 0; attempt < 6; attempt += 1) {
+        const live = await existingAccount();
+        if (mine !== ticket) return;
+        if (!hinted || (live && live.toLowerCase() === hinted.toLowerCase())) {
+          onChange(live);
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      if (mine !== ticket) return;
+      onChange(await existingAccount());
+    })();
   };
   ethereum.on?.("accountsChanged", accounts);
   return () => ethereum.removeListener?.("accountsChanged", accounts);
@@ -145,10 +159,30 @@ export async function waitForRoot(hash: Hex): Promise<Address> {
   return getAddress(`0x${log.topics[2].slice(-40)}`);
 }
 
+const registrarAbi = [
+  {
+    type: "function",
+    name: "registrar",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "address" }],
+  },
+] as const;
+
 export async function fundRoot(root: Address, amountRaw: bigint): Promise<Hex> {
   const account = await existingAccount();
   if (!account) throw new Error("Connect a wallet before depositing.");
   const client = walletClient();
+  const chainId = await client.getChainId();
+  if (chainId !== arc.id) throw new Error("Switch to Arc before depositing.");
+  const recorded = await arcClient().readContract({
+    address: root,
+    abi: registrarAbi,
+    functionName: "registrar",
+  });
+  if (getAddress(recorded).toLowerCase() !== account.toLowerCase()) {
+    throw new Error("The wallet changed. The deposit was not sent.");
+  }
   return client.writeContract({
     account,
     address: USDC,
