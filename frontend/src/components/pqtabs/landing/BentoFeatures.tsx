@@ -91,7 +91,7 @@ export default function BentoFeatures() {
               </div>
               <p className="mt-5 max-w-md text-sm leading-relaxed text-muted-foreground md:text-[15px]">
                 The post-quantum root signs every capability into existence.
-                Recipients, limits and expiry are bound into the tab itself —
+                Recipients, limits and expiry are bound into the capability itself —
                 before an agent can spend.
               </p>
               <div className="mt-auto pt-8 md:pt-10">

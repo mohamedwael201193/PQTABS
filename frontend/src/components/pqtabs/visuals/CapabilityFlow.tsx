@@ -29,7 +29,7 @@ const CARD_CY = CARD_Y + CARD_H / 2; // 126 — the channel line
 
 const STAGES = [
   { name: "PQ Root", title: "PQ ROOT", sub: "SLH-DSA" },
-  { name: "Tab", title: "TAB", sub: "BOUNDED CAPABILITY" },
+  { name: "Capability", title: "CAPABILITY", sub: "BARKEEP TAB" },
   { name: "Agent", title: "AGENT", sub: "AUTONOMOUS" },
   { name: "Payment", title: "PAYMENT", sub: "USDC" },
 ] as const;

@@ -43,7 +43,7 @@ export default function TabsView() {
       const snapshot = await loadSnapshot(store.registrar);
       const row = snapshot.tabs.find((item) => item.id.toLowerCase() === tab.id.toLowerCase());
       const returned = row && row.balanceUsd === 0 && (path === "reclaim" ? row.status === "closed" : !row.needsSweep);
-      if (!returned) throw new Error("The receipt succeeded, but the tab still holds USDC.");
+      if (!returned) throw new Error("The receipt succeeded, but the capability still holds USDC.");
       store.replaceSnapshot(snapshot);
       toast.success(`${usd(tab.balanceUsd)} returned to the treasury`);
     } catch (error) {

@@ -142,8 +142,8 @@ export default function AgentsView() {
                     </span>
                     <span className="mt-0.5 block font-mono text-[11px] tabular text-muted-foreground">
                       {agent.lastActiveHoursAgo != null
-                        ? `active ${relTime(agent.lastActiveHoursAgo)}`
-                        : "never active"}
+                        ? `opened ${relTime(agent.lastActiveHoursAgo)}`
+                        : "no capability on Arc yet"}
                     </span>
                   </span>
                   <ChevronRight

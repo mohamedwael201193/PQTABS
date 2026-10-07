@@ -141,7 +141,7 @@ export function HeroVisual({ className }: { className?: string }) {
         role="img"
       >
         <title>
-          PQTABS architecture: a post-quantum root issues bounded spending tabs
+          PQTABS architecture: a post-quantum root issues bounded spending capabilities
           to autonomous agents
         </title>
 
@@ -341,7 +341,7 @@ export function HeroVisual({ className }: { className?: string }) {
                   fontSize="9"
                   letterSpacing="1.6"
                 >
-                  {t.name} · TAB
+                  {t.name} · CAPABILITY
                 </text>
                 <text
                   x={x + 14}
