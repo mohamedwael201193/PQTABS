@@ -70,7 +70,7 @@ export default function ProductFlow({ onLaunchApp }: { onLaunchApp: () => void }
                       Agent you choose
                     </span>
                     <span className="block truncate font-mono text-[10px] text-muted-foreground">
-                      address you paste
+                      created on this device
                     </span>
                   </span>
                   <span
@@ -194,7 +194,7 @@ export default function ProductFlow({ onLaunchApp }: { onLaunchApp: () => void }
             onClick={onLaunchApp}
             className="h-11 rounded-md bg-gold px-6 text-sm font-semibold text-[#171204] hover:bg-[#eec95e] hover:shadow-[0_8px_30px_rgba(226,181,62,0.25)]"
           >
-            Launch App
+            Connect wallet
             <ArrowRight className="size-4" strokeWidth={2} aria-hidden="true" />
           </Button>
           <Button

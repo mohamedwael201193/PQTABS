@@ -47,7 +47,11 @@ const EMPTY_SNAPSHOT: AccountSnapshot = {
 interface PqtabsDataState {
   snapshot: AccountSnapshot;
   registrar: string;
+  chainId: number | null;
+  localAgents: Agent[];
   setRegistrar: (address: string) => void;
+  setChainId: (chainId: number | null) => void;
+  addLocalAgent: (agent: Agent) => void;
   replaceSnapshot: (snapshot: AccountSnapshot) => void;
   createCapability: () => never;
   closeCapability: () => never;
@@ -61,8 +65,25 @@ const SIGNATURE_REQUIRED =
 
 export const usePqtabsData = create<PqtabsDataState>((set) => ({
   snapshot: EMPTY_SNAPSHOT,
-  registrar: "0xf76e6B0920e9332fF4410f6dD53F01722AbC71a3",
-  setRegistrar: (address) => set({ registrar: address }),
+  registrar: "",
+  chainId: null,
+  localAgents: [],
+  setRegistrar: (address) =>
+    set((state) => {
+      const same = address.toLowerCase() === state.registrar.toLowerCase();
+      return {
+        registrar: address,
+        snapshot: same ? state.snapshot : EMPTY_SNAPSHOT,
+        localAgents: same ? state.localAgents : [],
+      };
+    }),
+  setChainId: (chainId) => set({ chainId }),
+  addLocalAgent: (agent) =>
+    set((state) => ({
+      localAgents: state.localAgents.some((item) => item.id.toLowerCase() === agent.id.toLowerCase())
+        ? state.localAgents
+        : [agent, ...state.localAgents],
+    })),
   replaceSnapshot: (snapshot) => set({ snapshot: { ...snapshot, totals: totalsFrom(snapshot.account, snapshot.tabs) } }),
   createCapability: () => {
     throw new Error(SIGNATURE_REQUIRED);
@@ -134,7 +155,10 @@ export function useTabs(): Tab[] {
 }
 
 export function useAgents(): Agent[] {
-  return usePqtabsData((s) => s.snapshot.agents);
+  const chain = usePqtabsData((s) => s.snapshot.agents);
+  const local = usePqtabsData((s) => s.localAgents);
+  const seen = new Set(chain.map((agent) => agent.id.toLowerCase()));
+  return [...local.filter((agent) => !seen.has(agent.id.toLowerCase())), ...chain];
 }
 
 export function useActivity(): ActivityRecord[] {

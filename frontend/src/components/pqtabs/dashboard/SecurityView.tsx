@@ -21,6 +21,7 @@ import {
   useActivity,
   useAgents,
   useDashboardUi,
+  usePqtabsData,
   useSecurity,
   useTabs,
   useTotals,
@@ -87,6 +88,7 @@ export default function SecurityView() {
   const tabs = useTabs();
   const agents = useAgents();
   const activity = useActivity();
+  const account = usePqtabsData((state) => state.snapshot.account);
   const setView = useDashboardUi((s) => s.setView);
 
   const [rotateOpen, setRotateOpen] = useState(false);
@@ -200,6 +202,7 @@ export default function SecurityView() {
                     : "no scheduled rotation"}
                 </dd>
               </div>
+              {security.rotationIntervalDays > 0 && (
               <div className="flex items-center justify-between gap-4 py-3">
                 <dt className="text-sm text-muted-foreground">Next rotation</dt>
                 <dd
@@ -211,6 +214,7 @@ export default function SecurityView() {
                   {relFuture(nextRotationHours)}
                 </dd>
               </div>
+              )}
             </dl>
             <div className="mt-5">
               <Button variant="ghost" className={BTN_GHOST} onClick={() => setRotateOpen(true)}>
@@ -224,18 +228,33 @@ export default function SecurityView() {
         <section className="rounded-xl border border-white/[.07] bg-[#0e1013] p-6">
           <div className="flex items-center justify-between gap-3">
             <p className={MICRO}>Recovery &amp; custody</p>
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-success/25 bg-success/10 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-success">
-              <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden="true" />
-              Configured
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-warning/25 bg-warning/10 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-warning">
+              Backup file
             </span>
           </div>
           <div className="mt-4 space-y-3.5 text-sm leading-relaxed text-muted-foreground">
-            <p>Recovery is a root-authority action. Agents can never participate.</p>
-            <p>
-              Root material never leaves your control. Agents hold capabilities — never keys to the
-              treasury.
-            </p>
+            <p>Your root authority cannot be recreated from your wallet alone. The backup file is the only copy.</p>
+            <p>If the backup and this device are both lost, the USDC in the root stays there. There is no operator recovery.</p>
           </div>
+          <details className="mt-5 text-xs text-muted-foreground">
+            <summary className="cursor-pointer text-foreground">Technical details</summary>
+            <dl className="mt-3 space-y-2 break-all font-mono text-[10px] leading-relaxed">
+              <div>Root {account.rootAddress || "—"}</div>
+              <div>PQ verifying key {account.pqVk || "—"}</div>
+              <div>Network Arc {account.chainId ?? 5042}</div>
+              <div>Factory {account.factory || "—"}</div>
+              <div>Nonce {account.nonce || "—"}</div>
+              <div>PQ verification precompile 0x1800000000000000000000000000000000000004</div>
+              <div>Barkeep {account.barkeep || "—"}</div>
+              {account.explorer && account.rootAddress && (
+                <div>
+                  <a className="text-gold" href={`${account.explorer}/address/${account.rootAddress}`} target="_blank" rel="noreferrer">
+                    View on Arc Explorer
+                  </a>
+                </div>
+              )}
+            </dl>
+          </details>
         </section>
       </div>
 

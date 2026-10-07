@@ -1,9 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import { Bot, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { EmptyState, StatusChip } from "@/components/pqtabs/shared";
 import { initials, relTime, usd } from "@/data/formatters";
-import { useAgents, useDashboardUi, useTabs } from "@/lib/store";
+import { createAgentKey } from "@/data/spend";
+import { useAgents, useDashboardUi, usePqtabsData, useTabs } from "@/lib/store";
 
 /**
  * AgentsView — the roster of enrolled agents. Each row states who the
@@ -14,6 +17,25 @@ export default function AgentsView() {
   const agents = useAgents();
   const tabs = useTabs();
   const openDrawer = useDashboardUi((s) => s.openDrawer);
+  const setCreateOpen = useDashboardUi((s) => s.setCreateOpen);
+  const [name, setName] = useState("");
+  const [purpose, setPurpose] = useState("");
+
+  function createAgent() {
+    const created = createAgentKey();
+    const label = name.trim() || "Agent";
+    usePqtabsData.getState().addLocalAgent({
+      id: created.address,
+      name: label,
+      address: created.address,
+      status: "active",
+      role: purpose.trim() || "Created on this device. No treasury access until you give it a capability.",
+      addedHoursAgo: 0,
+      lastActiveHoursAgo: null,
+    });
+    setName("");
+    setPurpose("");
+  }
 
   return (
     <div className="space-y-8">
@@ -28,10 +50,30 @@ export default function AgentsView() {
             Who can act, and under which capabilities.
           </p>
         </div>
-        <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-          {agents.length} enrolled
-        </p>
+        <Button onClick={createAgent} disabled={!name.trim()} className="bg-gold text-[#171204] hover:bg-[#eec95e]">
+          Create agent
+        </Button>
       </header>
+      <div className="grid gap-3 rounded-xl border border-white/[.07] bg-[#0e1013] p-4 sm:grid-cols-2">
+        <label className="text-sm text-muted-foreground">
+          Agent name
+          <input
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="Research Agent"
+            className="mt-1.5 h-9 w-full rounded-lg border border-white/10 bg-transparent px-3 text-sm text-foreground outline-none"
+          />
+        </label>
+        <label className="text-sm text-muted-foreground">
+          Purpose
+          <input
+            value={purpose}
+            onChange={(event) => setPurpose(event.target.value)}
+            placeholder="Used for research and API purchases"
+            className="mt-1.5 h-9 w-full rounded-lg border border-white/10 bg-transparent px-3 text-sm text-foreground outline-none"
+          />
+        </label>
+      </div>
 
       {agents.length > 0 ? (
         <ul className="space-y-3">
@@ -60,6 +102,11 @@ export default function AgentsView() {
                     <span className="mt-0.5 block truncate text-xs text-muted-foreground" title={agent.role}>
                       {agent.role}
                     </span>
+                    {activeTabs.length === 0 && (
+                      <span className="mt-2 block text-xs text-muted-foreground">
+                        This agent has no treasury access by itself.
+                      </span>
+                    )}
                     <span className="mt-1 block truncate font-mono text-[10px] text-muted-foreground">
                       {agent.address}
                     </span>
@@ -93,6 +140,15 @@ export default function AgentsView() {
                     aria-hidden="true"
                   />
                 </button>
+                {activeTabs.length === 0 && (
+                  <Button
+                    variant="ghost"
+                    className="mt-2 h-8 text-gold"
+                    onClick={() => setCreateOpen(true, agent.id)}
+                  >
+                    Give it a capability
+                  </Button>
+                )}
               </li>
             );
           })}
@@ -100,8 +156,8 @@ export default function AgentsView() {
       ) : (
         <EmptyState
           icon={<Bot className="h-5 w-5" strokeWidth={1.75} />}
-          title="No agents enrolled yet"
-          body="Agents enrolled under your root appear here with their capabilities."
+          title="No agents yet"
+          body="Create an agent to give software controlled spending access. An agent has no treasury access until you give it a capability."
         />
       )}
     </div>

@@ -1,11 +1,15 @@
 "use client";
 
+import { useState } from "react";
 import { Coins, Landmark, Layers, Plus, Wallet } from "lucide-react";
 import { CountUp, EmptyState, Reveal } from "@/components/pqtabs/shared";
 import { Button } from "@/components/ui/button";
 import { ExposureMeter } from "@/components/pqtabs/visuals/ExposureMeter";
+import { parseUsdcRaw } from "@/data/actions";
 import { pct, usd } from "@/data/formatters";
-import { useActivity, useDashboardUi, useTabs, useTotals } from "@/lib/store";
+import { loadSnapshot } from "@/data/production";
+import { arcClient, fundRoot } from "@/data/wallet";
+import { useActivity, useDashboardUi, usePqtabsData, useTabs, useTotals } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { ActivityRow } from "./shared/ActivityRow";
 import { StatCard } from "./shared/StatCard";
@@ -16,6 +20,52 @@ import { TabCard } from "./shared/TabCard";
  * totals, security posture, treasury exposure, live capabilities and
  * the latest ledger lines, all above the fold of attention.
  */
+function FundNotice() {
+  const root = usePqtabsData((s) => s.snapshot.account.rootAddress);
+  const registrar = usePqtabsData((s) => s.registrar);
+  const replaceSnapshot = usePqtabsData((s) => s.replaceSnapshot);
+  const [amount, setAmount] = useState("0.5");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  if (!root) return null;
+
+  async function deposit() {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const hash = await fundRoot(root as `0x${string}`, parseUsdcRaw(amount));
+      const receipt = await arcClient().waitForTransactionReceipt({ hash });
+      if (receipt.status !== "success") throw new Error("The deposit reverted.");
+      replaceSnapshot(await loadSnapshot(registrar));
+      setMessage("Confirmed. The treasury balance is the onchain USDC balance.");
+    } catch (reason: unknown) {
+      setMessage(reason instanceof Error ? reason.message : "The deposit was not confirmed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="rounded-xl border border-white/[.08] bg-[#0e1013] p-5">
+      <h2 className="font-display text-lg font-semibold">Your treasury is empty.</h2>
+      <p className="mt-1 text-sm text-muted-foreground">Deposit USDC to start creating capabilities.</p>
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <input
+          value={amount}
+          onChange={(event) => setAmount(event.target.value)}
+          aria-label="Deposit amount in USDC"
+          className="h-9 w-32 rounded-lg border border-white/10 bg-transparent px-3 text-sm outline-none"
+        />
+        <Button onClick={deposit} disabled={busy} className="bg-gold text-[#171204] hover:bg-[#eec95e]">
+          {busy ? "Waiting for Arc" : "Deposit"}
+        </Button>
+      </div>
+      {message && <p className="mt-3 text-xs text-muted-foreground">{message}</p>}
+    </section>
+  );
+}
+
 export default function OverviewView() {
   const totals = useTotals();
   const tabs = useTabs();
@@ -61,6 +111,8 @@ export default function OverviewView() {
           New capability
         </Button>
       </header>
+
+      {totals.treasuryTotalUsd === 0 && <FundNotice />}
 
       {/* Key figures */}
       <section aria-label="Treasury figures" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -173,7 +225,7 @@ export default function OverviewView() {
             <EmptyState
               icon={<Layers className="h-5 w-5" strokeWidth={1.75} />}
               title="No active capabilities"
-              body="Open a capability to let an agent spend within bounds."
+              body="Create a capability that limits how much an agent can spend."
               action={
                 <Button
                   onClick={() => setCreateOpen(true)}

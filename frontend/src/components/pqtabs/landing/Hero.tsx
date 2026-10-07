@@ -120,7 +120,7 @@ export default function Hero({ onLaunchApp }: { onLaunchApp: () => void }) {
             onClick={onLaunchApp}
             className="group relative h-11 overflow-hidden rounded-lg bg-gold px-6 text-sm font-medium text-[#171204] hover:bg-[#eec95e] hover:shadow-[0_8px_30px_rgba(226,181,62,0.25)]"
           >
-            Launch App
+            Connect wallet
             <ArrowRight
               className="size-4 transition-transform duration-200 group-hover:translate-x-0.5"
               aria-hidden="true"

@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import type { AccountSnapshot } from "@/data/types";
-import { currentRegistrar, loadSnapshot, rememberRegistrar } from "@/data/production";
+import { loadSnapshot, rememberRegistrar } from "@/data/production";
+import { existingAccount, watchChain, watchWallet, walletClient } from "@/data/wallet";
 import { usePqtabsData } from "@/lib/store";
 
 /**
@@ -17,6 +18,7 @@ export function useAccountData(): {
 } {
   const registrar = usePqtabsData((state) => state.registrar);
   const setRegistrar = usePqtabsData((state) => state.setRegistrar);
+  const setChainId = usePqtabsData((state) => state.setChainId);
   const replaceSnapshot = usePqtabsData((state) => state.replaceSnapshot);
   const [snapshot, setSnapshot] = useState<AccountSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
@@ -25,13 +27,68 @@ export function useAccountData(): {
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    const stored = currentRegistrar();
-    if (stored !== registrar) setRegistrar(stored);
-    setHydrated(true);
+    let cancelled = false;
+    existingAccount()
+      .then((address) => {
+        if (cancelled) return;
+        if (address && address.toLowerCase() !== registrar.toLowerCase()) {
+          window.localStorage.removeItem("pqtabs.root");
+          rememberRegistrar(address);
+          setRegistrar(address);
+        }
+        if (!address && registrar) setRegistrar("");
+        setHydrated(true);
+      })
+      .catch(() => {
+        if (!cancelled) setHydrated(true);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [registrar, setRegistrar]);
 
   useEffect(() => {
+    let stop = () => {};
+    try {
+      stop = watchWallet((address) => {
+        window.localStorage.removeItem("pqtabs.root");
+        if (address) {
+          rememberRegistrar(address);
+          setRegistrar(address);
+        } else {
+          window.localStorage.removeItem("pqtabs.registrar");
+          setRegistrar("");
+        }
+      });
+    } catch {
+      stop = () => {};
+    }
+    return stop;
+  }, [setRegistrar]);
+
+  useEffect(() => {
+    if (!registrar) return;
+    let stop = () => {};
+    walletClient()
+      .getChainId()
+      .then(setChainId)
+      .catch(() => setChainId(null));
+    try {
+      stop = watchChain(setChainId);
+    } catch {
+      stop = () => {};
+    }
+    return stop;
+  }, [registrar, setChainId]);
+
+  useEffect(() => {
     if (!hydrated) return;
+    if (!registrar) {
+      setSnapshot(null);
+      setLoading(false);
+      setError(null);
+      return;
+    }
     let cancelled = false;
     setLoading(true);
     setError(null);

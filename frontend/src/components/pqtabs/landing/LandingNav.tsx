@@ -77,7 +77,7 @@ export default function LandingNav({ onLaunchApp }: { onLaunchApp: () => void })
             onClick={onLaunchApp}
             className="h-9 rounded-lg bg-gold px-4 text-sm font-medium text-[#171204] hover:bg-[#eec95e] hover:shadow-[0_8px_30px_rgba(226,181,62,0.25)]"
           >
-            Launch App
+            Connect wallet
           </Button>
 
           <Sheet open={open} onOpenChange={setOpen}>
@@ -127,7 +127,7 @@ export default function LandingNav({ onLaunchApp }: { onLaunchApp: () => void })
                   }}
                   className="h-11 w-full rounded-lg bg-gold text-sm font-medium text-[#171204] hover:bg-[#eec95e]"
                 >
-                  Launch App
+                  Connect wallet
                 </Button>
               </div>
             </SheetContent>

@@ -1,7 +1,7 @@
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import type { Address, Hex } from "viem";
-import { assertOurRoot, type Clients, factoryAbi, loadClients, readPortfolio, relay, rootAbi, tabAbi, usdcAbi } from "./chain.js";
+import { assertOurRoot, type Clients, factoryAbi, loadClients, readPortfolio, relay, rootAbi, tabAbi, usdcAbi, withRpcRetry } from "./chain.js";
 import { BARKEEP, CHAIN_ID, EXPLORER, MAX_BODY_BYTES, USDC } from "./constants.js";
 import { RateLimiter } from "./limit.js";
 import { log } from "./log.js";
@@ -93,13 +93,13 @@ export function createApp(clients: Clients = loadClients()) {
     const root = asAddress(c.req.param("address"), "root");
     await assertOurRoot(clients, root);
     const [pqVk, registrar, nextNonce, maxOpenExposure, openExposure] = await Promise.all([
-      clients.public.readContract({ address: root, abi: rootAbi, functionName: "pqVk" }),
-      clients.public.readContract({ address: root, abi: rootAbi, functionName: "registrar" }),
-      clients.public.readContract({ address: root, abi: rootAbi, functionName: "nextNonce" }),
-      clients.public.readContract({ address: root, abi: rootAbi, functionName: "maxOpenExposure" }),
-      clients.public.readContract({ address: root, abi: rootAbi, functionName: "openExposure" }),
+      withRpcRetry(() => clients.public.readContract({ address: root, abi: rootAbi, functionName: "pqVk" })),
+      withRpcRetry(() => clients.public.readContract({ address: root, abi: rootAbi, functionName: "registrar" })),
+      withRpcRetry(() => clients.public.readContract({ address: root, abi: rootAbi, functionName: "nextNonce" })),
+      withRpcRetry(() => clients.public.readContract({ address: root, abi: rootAbi, functionName: "maxOpenExposure" })),
+      withRpcRetry(() => clients.public.readContract({ address: root, abi: rootAbi, functionName: "openExposure" })),
     ]);
-    const balance = await clients.public.readContract({ address: USDC, abi: usdcAbi, functionName: "balanceOf", args: [root] });
+    const balance = await withRpcRetry(() => clients.public.readContract({ address: USDC, abi: usdcAbi, functionName: "balanceOf", args: [root] }));
     return c.json({
       root,
       pqVk,
@@ -148,7 +148,7 @@ export function createApp(clients: Clients = loadClients()) {
   app.get("/v1/tx/:hash", async (c) => {
     const hash = asHex(c.req.param("hash"), "hash");
     if (hash.length !== 66) throw new RequestError(400, "bad_hash", "transaction hash must be 32 bytes");
-    const receipt = await clients.public.getTransactionReceipt({ hash });
+    const receipt = await withRpcRetry(() => clients.public.getTransactionReceipt({ hash }));
     return c.json({
       hash: receipt.transactionHash,
       status: receipt.status,
@@ -162,7 +162,7 @@ export function createApp(clients: Clients = loadClients()) {
     const root = asAddress(body.root, "root");
     await assertOurRoot(clients, root);
     const data = encodeExecute(asHex(body.action, "action"), asUint(body.nonce, "nonce"), asUint(body.deadline, "deadline"), asHex(body.signature, "signature"));
-    const current = await clients.public.readContract({ address: root, abi: rootAbi, functionName: "nextNonce" });
+    const current = await withRpcRetry(() => clients.public.readContract({ address: root, abi: rootAbi, functionName: "nextNonce" }));
     const nonce = asUint(body.nonce, "nonce");
     if (nonce < current) throw new RequestError(409, "nonce_consumed", "that nonce is already used");
     if (nonce !== current) throw new RequestError(409, "bad_nonce", "nonce does not match the root");

@@ -30,6 +30,30 @@ pub fn sign_hex(signing_key_hex: &str, digest_hex: &str) -> Result<String, JsVal
 }
 
 #[wasm_bindgen]
+pub fn keygen_json() -> Result<String, JsValue> {
+    let (sk, vk) = pqtabs_sign::pq::generate_keypair();
+    let file = serde_json::json!({
+        "scheme": "SLH-DSA-SHA2-128s",
+        "signing_key_hex": hex::encode(sk),
+        "verifying_key_hex": hex::encode(vk),
+    });
+    Ok(file.to_string())
+}
+
+#[wasm_bindgen]
+pub fn backup_encrypt_hex(passphrase: &str, plaintext_utf8: &str) -> Result<String, JsValue> {
+    let blob = pqtabs_sign::backup::encrypt(passphrase, plaintext_utf8.as_bytes()).map_err(|err| JsValue::from_str(&err))?;
+    Ok(hex::encode(blob))
+}
+
+#[wasm_bindgen]
+pub fn backup_decrypt_utf8(passphrase: &str, blob_hex: &str) -> Result<String, JsValue> {
+    let blob = decode_hex(blob_hex)?;
+    let plain = pqtabs_sign::backup::decrypt(passphrase, &blob).map_err(|err| JsValue::from_str(&err))?;
+    String::from_utf8(plain).map_err(|_| JsValue::from_str("backup is not text"))
+}
+
+#[wasm_bindgen]
 pub fn verify_hex(verifying_key_hex: &str, digest_hex: &str, signature_hex: &str) -> Result<bool, JsValue> {
     let vk_raw = decode_hex(verifying_key_hex)?;
     let digest_raw = decode_hex(digest_hex)?;
@@ -52,5 +76,19 @@ mod tests {
         let action = pqtabs_sign::digest::encode_open(&agent, &[payee], 200_000, 1_893_456_000, 1_000_000);
         let got = digest_hex(5042, &hex::encode([0x33u8; 20]), 7, 1_893_456_000, &hex::encode(action)).unwrap();
         assert_eq!(got, "0xb89923a0c10a21a5d6fc2de3558799654b0de9621028cdbf4c05bca63ca251bf");
+    }
+
+    #[test]
+    fn generated_key_signs_and_the_backup_roundtrips() {
+        let json = keygen_json().unwrap();
+        let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        let sk = value["signing_key_hex"].as_str().unwrap();
+        let vk = value["verifying_key_hex"].as_str().unwrap();
+        let digest = "44".repeat(32);
+        let sig = sign_hex(sk, &digest).unwrap();
+        assert_eq!(sig.len(), 7856 * 2);
+        assert!(verify_hex(vk, &digest, &sig).unwrap());
+        let blob = backup_encrypt_hex("correct horse", &json).unwrap();
+        assert_eq!(backup_decrypt_utf8("correct horse", &blob).unwrap(), json);
     }
 }

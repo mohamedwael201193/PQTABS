@@ -163,7 +163,7 @@ export default function FinalCta({ onLaunchApp }: { onLaunchApp: () => void }) {
                 aria-hidden="true"
                 className="pointer-events-none absolute inset-y-0 left-0 w-1/2 -translate-x-[120%] -skew-x-[18deg] bg-gradient-to-r from-transparent via-white/45 to-transparent transition-transform duration-700 ease-out group-hover:translate-x-[340%]"
               />
-              <span className="relative">Launch App</span>
+              <span className="relative">Connect wallet</span>
               <ArrowRight className="relative size-4" strokeWidth={2} aria-hidden="true" />
             </Button>
             <Button

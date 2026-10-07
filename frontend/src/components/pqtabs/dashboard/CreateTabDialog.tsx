@@ -32,7 +32,8 @@ import {
   Lock,
   X,
 } from "lucide-react";
-import { isAddress, parseUsdcRaw, signatureBytes } from "@/data/actions";
+import { isAddress, parseUsdcRaw } from "@/data/actions";
+import { rootUnlocked, signRootDigest, unlockBackup } from "@/data/pq-vault";
 import { initials, relFuture, usd } from "@/data/formatters";
 import { loadSnapshot, prepareOpen, submitPrepared, type PreparedAction } from "@/data/production";
 import { createAgentKey } from "@/data/spend";
@@ -136,11 +137,13 @@ function CreateFlow() {
   const [capInput, setCapInput] = useState("0.01");
   const [perCall, setPerCall] = useState(0.01);
   const [agentDraft, setAgentDraft] = useState("");
-  const [agentSecret, setAgentSecret] = useState<string | null>(null);
+  const [agentName, setAgentName] = useState("");
   const [payeeDraft, setPayeeDraft] = useState("");
   const [extraRecipients, setExtraRecipients] = useState<Recipient[]>([]);
   const [prepared, setPrepared] = useState<PreparedAction | null>(null);
-  const [signature, setSignature] = useState("");
+  const [passphrase, setPassphrase] = useState("");
+  const [authorizing, setAuthorizing] = useState(false);
+  const [keyReady, setKeyReady] = useState(rootUnlocked());
   const [failure, setFailure] = useState("The capability was not opened.");
   const [recipientIds, setRecipientIds] = useState<Set<string>>(() => new Set());
   const [hours, setHours] = useState(24);
@@ -274,7 +277,6 @@ function CreateFlow() {
     const payees = directory.filter((item) => recipientIds.has(item.id)).map((item) => item.address);
     setPhase("authorize");
     setPrepared(null);
-    setSignature("");
     setCreatedTab(null);
     prepareOpen({
       root,
@@ -291,12 +293,12 @@ function CreateFlow() {
       });
   };
 
-  const submitCreation = () => {
+  const submitCreation = (signed: string) => {
     if (!prepared || !selectedAgent) return;
     setPhase("confirming");
     setStage(2);
     const registrar = usePqtabsData.getState().registrar;
-    submitPrepared(registrar, prepared, signature)
+    submitPrepared(registrar, prepared, signed)
       .then(async ({ hash, snapshot }) => {
         const tab =
           snapshot.tabs.find((item) => item.txHash?.toLowerCase() === hash.toLowerCase()) ??
@@ -402,7 +404,7 @@ function CreateFlow() {
   const description = succeeded
     ? "Arc accepted the signature and the tab is in this root's portfolio."
     : phase === "authorize"
-      ? "The signature is checked by the Arc precompile. This page cannot create it."
+      ? "Authorize with your security key. The signature is created on this device and checked by Arc."
       : phase === "confirming"
         ? "Waiting for the transaction receipt."
         : phase === "error"
@@ -489,17 +491,13 @@ function CreateFlow() {
               className="animate-in fade-in slide-in-from-bottom-1 space-y-2 duration-200"
             >
               <div className="rounded-xl border border-white/[.07] bg-white/[.015] p-3">
-                <p className={MICRO}>Agent address</p>
+                <p className={MICRO}>Create an agent</p>
                 <Input
-                  value={agentDraft}
-                  onChange={(event) => {
-                    setAgentDraft(event.target.value.trim());
-                    setAgentSecret(null);
-                  }}
-                  placeholder="0x…"
-                  spellCheck={false}
-                  aria-label="Agent address"
-                  className="mt-2 border-white/10 bg-transparent font-mono text-xs"
+                  value={agentName}
+                  onChange={(event) => setAgentName(event.target.value)}
+                  placeholder="Research Agent"
+                  aria-label="Agent name"
+                  className="mt-2 border-white/10 bg-transparent text-sm"
                 />
                 <Button
                   type="button"
@@ -507,18 +505,40 @@ function CreateFlow() {
                   className={cn(BTN_GHOST, "mt-2 h-8")}
                   onClick={() => {
                     const created = createAgentKey();
-                    setAgentDraft(created.address);
-                    setAgentSecret(created.privateKey);
-                    setAgentId(null);
+                    const name = agentName.trim() || "Agent";
+                    usePqtabsData.getState().addLocalAgent({
+                      id: created.address,
+                      name,
+                      address: created.address,
+                      status: "active",
+                      role: "Created on this device. No treasury access until you give it a capability.",
+                      addedHoursAgo: 0,
+                      lastActiveHoursAgo: null,
+                    });
+                    setAgentId(created.address);
+                    setAgentDraft("");
+                    setAgentName("");
                   }}
                 >
-                  Generate a key for this tab
+                  Create agent
                 </Button>
-                {agentSecret && (
-                  <p className="mt-2 break-all font-mono text-[10px] leading-relaxed text-warning">
-                    Agent key, shown once: {agentSecret}. Give it to the agent. It is not saved after you leave this page.
-                  </p>
-                )}
+                <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                  The signing key stays on this device. It is not shown, and this agent cannot reach the treasury until you authorize a capability.
+                </p>
+                <details className="mt-3 text-xs text-muted-foreground">
+                  <summary className="cursor-pointer">Use an agent already on this device</summary>
+                  <Input
+                    value={agentDraft}
+                    onChange={(event) => {
+                      setAgentDraft(event.target.value.trim());
+                      setAgentId(null);
+                    }}
+                    placeholder="0x…"
+                    spellCheck={false}
+                    aria-label="Existing agent address"
+                    className="mt-2 border-white/10 bg-transparent font-mono text-xs"
+                  />
+                </details>
               </div>
               {eligibleAgents.map((a, idx) => {
                 const selected = a.id === agentId;
@@ -535,7 +555,6 @@ function CreateFlow() {
                     onClick={() => {
                       setAgentId(a.id);
                       setAgentDraft("");
-                      setAgentSecret(null);
                     }}
                     className={cn(
                       "flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
@@ -571,7 +590,7 @@ function CreateFlow() {
               })}
               {eligibleAgents.length === 0 && (
                 <p className="py-3 text-center text-sm text-muted-foreground">
-                  No open agent is on this root. Paste or generate the address that will spend.
+                  No agent is enrolled yet. Name one above. It has no treasury access until this capability is authorized.
                 </p>
               )}
             </div>
@@ -821,7 +840,7 @@ function CreateFlow() {
                 <span className="tabular text-gold">{usd(cap)}</span>, with no payment above{" "}
                 <span className="tabular text-gold">{usd(effectivePerCall)}</span>, to{" "}
                 {recipientIds.size === 1 ? "this recipient" : "these recipients"}, until{" "}
-                {new Date(Date.now() + hours * 3600 * 1000).toISOString()}.”
+                {new Date(Date.now() + hours * 3600 * 1000).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}.”
               </blockquote>
 
               <dl className="mt-7 grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-3">
@@ -874,21 +893,36 @@ function CreateFlow() {
               {prepared ? (
                 <>
                   <p className="text-sm leading-relaxed text-muted-foreground">
-                    Sign this digest with the root key. Paste the 7856-byte signature. A different digest, a reused nonce, or a signature from another root is rejected onchain.
+                    Authorize this capability with your security key. The signature stays on this device.
                   </p>
-                  <p className="break-all font-mono text-[10px] leading-relaxed text-foreground">{prepared.digest}</p>
-                  <p className="break-all font-mono text-[10px] leading-relaxed text-muted-foreground">
-                    nonce {prepared.nonce} · deadline {prepared.deadline}
-                    {prepared.expiry ? ` · expires ${new Date(Number(prepared.expiry) * 1000).toISOString()}` : ""}
-                  </p>
-                  <textarea
-                    value={signature}
-                    onChange={(event) => setSignature(event.target.value.trim())}
-                    spellCheck={false}
-                    aria-label="Root signature"
-                    placeholder="7856-byte signature hex"
-                    className="h-28 w-full rounded-lg border border-white/10 bg-transparent p-3 font-mono text-[10px] text-foreground outline-none"
-                  />
+                  {!rootUnlocked() && (
+                    <div className="space-y-2">
+                      <input
+                        type="password"
+                        value={passphrase}
+                        aria-label="Security key passphrase"
+                        placeholder="Passphrase for your backup"
+                        className="h-9 w-full rounded-lg border border-white/10 bg-transparent px-3 text-sm outline-none"
+                        onChange={(event) => setPassphrase(event.target.value)}
+                      />
+                      <input
+                        type="file"
+                        aria-label="Security key backup"
+                        className="block w-full text-xs text-muted-foreground"
+                        onChange={(event) => {
+                          const file = event.target.files?.[0];
+                          if (!file || passphrase.length < 8) return;
+                          void file.arrayBuffer().then((bytes) => unlockBackup(bytes, passphrase)).then(() => setKeyReady(true)).catch((reason: unknown) => {
+                            setFailure(reason instanceof Error ? reason.message : "Could not unlock the security key.");
+                          });
+                        }}
+                      />
+                    </div>
+                  )}
+                  <details className="text-xs text-muted-foreground">
+                    <summary className="cursor-pointer">Technical details</summary>
+                    <p className="mt-2 break-all font-mono text-[10px]">{prepared.digest}</p>
+                  </details>
                 </>
               ) : (
                 <p className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
@@ -1015,8 +1049,22 @@ function CreateFlow() {
               <Button variant="ghost" className={BTN_GHOST} onClick={() => setPhase("wizard")}>
                 <ArrowLeft className="size-4" /> Back
               </Button>
-              <Button className={BTN_GOLD} disabled={!prepared || signatureBytes(signature) !== 7856} onClick={submitCreation}>
-                Submit signature
+              <Button
+                className={BTN_GOLD}
+                disabled={!prepared || authorizing || !keyReady}
+                onClick={() => {
+                  if (!prepared) return;
+                  setAuthorizing(true);
+                  void signRootDigest(prepared.digest)
+                    .then((signed) => submitCreation(signed))
+                    .catch((reason: unknown) => {
+                      setFailure(reason instanceof Error ? reason.message : "The security key could not authorize this.");
+                      setPhase("error");
+                    })
+                    .finally(() => setAuthorizing(false));
+                }}
+              >
+                {authorizing ? "Authorizing" : "Authorize"}
               </Button>
             </div>
           </div>

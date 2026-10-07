@@ -5,6 +5,14 @@ use slh_dsa::{Sha2_128s, Signature, SigningKey, VerifyingKey};
 
 pub const SIG_LEN: usize = 7856;
 
+/// Same `SigningKey::new` the CLI uses. Returns the 64-byte signing key and the 32-byte verifying key.
+pub fn generate_keypair() -> (Vec<u8>, Vec<u8>) {
+    let mut rng = rand::rng();
+    let sk = SigningKey::<Sha2_128s>::new(&mut rng);
+    let vk = sk.as_ref().to_bytes();
+    (sk.to_bytes().to_vec(), vk.to_vec())
+}
+
 pub fn sign_digest(sk: &SigningKey<Sha2_128s>, digest: &[u8; 32]) -> Result<Vec<u8>, String> {
     let sig = sk
         .try_sign_with_context(digest, &[], None)

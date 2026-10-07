@@ -1,14 +1,11 @@
+use pqtabs_sign::backup;
 use pqtabs_sign::digest;
 use pqtabs_sign::pq;
 
 use std::fs;
 use std::path::PathBuf;
 
-use aes_gcm::aead::{Aead, KeyInit};
-use aes_gcm::{Aes256Gcm, Nonce};
-use argon2::Argon2;
 use clap::{Parser, Subcommand};
-use rand::TryRng;
 use serde::{Deserialize, Serialize};
 use slh_dsa::{Sha2_128s, SigningKey};
 
@@ -48,6 +45,16 @@ struct KeyFile {
     verifying_key_hex: String,
 }
 
+fn passphrase() -> Result<String, String> {
+    if let Ok(value) = std::env::var("PQTABS_PASSPHRASE") {
+        if value.len() >= 8 {
+            return Ok(value);
+        }
+        return Err("PQTABS_PASSPHRASE must be at least 8 characters".into());
+    }
+    rpassword::prompt_password("backup passphrase: ").map_err(|e| e.to_string())
+}
+
 fn main() {
     if let Err(err) = run() {
         eprintln!("error: {err}");
@@ -80,8 +87,8 @@ fn run() -> Result<(), String> {
         }
         Cmd::Backup { path, out } => {
             let plain = fs::read(&path).map_err(|e| e.to_string())?;
-            let pass = rpassword::prompt_password("backup passphrase: ").map_err(|e| e.to_string())?;
-            let blob = encrypt(&pass, &plain)?;
+            let pass = passphrase()?;
+            let blob = backup::encrypt(&pass, &plain)?;
             if let Some(parent) = out.parent() {
                 fs::create_dir_all(parent).map_err(|e| e.to_string())?;
             }
@@ -91,8 +98,8 @@ fn run() -> Result<(), String> {
         }
         Cmd::Restore { backup, out } => {
             let blob = fs::read(&backup).map_err(|e| e.to_string())?;
-            let pass = rpassword::prompt_password("backup passphrase: ").map_err(|e| e.to_string())?;
-            let plain = decrypt(&pass, &blob)?;
+            let pass = passphrase()?;
+            let plain = backup::decrypt(&pass, &blob)?;
             let file: KeyFile = serde_json::from_slice(&plain).map_err(|e| e.to_string())?;
             if let Some(parent) = out.parent() {
                 fs::create_dir_all(parent).map_err(|e| e.to_string())?;
@@ -151,42 +158,6 @@ fn decode_32(hex_str: &str) -> Result<[u8; 32], String> {
     raw.try_into().map_err(|_| "digest must be 32 bytes".into())
 }
 
-fn encrypt(pass: &str, plain: &[u8]) -> Result<Vec<u8>, String> {
-    let mut salt = [0u8; 16];
-    let mut nonce = [0u8; 12];
-    rand::rng().try_fill_bytes(&mut salt).map_err(|_| "rng")?;
-    rand::rng().try_fill_bytes(&mut nonce).map_err(|_| "rng")?;
-    let key = derive(pass, &salt)?;
-    let cipher = Aes256Gcm::new_from_slice(&key).map_err(|_| "aes key")?;
-    let ct = cipher.encrypt(Nonce::from_slice(&nonce), plain).map_err(|_| "encrypt")?;
-    let mut out = b"PQTABS1".to_vec();
-    out.extend_from_slice(&salt);
-    out.extend_from_slice(&nonce);
-    out.extend_from_slice(&ct);
-    Ok(out)
-}
-
-fn decrypt(pass: &str, blob: &[u8]) -> Result<Vec<u8>, String> {
-    if blob.len() < 7 + 16 + 12 || &blob[..7] != b"PQTABS1" {
-        return Err("not a pqtabs backup".into());
-    }
-    let salt: [u8; 16] = blob[7..23].try_into().unwrap();
-    let nonce: [u8; 12] = blob[23..35].try_into().unwrap();
-    let key = derive(pass, &salt)?;
-    let cipher = Aes256Gcm::new_from_slice(&key).map_err(|_| "aes key")?;
-    cipher
-        .decrypt(Nonce::from_slice(&nonce), &blob[35..])
-        .map_err(|_| "decrypt failed".into())
-}
-
-fn derive(pass: &str, salt: &[u8]) -> Result<[u8; 32], String> {
-    let mut key = [0u8; 32];
-    Argon2::default()
-        .hash_password_into(pass.as_bytes(), salt, &mut key)
-        .map_err(|_| "argon2")?;
-    Ok(key)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -223,9 +194,9 @@ mod tests {
         let key_path = dir.join("root.json");
         write_key(&key_path, &sk, vk.as_slice()).unwrap();
         let plain = fs::read(&key_path).unwrap();
-        let blob = encrypt("correct horse", &plain).unwrap();
-        assert!(decrypt("wrong", &blob).is_err());
-        let restored = decrypt("correct horse", &blob).unwrap();
+        let blob = backup::encrypt("correct horse", &plain).unwrap();
+        assert!(backup::decrypt("wrong", &blob).is_err());
+        let restored = backup::decrypt("correct horse", &blob).unwrap();
         assert_eq!(restored, plain);
         let _ = fs::remove_dir_all(&dir);
     }

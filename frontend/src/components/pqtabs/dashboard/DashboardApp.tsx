@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, type ReactElement } from "react";
+import { useEffect, useState, type ReactElement } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   Activity as ActivityIcon,
@@ -19,7 +19,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { EmptyState, Logo } from "@/components/pqtabs/shared";
 import { switchRegistrar, useAccountData } from "@/hooks/use-account-data";
-import { KNOWN_REGISTRARS } from "@/data/production";
+import { connectWallet, switchToArc } from "@/data/wallet";
 import { initials, usd } from "@/data/formatters";
 import { useDashboardUi, usePqtabsData, useTotals, type DashboardView } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -34,11 +34,13 @@ import ActivityView from "./ActivityView";
 import SecurityView from "./SecurityView";
 import SettingsView from "./SettingsView";
 import CreateTabDialog from "./CreateTabDialog";
+import { DomainSetup } from "./DomainSetup";
 import CommandMenu from "./CommandMenu";
+import { toast } from "sonner";
 
 const NAV_ITEMS: { view: DashboardView; label: string; icon: LucideIcon }[] = [
   { view: "overview", label: "Overview", icon: LayoutDashboard },
-  { view: "tabs", label: "Tabs", icon: Wallet },
+  { view: "tabs", label: "Capabilities", icon: Wallet },
   { view: "agents", label: "Agents", icon: Bot },
   { view: "activity", label: "Activity", icon: ActivityIcon },
   { view: "security", label: "Security", icon: ShieldCheck },
@@ -46,7 +48,7 @@ const NAV_ITEMS: { view: DashboardView; label: string; icon: LucideIcon }[] = [
 
 const VIEW_TITLES: Record<DashboardView, string> = {
   overview: "Overview",
-  tabs: "Tabs",
+  tabs: "Capabilities",
   agents: "Agents",
   activity: "Activity",
   security: "Security",
@@ -69,7 +71,52 @@ const VIEW_ELEMENTS: Record<DashboardView, ReactElement> = {
  * active view cross-fading inside a single max-width column. Drawers and
  * dialogs mount once at this level.
  */
+function ConnectGate({ onExit }: { onExit: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  async function connect() {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const session = await connectWallet();
+      if (session.chainId !== 5042) await switchToArc();
+      window.localStorage.removeItem("pqtabs.root");
+      switchRegistrar(session.address);
+    } catch (reason: unknown) {
+      setMessage(reason instanceof Error ? reason.message : "The wallet did not connect.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+      <div className="w-full max-w-md">
+        <EmptyState
+          icon={<Wallet className="h-5 w-5" strokeWidth={1.75} />}
+          title="Connect wallet"
+          body="Your wallet identifies you. It does not hold the security key that protects the treasury."
+          action={
+            <div className="flex flex-col items-center gap-3">
+              <Button onClick={connect} disabled={busy} className="bg-gold text-[#171204] hover:bg-[#eec95e]">
+                {busy ? "Waiting for the wallet" : "Connect wallet"}
+              </Button>
+              <button type="button" onClick={onExit} className="text-xs text-muted-foreground hover:text-foreground">
+                Back to site
+              </button>
+            </div>
+          }
+          className="w-full"
+        />
+        {message && <p className="mt-4 text-center text-sm text-danger">{message}</p>}
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardApp({ onExit }: { onExit: () => void }) {
+  const registrar = usePqtabsData((s) => s.registrar);
   const { snapshot, loading, error, retry } = useAccountData();
   const activeView = useDashboardUi((s) => s.activeView);
   const reduced = useReducedMotion();
@@ -77,6 +124,35 @@ export default function DashboardApp({ onExit }: { onExit: () => void }) {
   useEffect(() => {
     window.scrollTo({ top: 0 });
   }, [activeView]);
+
+  const chainId = usePqtabsData((s) => s.chainId);
+
+  if (!registrar) return <ConnectGate onExit={onExit} />;
+  if (chainId !== null && chainId !== 5042) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+        <EmptyState
+          icon={<Wallet className="h-5 w-5" strokeWidth={1.75} />}
+          title="Wrong network"
+          body="PQTABS settles on Arc mainnet. Switch the wallet before the treasury can load."
+          action={
+            <Button
+              onClick={() => {
+                void switchToArc().catch((reason: unknown) => {
+                  toast.error(reason instanceof Error ? reason.message : "The wallet stayed on another network.");
+                });
+              }}
+              className="bg-gold text-[#171204] hover:bg-[#eec95e]"
+            >
+              Switch to Arc
+            </Button>
+          }
+          className="w-full max-w-md"
+        />
+      </div>
+    );
+  }
+  if (snapshot && !snapshot.account.rootAddress) return <DomainSetup onExit={onExit} onReady={retry} />;
 
   const booting = !snapshot && loading;
   const failed = !snapshot && error !== null;
@@ -142,6 +218,7 @@ export default function DashboardApp({ onExit }: { onExit: () => void }) {
 /* ------------------------------------------------------------------ */
 
 function Sidebar({ onExit, loading }: { onExit: () => void; loading: boolean }) {
+  const registrar = usePqtabsData((s) => s.registrar);
   const activeView = useDashboardUi((s) => s.activeView);
   const setView = useDashboardUi((s) => s.setView);
   const setCreateOpen = useDashboardUi((s) => s.setCreateOpen);
@@ -224,18 +301,9 @@ function Sidebar({ onExit, loading }: { onExit: () => void; loading: boolean }) 
         </div>
 
         {/* User chip + settings */}
-        <div className="flex gap-1">
-          {KNOWN_REGISTRARS.map((address) => (
-            <button
-              key={address}
-              type="button"
-              onClick={() => switchRegistrar(address)}
-              className="focus-ring truncate rounded border border-white/10 px-1.5 py-1 font-mono text-[9px] text-muted-foreground hover:text-foreground"
-            >
-              {address.slice(0, 6)}…{address.slice(-4)}
-            </button>
-          ))}
-        </div>
+        <p className="truncate font-mono text-[9px] text-muted-foreground">
+          Wallet {registrar.slice(0, 6)}…{registrar.slice(-4)}
+        </p>
         <div className="flex items-center gap-2.5">
           <span
             aria-hidden="true"

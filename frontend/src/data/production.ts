@@ -1,4 +1,5 @@
 import { digestFor, encodeClose, encodeOpen, signatureBytes } from "./actions";
+import { arcClient } from "./wallet";
 import type { Hex } from "viem";
 import type {
   AccountSnapshot,
@@ -20,18 +21,13 @@ export const BACKEND_URL =
 export const EXPLORER_URL =
   process.env.NEXT_PUBLIC_EXPLORER_URL ?? "https://explorer.arc.io";
 
-/** Public registrar wallets that already created roots on the production factory. */
-export const KNOWN_REGISTRARS = [
-  "0xf76e6B0920e9332fF4410f6dD53F01722AbC71a3",
-  "0xB96Aa3d062eF493FC6E9bFcFe181b4bac7e72f33",
-] as const;
-
 const REGISTRAR_KEY = "pqtabs.registrar";
 
+/** The connected wallet. Empty until the user connects. Never a built-in account. */
 export function currentRegistrar(): string {
-  if (typeof window === "undefined") return KNOWN_REGISTRARS[0];
+  if (typeof window === "undefined") return "";
   const stored = window.localStorage.getItem(REGISTRAR_KEY);
-  return stored && stored.startsWith("0x") && stored.length === 42 ? stored : KNOWN_REGISTRARS[0];
+  return stored && stored.startsWith("0x") && stored.length === 42 ? stored : "";
 }
 
 export function rememberRegistrar(address: string): void {
@@ -362,15 +358,8 @@ async function relay(path: string, body: unknown): Promise<{ hash: string }> {
 }
 
 async function waitForReceipt(hash: string): Promise<{ status: string }> {
-  const started = Date.now();
-  while (Date.now() - started < 90_000) {
-    const response = await fetch(`${BACKEND_URL}/v1/tx/${hash}`);
-    if (response.ok) {
-      return (await response.json()) as { status: string };
-    }
-    await new Promise((resolve) => setTimeout(resolve, 3000));
-  }
-  throw new Error("the transaction has no receipt yet");
+  const receipt = await arcClient().waitForTransactionReceipt({ hash: hash as Hex, timeout: 90_000 });
+  return { status: receipt.status };
 }
 
 export type PreparedAction = {

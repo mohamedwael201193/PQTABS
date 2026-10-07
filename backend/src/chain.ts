@@ -96,8 +96,8 @@ export async function fee(client: PublicClient): Promise<{ maxFeePerGas: bigint;
 
 export async function assertOurRoot(clients: Clients, root: Address): Promise<void> {
   const [registrar, factory] = await Promise.all([
-    clients.public.readContract({ address: clients.factory, abi: factoryAbi, functionName: "registrarOf", args: [root] }),
-    clients.public.readContract({ address: root, abi: rootAbi, functionName: "factory" }),
+    withRpcRetry(() => clients.public.readContract({ address: clients.factory, abi: factoryAbi, functionName: "registrarOf", args: [root] })),
+    withRpcRetry(() => clients.public.readContract({ address: root, abi: rootAbi, functionName: "factory" })),
   ]);
   if (registrar === "0x0000000000000000000000000000000000000000" || factory.toLowerCase() !== clients.factory.toLowerCase()) {
     throw new RequestError(400, "unknown_root", "that address is not a root of this factory");
@@ -117,7 +117,7 @@ export async function relay(
   const cached = seen.get(data);
   if (cached) return { hash: cached, simulated: true };
   try {
-    await clients.public.estimateGas({ account, to, data });
+    await withRpcRetry(() => clients.public.estimateGas({ account, to, data }));
   } catch (error) {
     const message = error instanceof Error ? error.message : "simulation failed";
     throw new RequestError(400, "simulation_failed", message.slice(0, 300));
@@ -176,7 +176,7 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function withRpcRetry<T>(read: () => Promise<T>): Promise<T> {
+export async function withRpcRetry<T>(read: () => Promise<T>): Promise<T> {
   let pause = 750;
   for (let attempt = 0; attempt < 8; attempt++) {
     try {

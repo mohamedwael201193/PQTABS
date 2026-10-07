@@ -28,6 +28,7 @@ import { relFuture, usd } from "@/data/formatters";
 import { isAddress, parseUsdcRaw } from "@/data/actions";
 import { loadSnapshot, prepareClose, productionProvider, submitPrepared, submitSpend, type PreparedAction } from "@/data/production";
 import { authorizationBlob, recallAgentKey } from "@/data/spend";
+import { rootUnlocked, signRootDigest, unlockBackup } from "@/data/pq-vault";
 import type { Tab } from "@/data/types";
 import { useActivity, useAgents, useDashboardUi, usePqtabsData, useRecipients, useTabs } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -168,11 +169,12 @@ function TabDrawerBody({
   const agents = useAgents();
   const recipients = useRecipients();
   const activity = useActivity();
-  const [closeSig, setCloseSig] = useState("");
   const [closePrep, setClosePrep] = useState<PreparedAction | null>(null);
   const [spendTo, setSpendTo] = useState("");
   const [spendAmount, setSpendAmount] = useState("0.000001");
-  const [spendKey, setSpendKey] = useState("");
+  const [closingSig, setClosingSig] = useState(false);
+  const [closePass, setClosePass] = useState("");
+  const [closeReady, setCloseReady] = useState(rootUnlocked());
   const [paying, setPaying] = useState(false);
 
   const agent = agents.find((a) => a.id === tab.agentId);
@@ -395,16 +397,20 @@ function TabDrawerBody({
         <div className="border-t border-white/[.06] px-5 py-4 md:px-6">
           <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Agent payment</p>
           <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-            The agent key signs this payment. The root key cannot. A recipient outside the list, or an amount above the per-payment limit, is rejected before broadcast.
+            The agent signs this payment from this device. A recipient outside the list, or an amount above the per-payment limit, is rejected before broadcast.
           </p>
-          <input
-            value={spendTo}
-            onChange={(event) => setSpendTo(event.target.value.trim())}
-            placeholder="Recipient"
-            spellCheck={false}
+          <select
+            value={spendTo || tab.policy.allowedRecipients[0] || ""}
+            onChange={(event) => setSpendTo(event.target.value)}
             aria-label="Payment recipient"
-            className="mt-3 h-9 w-full rounded-lg border border-white/10 bg-transparent px-3 font-mono text-[11px] text-foreground outline-none"
-          />
+            className="mt-3 h-9 w-full rounded-lg border border-white/10 bg-transparent px-3 text-sm text-foreground outline-none"
+          >
+            {tab.policy.allowedRecipients.map((recipient) => (
+              <option key={recipient} value={recipient}>
+                {recipient.slice(0, 6)}…{recipient.slice(-4)}
+              </option>
+            ))}
+          </select>
           <input
             value={spendAmount}
             onChange={(event) => setSpendAmount(event.target.value.trim())}
@@ -412,22 +418,18 @@ function TabDrawerBody({
             aria-label="Payment amount"
             className="mt-2 h-9 w-full rounded-lg border border-white/10 bg-transparent px-3 font-mono text-[11px] text-foreground outline-none"
           />
-          <input
-            value={spendKey}
-            onChange={(event) => setSpendKey(event.target.value.trim())}
-            placeholder={recallAgentKey(tab.agentId) ? "Agent key is in this session" : "Agent private key"}
-            spellCheck={false}
-            aria-label="Agent private key"
-            type="password"
-            className="mt-2 h-9 w-full rounded-lg border border-white/10 bg-transparent px-3 font-mono text-[11px] text-foreground outline-none"
-          />
+          {!recallAgentKey(tab.agentId) && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              This agent was not created on this device, so this browser cannot sign for it.
+            </p>
+          )}
           <Button
-            disabled={paying}
+            disabled={paying || !recallAgentKey(tab.agentId)}
             onClick={() => {
-              const key = (spendKey || recallAgentKey(tab.agentId) || "") as `0x${string}`;
+              const key = (recallAgentKey(tab.agentId) || "") as `0x${string}`;
               const payee = spendTo || tab.policy.allowedRecipients[0] || "";
               if (!key.startsWith("0x") || !isAddress(payee) || !tab.expiryUnix) {
-                toast.error("Enter the agent key and a recipient address.");
+                toast.error("Choose a recipient. This device must already hold the agent.");
                 return;
               }
               setPaying(true);
@@ -490,33 +492,61 @@ function TabDrawerBody({
                     Close this capability?
                   </AlertDialogTitle>
                   <AlertDialogDescription>
-                    Remaining funds return only after Arc accepts a root signature. Paste that signature here.
+                    Remaining balance returns to your protected treasury after you authorize the close with your security key.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 {closePrep ? (
-                  <p className="break-all font-mono text-[10px] leading-relaxed text-muted-foreground">
-                    digest {closePrep.digest}
-                  </p>
+                  <details className="text-xs text-muted-foreground">
+                    <summary className="cursor-pointer">Technical details</summary>
+                    <p className="mt-2 break-all font-mono text-[10px] leading-relaxed">{closePrep.digest}</p>
+                  </details>
                 ) : (
                   <p className="text-xs text-muted-foreground">Preparing the close from the current nonce.</p>
                 )}
-                <textarea
-                  value={closeSig}
-                  onChange={(event) => setCloseSig(event.target.value.trim())}
-                  spellCheck={false}
-                  aria-label="Root signature for close"
-                  placeholder="7856-byte signature"
-                  className="h-24 w-full rounded-lg border border-white/10 bg-transparent p-3 font-mono text-[10px] text-foreground outline-none"
-                />
+                {!closeReady && (
+                  <div className="space-y-2">
+                    <input
+                      type="password"
+                      value={closePass}
+                      aria-label="Security key passphrase"
+                      placeholder="Passphrase for your backup"
+                      className="h-9 w-full rounded-lg border border-white/10 bg-transparent px-3 text-sm outline-none"
+                      onChange={(event) => setClosePass(event.target.value)}
+                    />
+                    <input
+                      type="file"
+                      aria-label="Security key backup"
+                      className="block w-full text-xs text-muted-foreground"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        if (!file || closePass.length < 8) return;
+                        void file.arrayBuffer().then((bytes) => unlockBackup(bytes, closePass)).then(() => setCloseReady(true)).catch((reason: unknown) => {
+                          toast.error(reason instanceof Error ? reason.message : "Could not unlock the security key.");
+                        });
+                      }}
+                    />
+                  </div>
+                )}
                 <AlertDialogFooter>
                   <AlertDialogCancel className="border-white/10 bg-white/[.03] text-foreground shadow-none hover:bg-white/[.06] hover:text-foreground">
                     Cancel
                   </AlertDialogCancel>
                   <AlertDialogAction
-                    onClick={() => closePrep && onClose(closePrep, closeSig)}
+                    disabled={closingSig || !closePrep || !closeReady}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      if (!closePrep) return;
+                      setClosingSig(true);
+                      void signRootDigest(closePrep.digest)
+                        .then((signed) => onClose(closePrep, signed))
+                        .catch((reason: unknown) => {
+                          toast.error(reason instanceof Error ? reason.message : "Unlock your security key first.");
+                        })
+                        .finally(() => setClosingSig(false));
+                    }}
                     className="bg-danger text-white hover:bg-danger/90"
                   >
-                    Close capability
+                    {closeReady ? "Close capability" : "Unlock your security key first"}
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
