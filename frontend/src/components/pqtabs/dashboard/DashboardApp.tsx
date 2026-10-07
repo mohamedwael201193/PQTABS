@@ -19,7 +19,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { EmptyState, Logo } from "@/components/pqtabs/shared";
 import { switchRegistrar, useAccountData } from "@/hooks/use-account-data";
-import { connectWallet, switchToArc } from "@/data/wallet";
+import { connectWallet, existingAccount, switchToArc, walletClient } from "@/data/wallet";
 import { initials, usd } from "@/data/formatters";
 import { useDashboardUi, usePqtabsData, useTotals, type DashboardView } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -74,6 +74,22 @@ const VIEW_ELEMENTS: Record<DashboardView, ReactElement> = {
 function ConnectGate({ onExit }: { onExit: () => void }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    existingAccount()
+      .then(async (address) => {
+        if (cancelled || !address) return;
+        const chainId = await walletClient().getChainId();
+        if (cancelled || chainId !== 5042) return;
+        window.localStorage.removeItem("pqtabs.root");
+        switchRegistrar(address);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function connect() {
     setBusy(true);

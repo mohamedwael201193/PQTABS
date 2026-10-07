@@ -42,9 +42,11 @@ export async function existingAccount(): Promise<Address | null> {
 
 export async function connectWallet(): Promise<{ address: Address; chainId: number }> {
   const client = walletClient();
-  const [address] = await client.requestAddresses();
+  const already = await existingAccount();
+  const address = already ?? (await client.requestAddresses())[0];
+  if (!address) throw new Error("The wallet did not connect.");
   const chainId = await client.getChainId();
-  return { address, chainId };
+  return { address: getAddress(address), chainId };
 }
 
 export async function switchToArc(): Promise<void> {
