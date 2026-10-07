@@ -21,7 +21,7 @@ import type {
   Recipient,
   Tab,
 } from "@/data/types";
-import { useActivity, useAgents, useRecipients, useTabs } from "@/lib/store";
+import { useActivity, useAgents, usePqtabsData, useRecipients, useTabs } from "@/lib/store";
 import { useAccountData } from "@/hooks/use-account-data";
 import { EmptyState, StatusChip } from "@/components/pqtabs/shared";
 import { ActivityRow } from "@/components/pqtabs/dashboard/shared/ActivityRow";
@@ -106,19 +106,21 @@ function ActivityDetail({
         <div>
           <dt className={MICRO}>Agent</dt>
           <dd className="mt-1 text-sm text-foreground">
-            {record.agentId ? (agentsById.get(record.agentId)?.name ?? "—") : "—"}
+            {record.agentId
+              ? (agentsById.get(record.agentId.toLowerCase())?.name ?? "—")
+              : "—"}
           </dd>
         </div>
         <div>
           <dt className={MICRO}>Capability</dt>
           <dd className="mt-1 font-mono text-xs text-foreground">
-            {record.tabId ? (tabsById.get(record.tabId)?.reference ?? "—") : "—"}
+            {record.tabId ? (tabsById.get(record.tabId.toLowerCase())?.reference ?? "—") : "—"}
           </dd>
         </div>
         <div>
           <dt className={MICRO}>Recipient</dt>
           <dd className="mt-1">
-            <RecipientDetail recipient={recipientsById.get(record.recipientId ?? "")} />
+            <RecipientDetail recipient={recipientsById.get((record.recipientId ?? "").toLowerCase())} />
           </dd>
         </div>
         <div>
@@ -151,12 +153,14 @@ export default function ActivityView() {
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
-  const agentsById = useMemo(() => new Map(agents.map((a) => [a.id, a])), [agents]);
-  const tabsById = useMemo(() => new Map(tabs.map((t) => [t.id, t])), [tabs]);
+  const agentsById = useMemo(() => new Map(agents.map((a) => [a.id.toLowerCase(), a])), [agents]);
+  const tabsById = useMemo(() => new Map(tabs.map((t) => [t.id.toLowerCase(), t])), [tabs]);
   const recipientsById = useMemo(
-    () => new Map(recipients.map((r) => [r.id, r])),
+    () => new Map(recipients.map((r) => [r.id.toLowerCase(), r])),
     [recipients]
   );
+  const portfolioReady = usePqtabsData((state) => state.portfolioReady);
+  const portfolioError = usePqtabsData((state) => state.portfolioError);
 
   const activeCount =
     (agentFilter !== "all" ? 1 : 0) +
@@ -175,13 +179,13 @@ export default function ActivityView() {
     const q = query.trim().toLowerCase();
     return [...activity]
       .sort((a, b) => a.hoursAgo - b.hoursAgo)
-      .filter((r) => agentFilter === "all" || r.agentId === agentFilter)
+      .filter((r) => agentFilter === "all" || r.agentId?.toLowerCase() === agentFilter.toLowerCase())
       .filter((r) => statusFilter === "all" || r.status === statusFilter)
       .filter((r) => typeFilter === "all" || TYPE_KINDS[typeFilter].includes(r.kind))
       .filter((r) => {
         if (!q) return true;
-        const recipientName = recipientsById.get(r.recipientId ?? "")?.name.toLowerCase();
-        const agentName = agentsById.get(r.agentId ?? "")?.name.toLowerCase();
+        const recipientName = recipientsById.get((r.recipientId ?? "").toLowerCase())?.name.toLowerCase();
+        const agentName = agentsById.get((r.agentId ?? "").toLowerCase())?.name.toLowerCase();
         return (
           r.summary.toLowerCase().includes(q) ||
           (recipientName?.includes(q) ?? false) ||
@@ -247,7 +251,7 @@ export default function ActivityView() {
           </p>
         </div>
         <span className="rounded-full border border-white/[.08] bg-white/[.03] px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-          {activity.length} events
+          {portfolioReady ? `${activity.length} events` : "list not loaded"}
         </span>
       </header>
 
@@ -331,7 +335,17 @@ export default function ActivityView() {
 
       {/* Ledger */}
       <div className="mt-4 max-h-[calc(100vh-320px)] overflow-y-auto scrollbar-thin pr-1">
-        {filtered.length === 0 ? (
+        {!portfolioReady ? (
+          <EmptyState
+            icon={<ActivityIcon className="size-5" />}
+            title={portfolioError ? "Couldn't read activity" : "Loading activity"}
+            body={
+              portfolioError
+                ? "The treasury balance is already the onchain USDC balance. The activity list did not finish."
+                : "Activity is still being read from Arc."
+            }
+          />
+        ) : filtered.length === 0 ? (
           activeCount > 0 ? (
             <EmptyState
               icon={<Search className="size-5" />}

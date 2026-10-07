@@ -271,11 +271,13 @@ function mapSnapshot(
   }
 
   const activity: ActivityRecord[] = events.map((event) => ({
-    id: event.tx,
+    id: `${event.kind}:${event.tx}:${event.tab ?? ""}`,
     kind: activityKind(event.kind),
     status: "completed" as ActivityStatus,
     hoursAgo: hoursBetween(Number(event.timestamp), now),
-    agentId: event.agent,
+    agentId:
+      event.agent ??
+      tabs.find((tab) => tab.id.toLowerCase() === event.tab?.toLowerCase())?.agentId,
     tabId: event.tab,
     recipientId: event.to,
     amountUsd: event.amount ? usdc(event.amount) : undefined,
