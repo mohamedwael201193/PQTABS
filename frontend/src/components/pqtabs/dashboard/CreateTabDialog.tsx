@@ -36,7 +36,7 @@ import { isAddress, parseUsdcRaw } from "@/data/actions";
 import { rootUnlocked, signRootDigest, unlockBackup } from "@/data/pq-vault";
 import { initials, relFuture, usd } from "@/data/formatters";
 import { loadSnapshot, prepareOpen, submitPrepared, type PreparedAction } from "@/data/production";
-import { createAgentKey } from "@/data/spend";
+import { createAgentKey, recallAgentKey } from "@/data/spend";
 import type { Recipient, Tab } from "@/data/types";
 import { useAgents, useDashboardUi, usePqtabsData, useRecipients, useTotals } from "@/lib/store";
 
@@ -124,6 +124,7 @@ function CreateFlow() {
   const setCreateOpen = useDashboardUi((s) => s.setCreateOpen);
   const setView = useDashboardUi((s) => s.setView);
   const agents = useAgents();
+  const labels = usePqtabsData((state) => state.agentLabels);
   const recipients = useRecipients();
   const totals = useTotals();
   const rootBalance = usePqtabsData((state) => state.snapshot.account.treasuryTotalUsd);
@@ -161,8 +162,14 @@ function CreateFlow() {
 
   // ----- derived --------------------------------------------------------------
   const eligibleAgents = useMemo(
-    () => agents.filter((a) => a.status !== "revoked"),
-    [agents]
+    () =>
+      agents.filter((agent) => {
+        if (agent.status === "revoked") return false;
+        const namedHere = Boolean(labels[agent.id.toLowerCase()]);
+        if (namedHere && !recallAgentKey(agent.id)) return false;
+        return true;
+      }),
+    [agents, labels],
   );
   const directory = useMemo(() => [...recipients, ...extraRecipients], [recipients, extraRecipients]);
   const typedAgent = isAddress(agentDraft) ? agentDraft : null;
@@ -511,7 +518,7 @@ function CreateFlow() {
                       name,
                       address: created.address,
                       status: "active",
-                      role: "Created on this device. No treasury access until you give it a capability.",
+                      role: "Created in this browser session. No treasury access until you give it a capability.",
                       addedHoursAgo: 0,
                       lastActiveHoursAgo: null,
                     });
@@ -523,7 +530,7 @@ function CreateFlow() {
                   Create agent
                 </Button>
                 <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                  The signing key stays on this device. It is not shown, and this agent cannot reach the treasury until you authorize a capability.
+                  The signing key stays in this browser session. It is not saved and it is not shown. After a refresh, this agent cannot spend.
                 </p>
                 <details className="mt-3 text-xs text-muted-foreground">
                   <summary className="cursor-pointer">Use an agent already on this device</summary>

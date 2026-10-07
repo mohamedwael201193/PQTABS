@@ -5,7 +5,7 @@ import { Bot, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmptyState, StatusChip } from "@/components/pqtabs/shared";
 import { initials, relTime, usd } from "@/data/formatters";
-import { createAgentKey } from "@/data/spend";
+import { createAgentKey, recallAgentKey } from "@/data/spend";
 import { useAgents, useDashboardUi, usePqtabsData, useTabs } from "@/lib/store";
 
 /**
@@ -17,6 +17,7 @@ export default function AgentsView() {
   const portfolioReady = usePqtabsData((state) => state.portfolioReady);
   const portfolioError = usePqtabsData((state) => state.portfolioError);
   const agents = useAgents();
+  const labels = usePqtabsData((state) => state.agentLabels);
   const tabs = useTabs();
   const openDrawer = useDashboardUi((s) => s.openDrawer);
   const setCreateOpen = useDashboardUi((s) => s.setCreateOpen);
@@ -31,7 +32,7 @@ export default function AgentsView() {
       name: label,
       address: created.address,
       status: "active",
-      role: purpose.trim() || "Created on this device. No treasury access until you give it a capability.",
+      role: purpose.trim() || "Created in this browser session. No treasury access until you give it a capability.",
       addedHoursAgo: 0,
       lastActiveHoursAgo: null,
     });
@@ -84,6 +85,8 @@ export default function AgentsView() {
               (t) => t.agentId.toLowerCase() === agent.id.toLowerCase() && t.status === "active",
             );
             const authorized = activeTabs.reduce((s, t) => s + t.capUsd, 0);
+            const canSign = Boolean(recallAgentKey(agent.id));
+            const keyGone = Boolean(labels[agent.id.toLowerCase()]) && !canSign;
             return (
               <li key={agent.id}>
                 <button
@@ -108,7 +111,9 @@ export default function AgentsView() {
                     </span>
                     {activeTabs.length === 0 && (
                       <span className="mt-2 block text-xs text-muted-foreground">
-                        This agent has no treasury access by itself.
+                        {keyGone
+                          ? "The signing key was only kept for the session that created it. This agent cannot spend from this browser."
+                          : "This agent has no treasury access by itself."}
                       </span>
                     )}
                     <span className="mt-1 block truncate font-mono text-[10px] text-muted-foreground">
@@ -118,7 +123,7 @@ export default function AgentsView() {
 
                   {/* Live state */}
                   <span className="hidden shrink-0 items-center gap-2.5 lg:flex">
-                    <StatusChip status={agent.status} pulse={agent.status === "active"} />
+                    <StatusChip status={agent.status} pulse={canSign && agent.status === "active" && !keyGone} />
                     <span className="font-mono text-[11px] tabular text-muted-foreground">
                       {activeTabs.length} active {activeTabs.length === 1 ? "capability" : "capabilities"}
                     </span>
@@ -144,7 +149,7 @@ export default function AgentsView() {
                     aria-hidden="true"
                   />
                 </button>
-                {activeTabs.length === 0 && (
+                {activeTabs.length === 0 && canSign && (
                   <Button
                     variant="ghost"
                     className="mt-2 h-8 text-gold"

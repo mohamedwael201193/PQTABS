@@ -29,8 +29,9 @@ import {
 } from "@/components/ui/sheet";
 import { StatusChip } from "@/components/pqtabs/shared";
 import { relFuture, relTime, usd } from "@/data/formatters";
+import { recallAgentKey } from "@/data/spend";
 import type { Agent } from "@/data/types";
-import { useActivity, useAgents, useDashboardUi, useTabs } from "@/lib/store";
+import { useActivity, useAgents, useDashboardUi, usePqtabsData, useTabs } from "@/lib/store";
 import { ActivityRow } from "./shared/ActivityRow";
 
 const SHEET_CLASS =
@@ -79,6 +80,8 @@ function AgentDrawerBody({ agent }: { agent: Agent }) {
   const openDrawer = useDashboardUi((s) => s.openDrawer);
   const setCreateOpen = useDashboardUi((s) => s.setCreateOpen);
 
+  const labels = usePqtabsData((state) => state.agentLabels);
+  const keyGone = Boolean(labels[agent.id.toLowerCase()]) && !recallAgentKey(agent.id);
   const activeTabs = tabs.filter(
     (t) => t.agentId.toLowerCase() === agent.id.toLowerCase() && t.status === "active",
   );
@@ -263,6 +266,11 @@ function AgentDrawerBody({ agent }: { agent: Agent }) {
       {/* Actions */}
       <div className="shrink-0 border-t border-white/[.06] bg-[#0a0b0d]/95 px-5 py-4 backdrop-blur md:px-6">
         <div className="flex flex-wrap items-center gap-2">
+          {keyGone ? (
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              The signing key was only kept for the session that created it. Create a new agent to give it a capability.
+            </p>
+          ) : (
           <Button
             onClick={() => {
               setCreateOpen(true, agent.id);
@@ -273,6 +281,7 @@ function AgentDrawerBody({ agent }: { agent: Agent }) {
             <Plus className="size-4" strokeWidth={2} />
             Create capability
           </Button>
+          )}
           <AlertDialog>
             {activeTabs.length > 0 ? (
             <AlertDialogTrigger asChild>

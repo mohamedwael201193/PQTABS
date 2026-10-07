@@ -420,7 +420,7 @@ function TabDrawerBody({
           />
           {!recallAgentKey(tab.agentId) && (
             <p className="mt-2 text-xs text-muted-foreground">
-              This agent was not created on this device, so this browser cannot sign for it.
+              This browser session does not hold this agent's signing key, so it cannot sign a payment.
             </p>
           )}
           <Button
