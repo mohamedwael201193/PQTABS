@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactElement } from "react";
+import { useEffect, useRef, useState, type ReactElement } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   Activity as ActivityIcon,
@@ -142,6 +142,23 @@ export default function DashboardApp({ onExit }: { onExit: () => void }) {
     window.scrollTo({ top: 0 });
   }, [activeView]);
 
+  const rateLimited = Boolean(error && /rate limit/i.test(error));
+  const limitedSince = useRef<number | null>(null);
+  if (rateLimited) {
+    if (limitedSince.current == null) limitedSince.current = Date.now();
+  } else {
+    limitedSince.current = null;
+  }
+  const [limitTick, setLimitTick] = useState(0);
+  useEffect(() => {
+    if (!rateLimited || limitedSince.current == null) return;
+    const wait = Math.max(0, limitedSince.current + 20_000 - Date.now());
+    const timer = window.setTimeout(() => setLimitTick((value) => value + 1), wait);
+    return () => window.clearTimeout(timer);
+  }, [rateLimited, error]);
+  void limitTick;
+  const cooling = rateLimited && limitedSince.current != null && Date.now() < limitedSince.current + 20_000;
+
   const chainId = usePqtabsData((s) => s.chainId);
   const accountReady = usePqtabsData((s) => s.accountReady);
   const booting = !accountReady || (!snapshot && loading);
@@ -155,16 +172,21 @@ export default function DashboardApp({ onExit }: { onExit: () => void }) {
           title="Wrong network"
           body={`Wallet ${registrar.slice(0, 6)}…${registrar.slice(-4)} is connected. PQTABS settles on Arc mainnet. Switch before the treasury can load.`}
           action={
-            <Button
-              onClick={() => {
-                void switchToArc().catch((reason: unknown) => {
-                  toast.error(reason instanceof Error ? reason.message : "The wallet stayed on another network.");
-                });
-              }}
-              className="bg-gold text-[#171204] hover:bg-[#eec95e]"
-            >
-              Switch to Arc
-            </Button>
+            <div className="flex flex-col items-center gap-3">
+              <Button
+                onClick={() => {
+                  void switchToArc().catch((reason: unknown) => {
+                    toast.error(reason instanceof Error ? reason.message : "The wallet stayed on another network.");
+                  });
+                }}
+                className="bg-gold text-[#171204] hover:bg-[#eec95e]"
+              >
+                Switch to Arc
+              </Button>
+              <button type="button" onClick={onExit} className="text-xs text-muted-foreground hover:text-foreground">
+                Back to site
+              </button>
+            </div>
           }
           className="w-full max-w-md"
         />
@@ -180,12 +202,17 @@ export default function DashboardApp({ onExit }: { onExit: () => void }) {
       <div className="flex min-h-screen items-center justify-center bg-background px-4">
         <EmptyState
           icon={<ShieldCheck className="h-5 w-5" strokeWidth={1.75} />}
-          title="Couldn&apos;t load your treasury."
+          title={`Wallet ${registrar.slice(0, 6)}…${registrar.slice(-4)} could not be read from Arc.`}
           body={error ?? "Check your connection and try again."}
           action={
-            <Button onClick={retry} className="bg-gold text-[#171204] hover:bg-[#eec95e]">
-              Try again
-            </Button>
+            <div className="flex flex-col items-center gap-3">
+              <Button onClick={retry} disabled={cooling} className="bg-gold text-[#171204] hover:bg-[#eec95e]">
+                {cooling ? "Arc is still rate limiting" : "Try again"}
+              </Button>
+              <button type="button" onClick={onExit} className="text-xs text-muted-foreground hover:text-foreground">
+                Back to site
+              </button>
+            </div>
           }
           className="w-full max-w-md"
         />
