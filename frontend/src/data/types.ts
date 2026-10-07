@@ -91,6 +91,10 @@ export interface Tab {
   capUsd: number;
   /** Remaining spendable balance, USDC (completed payments only). */
   balanceUsd: number;
+  /** Remaining USDC in raw 6-decimal units, when Arc reported it. */
+  balanceRaw?: string;
+  /** Per-payment limit in raw 6-decimal units, when Arc reported it. */
+  maxPerCallRaw?: string;
   policy: TabPolicy;
   /** Hours since the capability was opened. */
   openedHoursAgo: number;

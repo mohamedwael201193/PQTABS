@@ -238,6 +238,8 @@ function mapSnapshot(
       status,
       capUsd: usdc(row.cap),
       balanceUsd: usdc(row.usdc),
+      balanceRaw: row.usdc,
+      maxPerCallRaw: row.maxPerCall,
       policy: {
         maxPerCallUsd: usdc(row.maxPerCall),
         allowedRecipients: row.payees,

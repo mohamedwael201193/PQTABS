@@ -37,6 +37,23 @@ import { ActivityRow } from "./shared/ActivityRow";
 const SHEET_CLASS =
   "w-full gap-0 border-l border-white/[.08] bg-[#0a0b0d] p-0 sm:w-[480px] sm:max-w-[480px]";
 
+function paymentRaw(amount: string, tab: Tab): { raw: bigint } | { error: string } {
+  let raw: bigint;
+  try {
+    raw = parseUsdcRaw(amount);
+  } catch (reason: unknown) {
+    return { error: reason instanceof Error ? reason.message : "Enter an amount with at most 6 decimal places." };
+  }
+  if (raw <= BigInt(0)) return { error: "Enter an amount above zero. Nothing was signed." };
+  if (tab.maxPerCallRaw && raw > BigInt(tab.maxPerCallRaw)) {
+    return { error: "That amount is above this capability's per-payment limit. Nothing was signed." };
+  }
+  if (tab.balanceRaw && raw > BigInt(tab.balanceRaw)) {
+    return { error: "This capability does not hold that much USDC. Nothing was signed." };
+  }
+  return { raw };
+}
+
 /**
  * TabDrawer — the full anatomy of one capability: holder, balance against
  * cap, the four bounding policy numbers, who it may pay, its ledger, and
@@ -164,6 +181,8 @@ function TabDrawerBody({
   const [closePass, setClosePass] = useState("");
   const [closeReady, setCloseReady] = useState(() => rootUnlocked(usePqtabsData.getState().registrar));
   const [paying, setPaying] = useState(false);
+  const payLock = useRef(false);
+  const amountCheck = paymentRaw(spendAmount, tab);
 
   const agent = agents.find((a) => a.id === tab.agentId);
   const allowed = recipients.filter((r) => tab.policy.allowedRecipients.includes(r.id));
@@ -385,7 +404,7 @@ function TabDrawerBody({
         <div className="border-t border-white/[.06] px-5 py-4 md:px-6">
           <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Agent payment</p>
           <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-            The agent signs this payment from this device. A recipient outside the list, or an amount above the per-payment limit, is rejected before broadcast.
+            The agent signs this payment from this device. An amount above the per-payment limit or the remaining balance is rejected here, before this device signs.
           </p>
           <select
             value={spendTo || tab.policy.allowedRecipients[0] || ""}
@@ -406,41 +425,56 @@ function TabDrawerBody({
             aria-label="Payment amount"
             className="mt-2 h-9 w-full rounded-lg border border-white/10 bg-transparent px-3 font-mono text-[11px] text-foreground outline-none"
           />
+          {"error" in amountCheck && (
+            <p className="mt-2 text-xs text-danger">{amountCheck.error}</p>
+          )}
           {!recallAgentKey(tab.agentId) && (
             <p className="mt-2 text-xs text-muted-foreground">
               This browser session does not hold this agent's signing key, so it cannot sign a payment.
             </p>
           )}
           <Button
-            disabled={paying || !recallAgentKey(tab.agentId)}
+            disabled={paying || !recallAgentKey(tab.agentId) || "error" in amountCheck}
             onClick={() => {
+              if (payLock.current || "error" in amountCheck) return;
               const key = (recallAgentKey(tab.agentId) || "") as `0x${string}`;
               const payee = spendTo || tab.policy.allowedRecipients[0] || "";
-              if (!key.startsWith("0x") || !isAddress(payee) || !tab.expiryUnix) {
+              const registrar = usePqtabsData.getState().registrar;
+              if (!key.startsWith("0x") || !isAddress(payee) || !tab.expiryUnix || !registrar) {
                 toast.error("Choose a recipient. This device must already hold the agent.");
                 return;
               }
+              payLock.current = true;
               setPaying(true);
-              void authorizationBlob(key, tab.id, payee, parseUsdcRaw(spendAmount), BigInt(tab.expiryUnix))
-                .then((signed) =>
-                  submitSpend({
-                    registrar: usePqtabsData.getState().registrar,
+              const raw = amountCheck.raw;
+              void authorizationBlob(key, tab.id, payee, raw, BigInt(tab.expiryUnix))
+                .then((signed) => {
+                  if (usePqtabsData.getState().registrar.toLowerCase() !== registrar.toLowerCase()) {
+                    throw new Error("The wallet changed. The payment was not submitted.");
+                  }
+                  return submitSpend({
+                    registrar,
                     tab: tab.id,
                     to: payee,
-                    value: parseUsdcRaw(spendAmount).toString(),
+                    value: raw.toString(),
                     validBefore: String(tab.expiryUnix),
                     nonce: signed.nonce,
                     signature: signed.blob,
-                  }),
-                )
+                  });
+                })
                 .then(({ hash, snapshot }) => {
-                  usePqtabsData.getState().replaceSnapshot(snapshot);
+                  const now = usePqtabsData.getState();
+                  if (now.registrar.toLowerCase() !== registrar.toLowerCase()) return;
+                  now.replaceSnapshot(snapshot);
                   toast.success(`Payment receipt ${hash.slice(0, 10)}…`);
                 })
                 .catch((error: unknown) => {
                   toast.error(error instanceof Error ? error.message : "The payment was rejected.");
                 })
-                .finally(() => setPaying(false));
+                .finally(() => {
+                  payLock.current = false;
+                  setPaying(false);
+                });
             }}
             className="mt-3 h-9 bg-gold text-[#171204] hover:bg-[#eec95e]"
           >
