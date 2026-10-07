@@ -89,7 +89,17 @@ function readableError(detail: string | undefined, fallback: string): string {
   if (detail.includes("rate limit") || detail.includes("429")) {
     return "Arc is rate limiting reads. Try again in a moment.";
   }
-  return detail.length > 240 ? `${detail.slice(0, 240)}…` : detail;
+  if (/NotExpired/i.test(detail)) return "Arc has not reached this capability's expiry yet. Nothing was submitted.";
+  if (/AlreadyClosed/i.test(detail)) return "This capability is already closed.";
+  if (/ExposureExceeded/i.test(detail)) return "This amount would pass the exposure ceiling. Nothing was submitted.";
+  if (/ExpiryNotFuture/i.test(detail)) return "The expiry must be in the future. Nothing was submitted.";
+  if (/SweepNotNeeded/i.test(detail)) return "There is no USDC left to return.";
+  if (/invalid signature/i.test(detail) || /InvalidSignature/i.test(detail)) {
+    return "Arc rejected the signature. Nothing was submitted.";
+  }
+  const cleaned = detail.replace(/0x[a-fA-F0-9]{8,}/g, "").replace(/\s+/g, " ").trim();
+  const text = cleaned || fallback;
+  return text.length > 240 ? `${text.slice(0, 240)}…` : text;
 }
 
 function usdc(raw: string | undefined): number {

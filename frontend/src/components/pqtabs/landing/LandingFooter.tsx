@@ -100,19 +100,8 @@ export default function LandingFooter() {
           <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
             Post-quantum authorization · Arc · USDC
           </p>
-          <p className="flex items-center gap-2.5 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-            <span
-              aria-hidden="true"
-              className="size-1.5 animate-pulse-soft rounded-full bg-gold"
-              style={
-                {
-                  ["--pulse-duration" as string]: "2.6s",
-                  ["--pulse-min" as string]: "0.35",
-                  ["--pulse-max" as string]: "1",
-                } as CSSProperties
-              }
-            />
-            All systems operational
+          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+            Receipts come from Arc
           </p>
         </div>
       </div>

@@ -33,7 +33,7 @@ const CARDS: { icon: Icon3DName; kicker: string; title: string; body: string }[]
       icon: "hourglass",
       kicker: "TTL",
       title: "Time-boxed access",
-      body: "Every capability expires on schedule, and the funds return with it.",
+      body: "Every capability expires on schedule. The agent can no longer spend, and the USDC stays until someone reclaims it.",
     },
     {
       icon: "robot",

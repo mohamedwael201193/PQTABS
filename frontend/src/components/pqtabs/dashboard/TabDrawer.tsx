@@ -109,10 +109,14 @@ export default function TabDrawer() {
       }
       const row = snapshot.tabs.find((item) => item.id.toLowerCase() === liveTab.id.toLowerCase());
       if (!row || row.status !== "closed") {
-        throw new Error("Arc did not show this tab as closed.");
+        throw new Error("Arc did not show this capability as closed.");
       }
       now.replaceSnapshot(snapshot);
-      toast.success("Close confirmed on Arc");
+      if (row.needsSweep || row.balanceUsd > 0) {
+        toast.message("The capability is closed. USDC is still on it until Return funds succeeds.");
+      } else {
+        toast.success("Close confirmed on Arc. The remaining USDC is back in the treasury.");
+      }
       closeDrawer();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Couldn't close this capability.");
@@ -135,7 +139,7 @@ export default function TabDrawer() {
       const snapshot = await loadSnapshot(store.registrar);
       const row = snapshot.tabs.find((item) => item.id.toLowerCase() === liveTab.id.toLowerCase());
       if (!row || row.status !== "closed") {
-        throw new Error("The receipt succeeded, but this tab is still open.");
+        throw new Error("The receipt succeeded, but this capability is still open.");
       }
       store.replaceSnapshot(snapshot);
       toast.success("Reclaim confirmed on Arc");
@@ -523,7 +527,7 @@ function TabDrawerBody({
                     Close this capability?
                   </AlertDialogTitle>
                   <AlertDialogDescription>
-                    Remaining balance returns to your protected treasury after you authorize the close with your security key.
+                    Closing asks Arc to return the remaining USDC to your treasury. If that transfer does not finish, the capability stays closed and Return funds can send it without another signature.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 {closePrep ? (
