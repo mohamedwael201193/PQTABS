@@ -96,9 +96,8 @@ export async function readIndexedPortfolio(sql: Sql, client: PublicClient, facto
 }
 
 async function readIndexedPortfolioBody(sql: Sql, client: PublicClient, factory: Address, root: Address): Promise<IndexedPortfolio> {
-  const cursor = await readCursor(sql);
-  const through = cursor ?? 0n;
-  const [membership, capabilityRows, activityRows] = await Promise.all([
+  const [cursor, membership, capabilityRows, activityRows] = await Promise.all([
+    readCursor(sql),
     sql.query<{ address: string }>("SELECT address FROM roots WHERE lower(address) = lower($1)", [root]),
     sql.query<CapabilityRow>(
       "SELECT tab, agent, cap, expiry, opened_block, opened_tx, opened_at, close_block, swept, usdc_balance, max_per_call, payees FROM capabilities WHERE lower(root) = lower($1) ORDER BY opened_block, opened_log_index",
@@ -111,6 +110,7 @@ async function readIndexedPortfolioBody(sql: Sql, client: PublicClient, factory:
       [root],
     ),
   ]);
+  const through = cursor ?? 0n;
   if (membership.length === 0 && capabilityRows.length === 0) {
     try {
       await assertOurRoot({ public: client, relayer: null, relayerAddress: null, factory }, root, 1);

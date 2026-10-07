@@ -45,7 +45,7 @@ export async function openIndex(env: NodeJS.ProcessEnv = process.env): Promise<S
 async function openPg(connectionString: string): Promise<Sql> {
   const pool = new pg.Pool({
     connectionString,
-    max: 4,
+    max: 8,
     ssl: connectionString.includes("supabase.com") ? { rejectUnauthorized: false } : undefined,
   });
   await pool.query(SCHEMA);

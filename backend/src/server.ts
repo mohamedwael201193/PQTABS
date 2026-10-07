@@ -145,7 +145,9 @@ export function createApp(clients: Clients = loadClients(), getIndex?: () => Sql
   app.get("/v1/roots/:address/portfolio", async (c) => {
     const root = asAddress(c.req.param("address"), "root");
     const index = getIndex?.() ?? null;
+    const started = Date.now();
     const portfolio = index ? await readIndexedPortfolio(index, clients.public, clients.factory, root) : await readPortfolio(clients, root);
+    c.header("Server-Timing", `app;dur=${Date.now() - started}`);
     return c.json({ root, ...portfolio });
   });
 

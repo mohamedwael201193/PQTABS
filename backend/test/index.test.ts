@@ -5,7 +5,7 @@ import { applyEvents, type IndexEvent, readCursor, resetIndex, writeEvents } fro
 import { readRegistrarRoots } from "../src/index/account.js";
 import { headFromSubscription, httpToWebSocket } from "../src/index/heads.js";
 import { indexCoversHead, noteIndexCursor, noteIndexHead, noteRateLimit } from "../src/index/lane.js";
-import { tabFromStored } from "../src/index/portfolio.js";
+import { tabFromStored, readIndexedPortfolio } from "../src/index/portfolio.js";
 import { openMemory, type Sql } from "../src/index/sql.js";
 
 const rootA = "0x846f56a8547Fe5cC3120c189c5640e84DAAB65Cf" as Address;
@@ -216,5 +216,19 @@ describe("derived index", () => {
     assert.equal(head?.number, 24782476n);
     assert.equal(head?.timestamp, "1791402524");
     assert.equal(headFromSubscription("not-json"), null);
+  });
+
+  it("reads a stored portfolio without asking Arc", async () => {
+    const sql = await openMemory();
+    await applyEvents(sql, [opened(rootA, tabA, 1)], 100n);
+    noteIndexHead(100n, "1790000000");
+    noteIndexCursor(100n);
+    const silent = { readContract: () => Promise.reject(new Error("Arc should not be read")) } as unknown as PublicClient;
+    const portfolio = await readIndexedPortfolio(sql, silent, rootA, rootA);
+    assert.equal(portfolio.tabs.length, 1);
+    assert.equal(portfolio.tabs[0]?.balanceKnown, false);
+    assert.equal(portfolio.freshness, "live");
+    assert.equal(portfolio.activity.length, 1);
+    await sql.close();
   });
 });
