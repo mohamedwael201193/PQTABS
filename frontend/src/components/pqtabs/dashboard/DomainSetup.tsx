@@ -67,7 +67,7 @@ export function DomainSetup({ onExit, onReady }: { onExit: () => void; onReady: 
         <EmptyState
           icon={<ShieldCheck className="h-5 w-5" strokeWidth={1.75} />}
           title="Protect your treasury"
-          body="This wallet has no security domain yet. Your wallet identifies you. A separate security key, kept on this device, authorizes what agents can spend."
+          body="This wallet has no security domain yet. Your wallet identifies you. A separate security key authorizes what agents can spend. It is not saved in the browser. After this, you create an agent and give it a capability. The agent never holds this key."
           action={
             <div className="flex w-full flex-col gap-3 text-left">
               <label className="text-xs text-muted-foreground">
