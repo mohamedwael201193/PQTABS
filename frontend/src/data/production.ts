@@ -67,6 +67,12 @@ type PortfolioTab = {
   openedAt: string;
 };
 
+type PortfolioJson = {
+  tabs: PortfolioTab[];
+  activity: PortfolioEvent[];
+  asOf?: string;
+};
+
 type PortfolioEvent = {
   kind: "opened" | "closed" | "transfer" | "rotated" | "spend";
   tx: string;
@@ -152,8 +158,8 @@ export async function loadAccount(
   }
   const state = await getJson<RootJson>(`/v1/roots/${root}`);
   onTreasury(mapSnapshot(registrar, state, [], [], config));
-  const portfolio = await getJson<{ tabs: PortfolioTab[]; activity: PortfolioEvent[] }>(`/v1/roots/${root}/portfolio`);
-  return mapSnapshot(registrar, state, portfolio.tabs, portfolio.activity, config);
+  const portfolio = await getJson<PortfolioJson>(`/v1/roots/${root}/portfolio`);
+  return mapSnapshot(registrar, state, portfolio.tabs, portfolio.activity, config, portfolio.asOf);
 }
 
 export async function loadSnapshot(registrar: string): Promise<AccountSnapshot> {
@@ -166,9 +172,9 @@ export async function loadSnapshot(registrar: string): Promise<AccountSnapshot> 
   }
   const [state, portfolio] = await Promise.all([
     getJson<RootJson>(`/v1/roots/${root}`),
-    getJson<{ tabs: PortfolioTab[]; activity: PortfolioEvent[] }>(`/v1/roots/${root}/portfolio`),
+    getJson<PortfolioJson>(`/v1/roots/${root}/portfolio`),
   ]);
-  return mapSnapshot(registrar, state, portfolio.tabs, portfolio.activity, config);
+  return mapSnapshot(registrar, state, portfolio.tabs, portfolio.activity, config, portfolio.asOf);
 }
 
 const ROOT_KEY = "pqtabs.root";
@@ -217,8 +223,10 @@ function mapSnapshot(
   rows: PortfolioTab[],
   events: PortfolioEvent[],
   config?: ConfigJson,
+  asOf?: string,
 ): AccountSnapshot {
-  const now = Date.now() / 1000;
+  const chainNow = asOf ? Number(asOf) : Number.NaN;
+  const now = Number.isFinite(chainNow) && chainNow > 0 ? chainNow : Date.now() / 1000;
   const recipients = new Map<string, Recipient>();
   const tabs: Tab[] = rows.map((row) => {
     for (const payee of row.payees) {

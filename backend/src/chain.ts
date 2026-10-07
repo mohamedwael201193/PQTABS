@@ -246,7 +246,9 @@ async function blockTime(client: PublicClient, blockNumber: bigint, cache: Map<s
 
 type CallResult = { status: "success"; result: unknown } | { status: "failure"; error: Error };
 
-const portfolioInflight = new Map<string, Promise<{ tabs: PortfolioTab[]; activity: PortfolioEvent[] }>>();
+type PortfolioRead = { tabs: PortfolioTab[]; activity: PortfolioEvent[]; asOf: string };
+
+const portfolioInflight = new Map<string, Promise<PortfolioRead>>();
 
 function callValue(results: readonly CallResult[], index: number, label: string): unknown {
   const row = results[index];
@@ -262,7 +264,7 @@ function payeeList(results: readonly CallResult[], index: number): Address[] {
   return [...(row.result as readonly Address[])];
 }
 
-export function readPortfolio(clients: Clients, root: Address): Promise<{ tabs: PortfolioTab[]; activity: PortfolioEvent[] }> {
+export function readPortfolio(clients: Clients, root: Address): Promise<PortfolioRead> {
   const key = `${clients.factory.toLowerCase()}:${root.toLowerCase()}`;
   const existing = portfolioInflight.get(key);
   if (existing) return existing;
@@ -273,10 +275,12 @@ export function readPortfolio(clients: Clients, root: Address): Promise<{ tabs: 
   return pending;
 }
 
-async function readPortfolioOnce(clients: Clients, root: Address): Promise<{ tabs: PortfolioTab[]; activity: PortfolioEvent[] }> {
+async function readPortfolioOnce(clients: Clients, root: Address): Promise<PortfolioRead> {
   await assertOurRoot(clients, root);
   const client = clients.public;
-  const latest = await withRpcRetry(() => client.getBlockNumber());
+  const head = await withRpcRetry(() => client.getBlock({ blockTag: "latest" }));
+  if (head.number == null) throw new Error("Arc did not return a block number.");
+  const latest = head.number;
   const opened = await ranged(latest, (from, to) =>
     client.getLogs({ address: root, event: openedEvent, fromBlock: from, toBlock: to }),
   );
@@ -398,7 +402,7 @@ async function readPortfolioOnce(clients: Clients, root: Address): Promise<{ tab
     });
   }
   activity.sort((a, b) => Number(b.block) - Number(a.block));
-  return { tabs, activity };
+  return { tabs, activity, asOf: head.timestamp.toString() };
 }
 
 export { factoryAbi, rootAbi, tabAbi, usdcAbi };
