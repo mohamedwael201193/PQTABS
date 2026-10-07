@@ -145,7 +145,7 @@ function CreateFlow() {
   const [prepared, setPrepared] = useState<PreparedAction | null>(null);
   const [passphrase, setPassphrase] = useState("");
   const [authorizing, setAuthorizing] = useState(false);
-  const [keyReady, setKeyReady] = useState(rootUnlocked());
+  const [keyReady, setKeyReady] = useState(() => rootUnlocked(usePqtabsData.getState().registrar));
   const [failure, setFailure] = useState("The capability was not opened.");
   const [recipientIds, setRecipientIds] = useState<Set<string>>(() => new Set());
   const [hours, setHours] = useState(24);
@@ -940,7 +940,7 @@ function CreateFlow() {
                   <p className="text-sm leading-relaxed text-muted-foreground">
                     Authorize this capability with your security key. The signature stays on this device.
                   </p>
-                  {!rootUnlocked() && (
+                  {!rootUnlocked(usePqtabsData.getState().registrar) && (
                     <div className="space-y-2">
                       <input
                         type="password"
@@ -957,7 +957,7 @@ function CreateFlow() {
                         onChange={(event) => {
                           const file = event.target.files?.[0];
                           if (!file || passphrase.length < 8) return;
-                          void file.arrayBuffer().then((bytes) => unlockBackup(bytes, passphrase)).then(() => setKeyReady(true)).catch((reason: unknown) => {
+                          void file.arrayBuffer().then((bytes) => unlockBackup(usePqtabsData.getState().registrar, bytes, passphrase)).then(() => setKeyReady(true)).catch((reason: unknown) => {
                             setFailure(reason instanceof Error ? reason.message : "Could not unlock the security key.");
                           });
                         }}
@@ -1100,7 +1100,7 @@ function CreateFlow() {
                 onClick={() => {
                   if (!prepared) return;
                   setAuthorizing(true);
-                  void signRootDigest(prepared.digest)
+                  void signRootDigest(usePqtabsData.getState().registrar, prepared.digest)
                     .then((signed) => submitCreation(signed))
                     .catch((reason: unknown) => {
                       setFailure(reason instanceof Error ? reason.message : "The security key could not authorize this.");

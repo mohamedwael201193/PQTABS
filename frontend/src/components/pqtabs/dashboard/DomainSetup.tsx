@@ -8,6 +8,7 @@ import { parseUsdcRaw } from "@/data/actions";
 import { rememberRoot } from "@/data/production";
 import { createRootKey, rootUnlocked, verifyingKey } from "@/data/pq-vault";
 import { createSecurityDomain, waitForRoot } from "@/data/wallet";
+import { usePqtabsData } from "@/lib/store";
 import { keccak256, toHex } from "viem";
 
 function downloadBackup(blob: Blob) {
@@ -20,22 +21,24 @@ function downloadBackup(blob: Blob) {
 }
 
 export function DomainSetup({ onExit, onReady }: { onExit: () => void; onReady: () => void }) {
+  const registrar = usePqtabsData((state) => state.registrar);
   const [passphrase, setPassphrase] = useState("");
   const [ceiling, setCeiling] = useState("0.2");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(rootUnlocked());
+  const [saved, setSaved] = useState(() => rootUnlocked(usePqtabsData.getState().registrar));
 
   async function protect() {
     setError(null);
     try {
       const maxOpenExposure = parseUsdcRaw(ceiling);
       if (maxOpenExposure <= BigInt(0)) throw new Error("Set an exposure ceiling above zero.");
-      let vk = verifyingKey();
+      if (!registrar) throw new Error("Connect a wallet before creating a security domain.");
+      let vk = verifyingKey(registrar);
       if (!vk) {
         if (passphrase.length < 8) throw new Error("Choose a passphrase of at least 8 characters.");
         setBusy("Creating your security key");
-        const created = await createRootKey(passphrase);
+        const created = await createRootKey(registrar, passphrase);
         downloadBackup(created.backup);
         vk = created.verifyingKey;
         setSaved(true);

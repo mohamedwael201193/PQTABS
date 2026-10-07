@@ -174,7 +174,7 @@ function TabDrawerBody({
   const [spendAmount, setSpendAmount] = useState("0.000001");
   const [closingSig, setClosingSig] = useState(false);
   const [closePass, setClosePass] = useState("");
-  const [closeReady, setCloseReady] = useState(rootUnlocked());
+  const [closeReady, setCloseReady] = useState(() => rootUnlocked(usePqtabsData.getState().registrar));
   const [paying, setPaying] = useState(false);
 
   const agent = agents.find((a) => a.id === tab.agentId);
@@ -520,7 +520,7 @@ function TabDrawerBody({
                       onChange={(event) => {
                         const file = event.target.files?.[0];
                         if (!file || closePass.length < 8) return;
-                        void file.arrayBuffer().then((bytes) => unlockBackup(bytes, closePass)).then(() => setCloseReady(true)).catch((reason: unknown) => {
+                        void file.arrayBuffer().then((bytes) => unlockBackup(usePqtabsData.getState().registrar, bytes, closePass)).then(() => setCloseReady(true)).catch((reason: unknown) => {
                           toast.error(reason instanceof Error ? reason.message : "Could not unlock the security key.");
                         });
                       }}
@@ -537,7 +537,7 @@ function TabDrawerBody({
                       event.preventDefault();
                       if (!closePrep) return;
                       setClosingSig(true);
-                      void signRootDigest(closePrep.digest)
+                      void signRootDigest(usePqtabsData.getState().registrar, closePrep.digest)
                         .then((signed) => onClose(closePrep, signed))
                         .catch((reason: unknown) => {
                           toast.error(reason instanceof Error ? reason.message : "Unlock your security key first.");
