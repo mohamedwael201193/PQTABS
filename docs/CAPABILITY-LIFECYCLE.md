@@ -6,4 +6,4 @@ The UI asks for agent, budget, per-payment limit, recipients, and expiry, then t
 
 Chain terms are read from the tab and the root. The portfolio response shows stored rows and a freshness label. A stored balance is not presented as a live balance when `balanceKnown` is false.
 
-Not proven in this audit: a new mainnet open, a comparison of that tab's on-chain terms with the screen, or `openExposure` equal to the sum of open caps on a freshly opened tab. Older receipts for root `0x846f…65Cf` are in HISTORY. That root currently has no open capability in the last portfolio sample.
+Not proven in this audit: a new mainnet open, a comparison of that tab's on-chain terms with the screen, or `openExposure` equal to the sum of open caps on a freshly opened tab. Older receipts for root `0x846f…65Cf` are in HISTORY. That root currently has no open capability. On the production page the review for agent `0x074D…096B` reached the security-key backup and did not submit. The live recipient on that review was `0x6Bf001BB5f5E75396d92163325ca01FdEBe2e9A9`.

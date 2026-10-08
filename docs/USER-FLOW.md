@@ -14,7 +14,7 @@ The product is a treasury with a post-quantum root and a bounded spending capabi
 
 ## What Chrome showed on the current production site
 
-Wallet `0xBDfC…0034` on `https://pqtabs.vercel.app` opened "Protect your treasury" and "Download backup". The registrar read returned no roots. Root `0x846f…65Cf` was not on the page. Back to site returned to the public page: agents need money, and the treasury key is not the spending key. No backup was downloaded and no domain was created. This browser's wallet could not be switched to the registrar that already has a root.
+An earlier production session with wallet `0xBDfC…0034` opened "Protect your treasury". No backup was downloaded and no domain was created. The current production page shows registrar `0xf76e…71a3`, root `0x846f…65Cf`, and `0.139994` USDC, with 0 open capabilities. Agent `0x074D…096B` is encrypted on that origin and still present after a reload. The capability review named the live recipient `0x6Bf001BB5f5E75396d92163325ca01FdEBe2e9A9` and stopped because the security-key backup was not chosen. No transaction was sent.
 
 ## What is already proven on Arc for registrar A
 
