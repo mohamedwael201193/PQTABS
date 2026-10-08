@@ -209,6 +209,7 @@ function TabDrawerBody({
   const agents = useAgents();
   const recipients = useRecipients();
   const activity = useActivity();
+  const verifyingKeyText = usePqtabsData((state) => state.snapshot.account.pqVk);
   const [closePrep, setClosePrep] = useState<PreparedAction | null>(null);
   const [task, setTask] = useState("Summarize what Arc mainnet settlement means for an agent payment.");
   const [closingSig, setClosingSig] = useState(false);
@@ -539,7 +540,7 @@ function TabDrawerBody({
         : "Closed";
 
   const canDo = [
-    `Pay the ${allowed.length} approved recipients`,
+    `Pay ${allowed.length === 1 ? "the approved recipient" : `the ${allowed.length} approved recipients`}`,
     `Spend up to ${usd(tab.policy.maxPerCallUsd)} per payment`,
     `Draw down to the ${usd(tab.capUsd)} cap`,
   ];
@@ -966,13 +967,17 @@ function TabDrawerBody({
                     Close this capability?
                   </AlertDialogTitle>
                   <AlertDialogDescription>
-                    Closing asks Arc to return the remaining USDC to your treasury. If that transfer does not finish, the capability stays closed and Return funds can send it without another signature.
+                    Closing asks Arc to return the remaining USDC to root cash. If that transfer does not finish, the capability stays closed and Return funds can send it without another signature.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 {closePrep ? (
                   <details className="text-xs text-muted-foreground">
                     <summary className="cursor-pointer">Technical details</summary>
-                    <p className="mt-2 break-all font-mono text-[10px] leading-relaxed">{closePrep.digest}</p>
+                    <p className="mt-2 font-mono text-[10px] leading-relaxed">chainId 5042</p>
+                    <p className="mt-2 font-mono text-[10px] leading-relaxed">nonce {closePrep.nonce}</p>
+                    <p className="mt-2 font-mono text-[10px] leading-relaxed">precompile 0x1800000000000000000000000000000000000004</p>
+                    {verifyingKeyText ? <p className="mt-2 break-all font-mono text-[10px] leading-relaxed">verifying key {verifyingKeyText}</p> : null}
+                    <p className="mt-2 break-all font-mono text-[10px] leading-relaxed">digest {closePrep.digest}</p>
                   </details>
                 ) : (
                   <p className="text-xs text-muted-foreground">Preparing the close from the current nonce.</p>
