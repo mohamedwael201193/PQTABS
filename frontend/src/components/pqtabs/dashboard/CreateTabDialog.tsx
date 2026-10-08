@@ -677,7 +677,7 @@ function CreateFlow() {
               </div>
               {capTooHigh && (
                 <p aria-live="polite" className="mt-3 text-xs text-danger">
-                  Only {usd(available)} is available in your treasury.
+                  Only {usd(available)} is root cash.
                 </p>
               )}
               {!capTooHigh && capTooLow && (
@@ -969,7 +969,7 @@ function CreateFlow() {
 
               <dl className="mt-6 divide-y divide-white/[.06] rounded-lg border border-white/[.06] bg-white/[.015]">
                 <div className="flex items-center justify-between gap-4 px-4 py-3">
-                  <dt className="text-sm text-muted-foreground">Current treasury</dt>
+                  <dt className="text-sm text-muted-foreground">Root cash</dt>
                   <dd className="font-mono text-sm tabular text-foreground">{usd(rootBalance)}</dd>
                 </div>
                 <div className="flex items-center justify-between gap-4 px-4 py-3">
@@ -996,7 +996,7 @@ function CreateFlow() {
               </p>
 
               <div className="mt-5 rounded-lg border border-white/[.06] bg-white/[.015] p-4">
-                <p className={MICRO}>Why this is safe</p>
+                <p className={MICRO}>What the agent cannot reach</p>
                 <ul className="mt-3 space-y-2 text-sm leading-relaxed text-muted-foreground">
                   <li>Your agent cannot access the rest of your wallet or root cash.</li>
                   <li>Every spend remains inside this capability&apos;s rules.</li>

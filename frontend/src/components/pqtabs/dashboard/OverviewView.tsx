@@ -284,8 +284,8 @@ export default function OverviewView() {
                 portfolioReady
                   ? "Create a capability that limits how much an agent can spend."
                   : portfolioError
-                    ? "The treasury balance above is the onchain USDC balance. The capability list did not finish."
-                    : "The treasury balance is already the onchain USDC balance. The capability list is still being read from Arc."
+                    ? "Root cash above is the USDC held by the root. The capability list did not finish."
+                    : "Root cash is the USDC held by the root. The capability list is still being read from Arc."
               }
               action={
                 <Button

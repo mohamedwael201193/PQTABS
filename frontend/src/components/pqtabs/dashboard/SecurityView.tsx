@@ -126,7 +126,7 @@ export default function SecurityView() {
           tone="success"
         />
         <PostureTile
-          label="Treasury exposure"
+          label="Open exposure"
           status="Controlled"
           detail={portfolioReady ? `${pct(allocatedPct)} of funds an agent can reach` : "list not loaded"}
           tone="gold"
@@ -277,10 +277,10 @@ export default function SecurityView() {
                           `${tab.agentId.slice(0, 6)}…${tab.agentId.slice(-4)}`}
                       </td>
                       <td className="py-3 pr-6 font-mono tabular">
-                        {usd(tab.capUsd, { decimals: 0 })}
+                        {usd(tab.capUsd)}
                       </td>
                       <td className="py-3 pr-6 font-mono tabular">
-                        {usd(tab.policy.maxPerCallUsd, { decimals: 0 })}
+                        {usd(tab.policy.maxPerCallUsd)}
                       </td>
                       <td className="py-3 pr-6 font-mono tabular">
                         {tab.policy.allowedRecipients.length}

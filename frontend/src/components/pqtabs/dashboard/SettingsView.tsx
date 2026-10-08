@@ -56,7 +56,10 @@ const SHORTCUTS: { action: string; keys: ReactNode }[] = [
 ];
 
 const DATA_MAPPINGS = [
-  { surface: "Treasury", source: "USDC balance" },
+  { surface: "Wallet", source: "connected account USDC" },
+  { surface: "Root cash", source: "USDC held by the root" },
+  { surface: "In capabilities", source: "USDC moved into capabilities" },
+  { surface: "Agent reachable", source: "USDC the agent can spend" },
   { surface: "Capabilities", source: "Barkeep tab state" },
   { surface: "Activity", source: "chain + backend events" },
   { surface: "Security", source: "contract reads" },

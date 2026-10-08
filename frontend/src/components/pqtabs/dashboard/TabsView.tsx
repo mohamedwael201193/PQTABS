@@ -204,7 +204,7 @@ export default function TabsView() {
               portfolioReady
                 ? "Open a capability to let an agent spend within bounds."
                 : portfolioError
-                  ? "The capability list did not finish. The treasury balance is still the onchain USDC balance."
+                  ? "The capability list did not finish. Root cash is still the USDC held by the root."
                   : "The capability list is still being read from Arc."
             }
             action={

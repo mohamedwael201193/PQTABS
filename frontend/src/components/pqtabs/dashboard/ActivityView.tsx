@@ -352,7 +352,7 @@ export default function ActivityView() {
             title={portfolioError ? "Couldn't read activity" : indexNote ?? "Loading activity"}
             body={
               portfolioError
-                ? "The treasury balance is already the onchain USDC balance. The activity list did not finish."
+                ? "Root cash is the USDC held by the root. The activity list did not finish."
                 : "Activity is still being read from Arc."
             }
           />
