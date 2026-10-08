@@ -71,6 +71,7 @@ test("the payment header names the Arc accept and the EIP-3009 method", () => {
   };
   const native = { ...log, address: "0xffffFFFfFFffffffffffffffFfFFFfffFFFfFFfE", data: "0x" + (12n * 10n ** 12n).toString(16).padStart(64, "0") };
   assert.equal(receiptSettlesSpend({ status: "success", logs: [log, native] }, { from, to, value: "12" }), true);
+  assert.equal(receiptSettlesSpend({ status: "success", logs: [log, log, native] }, { from, to, value: "12" }), false);
   assert.equal(receiptSettlesSpend({ status: "success", logs: [native] }, { from, to, value: "12" }), false);
   assert.equal(receiptSettlesSpend({ status: "reverted", logs: [log] }, { from, to, value: "12" }), false);
   assert.equal(receiptSettlesSpend({ status: "success", logs: [{ ...log, data: "0x" + (24).toString(16).padStart(64, "0") }] }, { from, to, value: "12" }), false);
