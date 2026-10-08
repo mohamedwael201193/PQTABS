@@ -81,7 +81,7 @@ export default function Hero({ onLaunchApp }: { onLaunchApp: () => void }) {
           <span className="h-px w-8 bg-gold/40" aria-hidden="true" />
           <span className="h-1.5 w-1.5 rounded-full bg-gold" aria-hidden="true" />
           <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-gold">
-            Post-Quantum Spending Boundaries
+            Agent spending, bounded
           </p>
           <span className="hidden h-px w-8 bg-gold/40 sm:block" aria-hidden="true" />
         </motion.div>
@@ -108,9 +108,11 @@ export default function Hero({ onLaunchApp }: { onLaunchApp: () => void }) {
           {...rise(0.52)}
           className="mt-6 max-w-2xl text-base leading-relaxed text-muted-foreground md:text-lg"
         >
-          PQTABS creates post-quantum secured spending boundaries for
-          autonomous agents. Every capability your agents hold is constrained
-          by programmable policy — enforced onchain, not by a dashboard.
+          PQTABS lets an agent spend real USDC without giving that agent control of the treasury.
+          You protect the treasury with a post-quantum root. The root opens a small capability,
+          and that capability is the only balance the agent can reach. When the agent requests a
+          paid service, the service names the real price and recipient. If the request fits, the
+          agent pays. If it does not, nothing is signed and nothing is sent.
         </motion.p>
 
         {/* CTAs */}

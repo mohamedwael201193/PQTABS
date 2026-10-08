@@ -21,9 +21,9 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "PQTABS — Post-quantum spending boundaries for autonomous agents",
+  title: "PQTABS — An agent can spend. It cannot reach your treasury.",
   description:
-    "PQTABS separates root authority from agent spending. A post-quantum root authorizes bounded spending capabilities, so agents act freely inside limits you control.",
+    "PQTABS lets an agent spend real USDC without giving that agent control of the treasury. A post-quantum root opens a small capability. That capability is the only balance the agent can reach. If a paid request fits, the agent pays. If it does not, nothing is signed and nothing is sent.",
   keywords: [
     "PQTABS",
     "post-quantum",
