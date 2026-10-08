@@ -292,6 +292,12 @@ describe("derived index", () => {
     const live = { readContract: () => Promise.resolve(chain) } as unknown as PublicClient;
     const after = await readRootState(sql, live, rootA, rootA);
     assert.equal(after.pqVk, chain);
+    noteIndexHead(51n, "1790000001");
+    noteIndexCursor(51n);
+    const limited = { readContract: () => Promise.reject(new Error("429 Too Many Requests")) } as unknown as PublicClient;
+    const fallback = await readRootState(sql, limited, rootA, rootA);
+    assert.equal(fallback.pqVk, next);
+    noteIndexHead(2_000n, "1790001000");
     await sql.close();
   });
 });

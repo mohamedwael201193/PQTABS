@@ -95,6 +95,7 @@ export async function readRootState(sql: Sql, client: PublicClient, factory: Add
     } catch (error) {
       if (isRateLimit(error)) {
         noteRateLimit();
+        if (indexCoversHead()) return viewFrom(root, row);
         throw unavailable();
       }
       throw error;
