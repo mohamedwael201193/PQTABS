@@ -52,6 +52,16 @@ test("a settled allow keeps the receipt and a refusal cannot use that path", () 
   assert.equal(record.txHash, "0x" + "ab".repeat(32));
   assert.equal(record.receipt?.status, "success");
   assert.equal(record.result, "pong");
+  assert.deepEqual(record.reason, ["capability_active"]);
+  const unusable = settledDecision(
+    allowed,
+    { txHash: "0x" + "cd".repeat(32), receipt: { status: "success", blockNumber: "24623357" }, result: "  " },
+    "2026-10-08T02:02:00.000Z",
+  );
+  assert.equal(unusable.decision, "ALLOW");
+  assert.equal(unusable.result, "");
+  assert.deepEqual(unusable.reason, ["capability_active", "result_unusable"]);
+  assert.equal(unusable.txHash, "0x" + "cd".repeat(32));
   assert.throws(() => settledDecision(facts(), { txHash: "0x" + "ab".repeat(32), receipt: { status: "success", blockNumber: "1" }, result: "pong" }, "t"));
   assert.throws(() => settledDecision(allowed, { txHash: "0xabc", receipt: { status: "success", blockNumber: "1" }, result: "pong" }, "t"));
 });

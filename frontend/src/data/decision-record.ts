@@ -61,14 +61,15 @@ export function settledDecision(facts: DecisionFacts, proof: SettlementProof, at
   if (facts.decision !== "ALLOW") throw new Error("A refusal cannot be stored as a settled payment.");
   if (!/^0x[0-9a-fA-F]{64}$/.test(proof.txHash)) throw new Error("A settled payment needs a transaction hash.");
   if (!proof.receipt?.status || !proof.receipt.blockNumber) throw new Error("A settled payment needs a receipt.");
+  const result = proof.result.trim();
   return {
     ...facts,
     decision: "ALLOW",
-    reason: [...facts.reason],
+    reason: result ? [...facts.reason] : [...facts.reason, "result_unusable"],
     agentId: null,
     txHash: proof.txHash,
     receipt: { status: proof.receipt.status, blockNumber: proof.receipt.blockNumber },
-    result: proof.result,
+    result,
     at,
   };
 }
