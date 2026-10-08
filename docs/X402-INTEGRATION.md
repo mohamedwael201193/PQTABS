@@ -26,6 +26,10 @@ An earlier request that did not carry a parsed chat body also returned HTTP 402,
 
 A Python client then received HTTP 403 from Cloudflare, error 1010, with no `PAYMENT-REQUIRED` header. That is not a price.
 
+From `https://pqtabs.vercel.app`, the same chat body returned HTTP 402. The page script could read `payment-required`. The raw response sets `access-control-expose-headers` to `PAYMENT-REQUIRED`, `PAYMENT-RESPONSE`, `X-ArcRouter-Receipt`, and `X-ArcRouter-Receipt-URL`, among others. This 402 did not include `PAYMENT-RESPONSE`. No `PAYMENT-SIGNATURE` was sent.
+
+ArcRouter describes amount `12` as a ceiling for the full input plus `max_tokens` of output, and says the unused part is refunded to the payer. That sentence is the service's own description. No payment was sent, so no refund transfer was observed. The client still records a payment only when a successful receipt has one 6-decimal USDC `Transfer` for the authorized amount. A settlement that moves a smaller amount, with no log for the authorized amount, would not be recorded.
+
 ## What the code does
 
 A payment signature uses Arc's clock from `GET /v1/time`. The laptop clock is not the deadline. If that clock cannot be read, nothing is signed.
