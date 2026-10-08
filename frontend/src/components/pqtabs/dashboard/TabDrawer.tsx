@@ -488,7 +488,7 @@ function TabDrawerBody({
               let facts: DecisionFacts | null = null;
               void requestServicePrice(asked)
                 .then((paymentRequired) => decideServicePrice(tab.id, paymentRequired).then((decision) => ({ paymentRequired, decision })))
-                .then(({ paymentRequired, decision }) => {
+                .then(async ({ paymentRequired, decision }) => {
                   facts = decisionFacts(asked, registrar, decision);
                   if (decision.decision !== "ALLOW") {
                     return saveDecision(decisionRecord(facts, new Date().toISOString())).then(() => {
