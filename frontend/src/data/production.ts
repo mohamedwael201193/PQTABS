@@ -100,6 +100,7 @@ type PortfolioEvent = {
   kind: "opened" | "closed" | "transfer" | "rotated" | "spend";
   tx: string;
   block: string;
+  logIndex?: string;
   timestamp: string;
   tab?: string;
   agent?: string;
@@ -332,6 +333,8 @@ function mapSnapshot(
     kind: activityKind(event),
     status: "completed" as ActivityStatus,
     hoursAgo: hoursBetween(Number(event.timestamp), now),
+    block: event.block,
+    logIndex: event.logIndex,
     agentId:
       event.agent ??
       tabs.find((tab) => tab.id.toLowerCase() === event.tab?.toLowerCase())?.agentId,

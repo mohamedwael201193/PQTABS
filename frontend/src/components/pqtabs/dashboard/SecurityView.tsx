@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { cn } from "@/lib/utils";
+import { compareChainActivity } from "@/data/activity-order";
 import { relFuture, relTime, usd } from "@/data/formatters";
 import type { ActivityKind } from "@/data/types";
 import {
@@ -85,7 +86,7 @@ export default function SecurityView() {
     () =>
       activity
         .filter((r) => SECURITY_EVENT_KINDS.includes(r.kind))
-        .sort((a, b) => a.hoursAgo - b.hoursAgo),
+        .sort(compareChainActivity),
     [activity]
   );
 

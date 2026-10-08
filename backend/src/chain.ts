@@ -173,6 +173,7 @@ export type PortfolioEvent = {
   kind: "opened" | "closed" | "transfer" | "rotated" | "spend";
   tx: Hex;
   block: string;
+  logIndex?: string;
   timestamp: string;
   tab?: Address;
   agent?: Address;
@@ -363,6 +364,7 @@ async function readPortfolioOnce(clients: Clients, root: Address): Promise<Portf
       kind: "opened",
       tx: log.transactionHash,
       block: log.blockNumber.toString(),
+      logIndex: log.logIndex == null ? undefined : String(log.logIndex),
       timestamp: await blockTime(client, log.blockNumber, times),
       tab: log.args.tab,
       agent: log.args.agent,
@@ -375,6 +377,7 @@ async function readPortfolioOnce(clients: Clients, root: Address): Promise<Portf
       kind: "closed",
       tx: log.transactionHash,
       block: log.blockNumber.toString(),
+      logIndex: log.logIndex == null ? undefined : String(log.logIndex),
       timestamp: await blockTime(client, log.blockNumber, times),
       tab: log.args.tab,
       amount: log.args.capReleased?.toString(),
@@ -387,6 +390,7 @@ async function readPortfolioOnce(clients: Clients, root: Address): Promise<Portf
       kind: "transfer",
       tx: log.transactionHash,
       block: log.blockNumber.toString(),
+      logIndex: log.logIndex == null ? undefined : String(log.logIndex),
       timestamp: await blockTime(client, log.blockNumber, times),
       to: log.args.to,
       amount: log.args.amount?.toString(),
@@ -397,6 +401,7 @@ async function readPortfolioOnce(clients: Clients, root: Address): Promise<Portf
       kind: "rotated",
       tx: log.transactionHash,
       block: log.blockNumber.toString(),
+      logIndex: log.logIndex == null ? undefined : String(log.logIndex),
       timestamp: await blockTime(client, log.blockNumber, times),
     });
   }
@@ -408,13 +413,20 @@ async function readPortfolioOnce(clients: Clients, root: Address): Promise<Portf
       kind: "spend",
       tx: log.transactionHash,
       block: log.blockNumber.toString(),
+      logIndex: log.logIndex == null ? undefined : String(log.logIndex),
       timestamp: await blockTime(client, log.blockNumber, times),
       tab: log.args.from,
       to: log.args.to,
       amount,
     });
   }
-  activity.sort((a, b) => Number(b.block) - Number(a.block));
+  activity.sort((a, b) => {
+    const block = BigInt(b.block) - BigInt(a.block);
+    if (block !== 0n) return block > 0n ? 1 : -1;
+    const log = BigInt(b.logIndex ?? "-1") - BigInt(a.logIndex ?? "-1");
+    if (log !== 0n) return log > 0n ? 1 : -1;
+    return 0;
+  });
   return { tabs, activity, asOf: head.timestamp.toString() };
 }
 

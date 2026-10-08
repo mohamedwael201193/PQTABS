@@ -116,8 +116,10 @@ export interface ActivityRecord {
   id: string;
   kind: ActivityKind;
   status: ActivityStatus;
-  /** Hours ago the record occurred. */
+  /** Hours ago the record occurred. Display only. Order uses block and log index. */
   hoursAgo: number;
+  block?: string;
+  logIndex?: string;
   agentId?: string;
   tabId?: string;
   recipientId?: string;

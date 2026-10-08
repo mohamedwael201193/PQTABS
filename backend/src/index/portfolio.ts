@@ -39,6 +39,7 @@ type ActivityRow = {
   kind: PortfolioEvent["kind"];
   tx_hash: string;
   block_number: string | number;
+  log_index: string | number;
   observed_at: string;
   tab: string | null;
   agent: string | null;
@@ -104,7 +105,7 @@ async function readIndexedPortfolioBody(sql: Sql, client: PublicClient, factory:
       [root],
     ),
     sql.query<ActivityRow>(
-      `SELECT kind, tx_hash, block_number, observed_at, tab, agent, payee, amount, permissionless, swept
+      `SELECT kind, tx_hash, block_number, log_index, observed_at, tab, agent, payee, amount, permissionless, swept
        FROM activity WHERE lower(root) = lower($1)
        ORDER BY block_number DESC, log_index DESC`,
       [root],
@@ -212,6 +213,7 @@ function activityFrom(activityRows: readonly ActivityRow[]): PortfolioEvent[] {
     kind: row.kind,
     tx: row.tx_hash as PortfolioEvent["tx"],
     block: String(row.block_number),
+    logIndex: String(row.log_index),
     timestamp: row.observed_at,
     tab: row.tab ? (row.tab as Address) : undefined,
     agent: row.agent ? (row.agent as Address) : undefined,

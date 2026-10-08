@@ -20,6 +20,7 @@ import type {
   Recipient,
   Tab,
 } from "@/data/types";
+import { compareChainActivity } from "@/data/activity-order";
 import { loadDecisions } from "@/data/decision-store";
 import type { DecisionRecord } from "@/data/decision-record";
 import { useActivity, useAgents, usePqtabsData, useRecipients, useTabs } from "@/lib/store";
@@ -204,7 +205,7 @@ export default function ActivityView() {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return [...activity]
-      .sort((a, b) => a.hoursAgo - b.hoursAgo)
+      .sort(compareChainActivity)
       .filter((r) => agentFilter === "all" || r.agentId?.toLowerCase() === agentFilter.toLowerCase())
       .filter((r) => typeFilter === "all" || TYPE_KINDS[typeFilter].includes(r.kind))
       .filter((r) => {
