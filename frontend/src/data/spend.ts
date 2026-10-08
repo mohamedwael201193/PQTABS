@@ -57,6 +57,10 @@ export async function importAgentBackup(registrar: string, fileText: string, pas
   return opened.address;
 }
 
+export function agentAddress(privateKey: Hex): Hex {
+  return privateKeyToAccount(privateKey).address;
+}
+
 export async function authorizationBlob(
   privateKey: Hex,
   tab: string,

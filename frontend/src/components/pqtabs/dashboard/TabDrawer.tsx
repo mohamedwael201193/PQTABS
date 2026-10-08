@@ -29,8 +29,8 @@ import { isAddress } from "@/data/actions";
 import { decisionRecord, settledDecision, type DecisionFacts, type QuotedDecision } from "@/data/decision-record";
 import { saveDecision } from "@/data/decision-store";
 import { arcClock, describeReturn, decideServicePrice, loadSnapshot, prepareClose, productionProvider, requestServicePrice, SERVICE_URL, settleService, submitPrepared, type PreparedAction, type ServiceDecision } from "@/data/production";
-import { authorizationBlob, recallAgentKey } from "@/data/spend";
-import { chainExpirySeconds, paymentDeadline, serviceTimeoutSeconds } from "@/data/x402-pay";
+import { agentAddress, authorizationBlob, recallAgentKey } from "@/data/spend";
+import { agentCanSign, chainExpirySeconds, paymentDeadline, serviceTimeoutSeconds } from "@/data/x402-pay";
 import { backupMatchesRoot, backupRefusal } from "@/data/pq-key-match";
 import { lockRoot, rootUnlocked, signRootDigest, unlockBackup, verifyingKey } from "@/data/pq-vault";
 import type { Tab } from "@/data/types";
@@ -498,6 +498,13 @@ function TabDrawerBody({
                   }
                   if (!isAddress(decision.payee)) {
                     throw new Error("The service price had no recipient. Nothing was signed.");
+                  }
+                  if (!agentCanSign(agentAddress(key), decision.agent)) {
+                    facts = { ...facts, decision: "REFUSE", reason: ["wrong_agent"] };
+                    return saveDecision(decisionRecord(facts, new Date().toISOString())).then(() => {
+                      usePqtabsData.getState().noteDecision();
+                      throw new Error("This device key is not the agent on this capability. Nothing was signed.");
+                    });
                   }
                   const now = await arcClock();
                   const deadline = paymentDeadline(now, chainExpirySeconds(decision.expiry), serviceTimeoutSeconds(paymentRequired));

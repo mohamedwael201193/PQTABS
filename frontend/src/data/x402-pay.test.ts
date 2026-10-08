@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { arcExactAccept, chainExpirySeconds, paymentDeadline, paymentSignatureHeader, receiptSettlesSpend, serviceAnswer, servicePayee, serviceTimeoutSeconds, transactionFromPaymentResponse } from "./x402-pay.ts";
+import { agentCanSign, arcExactAccept, chainExpirySeconds, paymentDeadline, paymentSignatureHeader, receiptSettlesSpend, serviceAnswer, servicePayee, serviceTimeoutSeconds, transactionFromPaymentResponse } from "./x402-pay.ts";
 
 const quoted = {
   x402Version: 2,
@@ -68,6 +68,9 @@ test("the payment header names the Arc accept and the EIP-3009 method", () => {
   assert.equal(receiptSettlesSpend({ status: "success", logs: [native] }, { from, to, value: "12" }), false);
   assert.equal(receiptSettlesSpend({ status: "reverted", logs: [log] }, { from, to, value: "12" }), false);
   assert.equal(receiptSettlesSpend({ status: "success", logs: [{ ...log, data: "0x" + (24).toString(16).padStart(64, "0") }] }, { from, to, value: "12" }), false);
+  assert.equal(agentCanSign("0x074D8F70cbF4B77b0f8BAb13f40c5461eb7C096B", "0x074d8f70cbf4b77b0f8bab13f40c5461eb7c096b"), true);
+  assert.equal(agentCanSign("0x074D8F70cbF4B77b0f8BAb13f40c5461eb7C096B", "0x54113A5C0195821c42CB831d280A73670951166D"), false);
+  assert.equal(agentCanSign("0x074D8F70cbF4B77b0f8BAb13f40c5461eb7C096B", ""), false);
   assert.equal(chainExpirySeconds("1893456000"), 1893456000);
   assert.throws(() => chainExpirySeconds(""), /could not be read/);
   assert.throws(() => chainExpirySeconds("12.5"), /could not be read/);

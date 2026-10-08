@@ -73,6 +73,12 @@ export function paymentSignatureHeader(
   return btoa(binary);
 }
 
+/** The key on this device must be the agent the chain read named. A different address is not signed. */
+export function agentCanSign(held: string, chainAgent: string): boolean {
+  if (!/^0x[0-9a-fA-F]{40}$/.test(held) || !/^0x[0-9a-fA-F]{40}$/.test(chainAgent)) return false;
+  return held.toLowerCase() === chainAgent.toLowerCase();
+}
+
 /** The expiry from the chain read on the decision. A missing or unsafe value is not signed. */
 export function chainExpirySeconds(value: string): number {
   if (!/^[0-9]+$/.test(value)) {
