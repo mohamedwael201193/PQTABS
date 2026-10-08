@@ -28,6 +28,8 @@ A Python client then received HTTP 403 from Cloudflare, error 1010, with no `PAY
 
 ## What the code does
 
+A payment signature uses Arc's clock from `GET /v1/time`. The laptop clock is not the deadline. If that clock cannot be read, nothing is signed.
+
 `decideHttpPayment` in `backend/src/index/x402.ts` returns `NO_PAYMENT` / `service_unavailable` for any status other than 402. On a 402 it keeps only the Arc exact USDC requirement and passes that amount and payee to `decideSpend`. `backend/test/x402.test.ts` uses the captured amount-12 document. With `maxPerCall` 10 the decision is `REFUSE` / `max_per_call`. The same capability allows amount 4. A payee of `0xC485…3044` is `wrong_payee`. A Base-only document is `no_arc_exact`.
 
 No signature was sent to ArcRouter. A throwaway EIP-3009 signature was sent only to `POST /v1/relay/spend`. Amount `4` against the quote of `12` returned `quote_mismatch` and no chain reason. Amount `12`, signed by a key that is not the tab's agent, returned `capability_inactive,wrong_agent,wrong_payee,balance`. Neither response contained a transaction hash.

@@ -84,7 +84,7 @@ export function serviceTimeoutSeconds(paymentRequired: unknown): number {
 
 /**
  * The signature dies at the service timeout, and never after the capability.
- * The official exact client uses now + maxTimeoutSeconds.
+ * `nowSeconds` must be Arc's clock. A laptop clock is not used.
  */
 export function paymentDeadline(nowSeconds: number, expiryUnix: number, maxTimeoutSeconds: number): number {
   if (!Number.isInteger(maxTimeoutSeconds) || maxTimeoutSeconds <= 6) {

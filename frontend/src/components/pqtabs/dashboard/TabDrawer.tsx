@@ -28,7 +28,7 @@ import { relFuture, usd } from "@/data/formatters";
 import { isAddress } from "@/data/actions";
 import { decisionRecord, settledDecision, type DecisionFacts, type QuotedDecision } from "@/data/decision-record";
 import { saveDecision } from "@/data/decision-store";
-import { describeReturn, decideServicePrice, loadSnapshot, prepareClose, productionProvider, requestServicePrice, SERVICE_URL, settleService, submitPrepared, type PreparedAction, type ServiceDecision } from "@/data/production";
+import { arcClock, describeReturn, decideServicePrice, loadSnapshot, prepareClose, productionProvider, requestServicePrice, SERVICE_URL, settleService, submitPrepared, type PreparedAction, type ServiceDecision } from "@/data/production";
 import { authorizationBlob, recallAgentKey } from "@/data/spend";
 import { paymentDeadline, serviceTimeoutSeconds } from "@/data/x402-pay";
 import { backupMatchesRoot, backupRefusal } from "@/data/pq-key-match";
@@ -499,7 +499,8 @@ function TabDrawerBody({
                   if (!isAddress(decision.payee)) {
                     throw new Error("The service price had no recipient. Nothing was signed.");
                   }
-                  const deadline = paymentDeadline(Math.floor(Date.now() / 1000), tab.expiryUnix!, serviceTimeoutSeconds(paymentRequired));
+                  const now = await arcClock();
+                  const deadline = paymentDeadline(now, tab.expiryUnix!, serviceTimeoutSeconds(paymentRequired));
                   return authorizationBlob(key, tab.id, decision.payee, BigInt(decision.price), BigInt(deadline)).then((signed) => ({
                     paymentRequired,
                     decision,

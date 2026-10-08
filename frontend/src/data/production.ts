@@ -474,6 +474,13 @@ export type PreparedAction = {
   expiry?: string;
 };
 
+export async function arcClock(): Promise<number> {
+  const now = await chainNow();
+  const seconds = Number(now);
+  if (!Number.isSafeInteger(seconds)) throw new Error("Could not read Arc's clock. Nothing was signed.");
+  return seconds;
+}
+
 async function chainNow(): Promise<bigint> {
   const body = await getJson<{ asOf?: string }>("/v1/time");
   const asOf = body.asOf ? BigInt(body.asOf) : BigInt(0);
