@@ -32,6 +32,7 @@ import { arcClock, BACKEND_URL, describeReturn, decideServicePrice, loadSnapshot
 import { probeAmount, probePayment, probeRefusal, replayRefusal, spentAuthorization, UNAVAILABLE_SERVICE_URL, unavailableServiceRefusal, type ProbeName } from "@/data/refusal-probe";
 import { agentAddress, authorizationBlob, recallAgentKey, USDC } from "@/data/spend";
 import { arcClient } from "@/data/wallet";
+import { generatePrivateKey } from "viem/accounts";
 import { agentCanSign, chainExpirySeconds, paymentDeadline, serviceTimeoutSeconds } from "@/data/x402-pay";
 import { backupMatchesRoot, backupRefusal } from "@/data/pq-key-match";
 import { lockRoot, rootUnlocked, signRootDigest, verifyingKey } from "@/data/pq-vault";
@@ -362,6 +363,79 @@ function TabDrawerBody({
       usePqtabsData.getState().noteDecision();
       setShownDecision(saved);
       setPayLog(["Check: unavailable service", "Payment blocked. The service was unavailable. Nothing was signed. Nothing was broadcast."]);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "This check was not a refusal. Nothing was signed. Nothing was broadcast.";
+      setPayLog((lines) => [...lines, message]);
+      toast.error(message);
+    } finally {
+      payLock.current = false;
+      setPaying(false);
+    }
+  }
+
+  async function runWrongAgent() {
+    if (!tab || payLock.current) return;
+    const registrar = usePqtabsData.getState().registrar;
+    const payee = tab.policy.allowedRecipients.find((item) => isAddress(item));
+    if (!registrar || !payee) {
+      toast.error("The capability could not be read. Nothing was signed.");
+      return;
+    }
+    payLock.current = true;
+    setPaying(true);
+    setPayLog(["Check: wrong agent"]);
+    try {
+      const stranger = generatePrivateKey();
+      const signed = await authorizationBlob(stranger, tab.id, payee, BigInt(1), BigInt(1));
+      const response = await fetch(`${BACKEND_URL}/v1/relay/spend`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          tab: tab.id,
+          to: payee,
+          value: "1",
+          validAfter: "0",
+          validBefore: "1",
+          nonce: signed.nonce,
+          signature: signed.blob,
+          paymentRequired: probePayment("above_per_payment", payee, "1"),
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as { hash?: string; error?: string; detail?: string } | null;
+      if (response.status === 429 || payload?.error === "rate_limited") {
+        throw new Error("Network reads are busy. Nothing was signed. Nothing was broadcast.");
+      }
+      const outcome = probeRefusal(response.status, payload);
+      if (!outcome || outcome.reason[0] !== "wrong_agent" || !payload) {
+        throw new Error("This check was not a refusal. Nothing was signed. Nothing was broadcast.");
+      }
+      const facts: DecisionFacts = {
+        task: "Check: wrong agent",
+        service: "Policy check",
+        resource: "",
+        price: "1",
+        asset: USDC,
+        network: "eip155:5042",
+        payee,
+        agent: tab.agentId,
+        capability: tab.id,
+        remaining_capability_balance: tab.balanceRaw ?? "",
+        maxPerCall: tab.maxPerCallRaw ?? "",
+        root_exposure: "",
+        maxOpenExposure: "",
+        expiry: tab.expiryUnix ? String(tab.expiryUnix) : "",
+        decision: outcome.decision,
+        reason: [...outcome.reason],
+        registrar,
+      };
+      const saved = decisionRecord(facts, new Date().toISOString());
+      if (saved.txHash || saved.decision !== "REFUSE") {
+        throw new Error("This check was not a refusal. Nothing was signed. Nothing was broadcast.");
+      }
+      await saveDecision(saved);
+      usePqtabsData.getState().noteDecision();
+      setShownDecision(saved);
+      setPayLog(["Check: wrong agent", "Payment blocked. This device key is not the agent on this capability. Nothing was signed. Nothing was broadcast."]);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "This check was not a refusal. Nothing was signed. Nothing was broadcast.";
       setPayLog((lines) => [...lines, message]);
@@ -832,6 +906,14 @@ function TabDrawerBody({
               className="h-8 border border-white/10 bg-transparent px-2 text-xs text-foreground shadow-none hover:bg-white/[.04]"
             >
               Unavailable service
+            </Button>
+            <Button
+              type="button"
+              disabled={paying}
+              onClick={() => void runWrongAgent()}
+              className="h-8 border border-white/10 bg-transparent px-2 text-xs text-foreground shadow-none hover:bg-white/[.04]"
+            >
+              Wrong agent
             </Button>
             <Button
               type="button"

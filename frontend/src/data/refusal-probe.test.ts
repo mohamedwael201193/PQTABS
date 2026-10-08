@@ -37,6 +37,10 @@ test("a refusal without a hash is blocked, and an allow is not", () => {
     decision: "NO_PAYMENT",
     reason: ["no_arc_exact"],
   });
+  assert.deepEqual(probeRefusal(400, { error: "policy_refused", detail: "wrong_agent" }), {
+    decision: "REFUSE",
+    reason: ["wrong_agent"],
+  });
 });
 
 test("an unreachable service is a refusal, and a priced 402 is not", () => {

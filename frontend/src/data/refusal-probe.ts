@@ -78,6 +78,9 @@ export function probeRefusal(
   if (status === 400 && body.error === "policy_refused" && body.detail === "no_arc_exact") {
     return { decision: "NO_PAYMENT", reason: ["no_arc_exact"] };
   }
+  if (status === 400 && body.error === "policy_refused" && body.detail === "wrong_agent") {
+    return { decision: "REFUSE", reason: ["wrong_agent"] };
+  }
   return null;
 }
 
