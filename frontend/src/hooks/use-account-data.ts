@@ -39,7 +39,7 @@ export function useAccountData(): {
     }
     existingAccount()
       .then((address) => {
-        if (cancelled) return;
+        if (cancelled || walletSessionPaused()) return;
         if (address && address.toLowerCase() !== registrar.toLowerCase()) {
           window.localStorage.removeItem("pqtabs.root");
           rememberRegistrar(address);

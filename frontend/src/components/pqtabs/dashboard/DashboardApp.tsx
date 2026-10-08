@@ -20,7 +20,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { EmptyState, Logo } from "@/components/pqtabs/shared";
 import { switchRegistrar, useAccountData, useWalletUsdc } from "@/hooks/use-account-data";
 import { connectWallet, existingAccount, switchToArc, walletClient } from "@/data/wallet";
-import { resumeWalletSession, pauseWalletSession } from "@/data/wallet-session";
+import { resumeWalletSession, pauseWalletSession, walletSessionPaused } from "@/data/wallet-session";
 import { initials, usd } from "@/data/formatters";
 import { useDashboardUi, usePqtabsData, useTotals, type DashboardView } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -77,12 +77,13 @@ function ConnectGate({ onExit }: { onExit: () => void }) {
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
+    if (walletSessionPaused()) return;
     let cancelled = false;
     existingAccount()
       .then(async (address) => {
-        if (cancelled || !address) return;
+        if (cancelled || !address || walletSessionPaused()) return;
         const chainId = await walletClient().getChainId();
-        if (cancelled) return;
+        if (cancelled || walletSessionPaused()) return;
         window.localStorage.removeItem("pqtabs.root");
         usePqtabsData.getState().setChainId(chainId);
         switchRegistrar(address);
@@ -136,6 +137,7 @@ function ConnectGate({ onExit }: { onExit: () => void }) {
 
 export default function DashboardApp({ onExit }: { onExit: () => void }) {
   const registrar = usePqtabsData((s) => s.registrar);
+  const [closing, setClosing] = useState(false);
   const { snapshot, loading, error, retry } = useAccountData();
   const activeView = useDashboardUi((s) => s.activeView);
   const reduced = useReducedMotion();
@@ -165,6 +167,17 @@ export default function DashboardApp({ onExit }: { onExit: () => void }) {
   const accountReady = usePqtabsData((s) => s.accountReady);
   const booting = !accountReady || (!snapshot && loading);
 
+  function leave() {
+    setClosing(true);
+    pauseWalletSession();
+    window.localStorage.removeItem("pqtabs.root");
+    window.localStorage.removeItem("pqtabs.registrar");
+    usePqtabsData.getState().setRegistrar("");
+    toast.message("Disconnected from PQTABS. To revoke this site's wallet permission completely, use your wallet's connected-sites settings.");
+    onExit();
+  }
+
+  if (closing) return null;
   if (!registrar) return <ConnectGate onExit={onExit} />;
   if (chainId !== null && chainId !== 5042) {
     return (
@@ -224,7 +237,7 @@ export default function DashboardApp({ onExit }: { onExit: () => void }) {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <Sidebar onExit={onExit} loading={booting} />
+      <Sidebar onExit={onExit} onDisconnect={leave} loading={booting} />
       <MobileTopBar onExit={onExit} />
 
       <div className="flex min-h-screen flex-1 flex-col md:pl-[248px]">
@@ -272,7 +285,7 @@ export default function DashboardApp({ onExit }: { onExit: () => void }) {
 /* Desktop sidebar                                                     */
 /* ------------------------------------------------------------------ */
 
-function Sidebar({ onExit, loading }: { onExit: () => void; loading: boolean }) {
+function Sidebar({ onExit, onDisconnect, loading }: { onExit: () => void; onDisconnect: () => void; loading: boolean }) {
   const registrar = usePqtabsData((s) => s.registrar);
   const activeView = useDashboardUi((s) => s.activeView);
   const setView = useDashboardUi((s) => s.setView);
@@ -411,14 +424,7 @@ function Sidebar({ onExit, loading }: { onExit: () => void; loading: boolean }) 
         </a>
         <button
           type="button"
-          onClick={() => {
-            pauseWalletSession();
-            window.localStorage.removeItem("pqtabs.root");
-            window.localStorage.removeItem("pqtabs.registrar");
-            usePqtabsData.getState().setRegistrar("");
-            toast.message("Disconnected from PQTABS. To revoke this site's wallet permission completely, use your wallet's connected-sites settings.");
-            onExit();
-          }}
+          onClick={onDisconnect}
           className="focus-ring flex w-full items-center gap-2 rounded-md px-1 py-1 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground transition-colors hover:text-foreground"
         >
           Disconnect
