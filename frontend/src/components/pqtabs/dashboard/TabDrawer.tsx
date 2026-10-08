@@ -29,8 +29,9 @@ import { isAddress } from "@/data/actions";
 import { decisionRecord, paymentReasonSentence, settledDecision, type DecisionFacts, type DecisionRecord, type QuotedDecision } from "@/data/decision-record";
 import { saveDecision } from "@/data/decision-store";
 import { arcClock, BACKEND_URL, describeReturn, decideServicePrice, loadSnapshot, prepareClose, productionProvider, requestServicePrice, SERVICE_URL, settleService, submitPrepared, type PreparedAction, type ServiceDecision } from "@/data/production";
-import { probeAmount, probePayment, probeRefusal, UNAVAILABLE_SERVICE_URL, unavailableServiceRefusal, type ProbeName } from "@/data/refusal-probe";
-import { agentAddress, authorizationBlob, recallAgentKey } from "@/data/spend";
+import { probeAmount, probePayment, probeRefusal, replayRefusal, spentAuthorization, UNAVAILABLE_SERVICE_URL, unavailableServiceRefusal, type ProbeName } from "@/data/refusal-probe";
+import { agentAddress, authorizationBlob, recallAgentKey, USDC } from "@/data/spend";
+import { arcClient } from "@/data/wallet";
 import { agentCanSign, chainExpirySeconds, paymentDeadline, serviceTimeoutSeconds } from "@/data/x402-pay";
 import { backupMatchesRoot, backupRefusal } from "@/data/pq-key-match";
 import { lockRoot, rootUnlocked, signRootDigest, verifyingKey } from "@/data/pq-vault";
@@ -361,6 +362,79 @@ function TabDrawerBody({
       usePqtabsData.getState().noteDecision();
       setShownDecision(saved);
       setPayLog(["Check: unavailable service", "Payment blocked. The service was unavailable. Nothing was signed. Nothing was broadcast."]);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "This check was not a refusal. Nothing was signed. Nothing was broadcast.";
+      setPayLog((lines) => [...lines, message]);
+      toast.error(message);
+    } finally {
+      payLock.current = false;
+      setPaying(false);
+    }
+  }
+
+  async function runReplayCheck() {
+    if (!tab || payLock.current) return;
+    const registrar = usePqtabsData.getState().registrar;
+    const payment = activity.find((item) => item.tabId === tab.id && item.kind === "payment" && item.status === "completed" && typeof item.txHash === "string" && /^0x[0-9a-fA-F]{64}$/.test(item.txHash));
+    if (!registrar || !payment?.txHash) {
+      toast.error("No settled payment is on this capability. Nothing was signed.");
+      return;
+    }
+    payLock.current = true;
+    setPaying(true);
+    setPayLog(["Check: replay"]);
+    try {
+      const tx = await arcClient().getTransaction({ hash: payment.txHash as `0x${string}` });
+      const spent = spentAuthorization(tx.input);
+      if (!spent || spent.from !== tab.id.toLowerCase()) {
+        throw new Error("This check was not a refusal. Nothing was signed. Nothing was broadcast.");
+      }
+      const used = await arcClient().readContract({
+        address: USDC,
+        abi: [{
+          type: "function",
+          name: "authorizationState",
+          stateMutability: "view",
+          inputs: [
+            { name: "authorizer", type: "address" },
+            { name: "nonce", type: "bytes32" },
+          ],
+          outputs: [{ type: "bool" }],
+        }],
+        functionName: "authorizationState",
+        args: [tab.id as `0x${string}`, spent.nonce as `0x${string}`],
+      });
+      const outcome = replayRefusal(used === true);
+      if (!outcome) {
+        throw new Error("This check was not a refusal. Nothing was signed. Nothing was broadcast.");
+      }
+      const facts: DecisionFacts = {
+        task: "Check: replay",
+        service: "Arc USDC authorization",
+        resource: payment.txHash,
+        price: spent.value,
+        asset: USDC,
+        network: "eip155:5042",
+        payee: spent.to,
+        agent: tab.agentId,
+        capability: tab.id,
+        remaining_capability_balance: tab.balanceRaw ?? "",
+        maxPerCall: tab.maxPerCallRaw ?? "",
+        root_exposure: "",
+        maxOpenExposure: "",
+        expiry: tab.expiryUnix ? String(tab.expiryUnix) : "",
+        decision: outcome.decision,
+        reason: [...outcome.reason],
+        registrar,
+      };
+      const saved = decisionRecord(facts, new Date().toISOString());
+      if (saved.txHash || saved.decision !== "REFUSE") {
+        throw new Error("This check was not a refusal. Nothing was signed. Nothing was broadcast.");
+      }
+      await saveDecision(saved);
+      usePqtabsData.getState().noteDecision();
+      setShownDecision(saved);
+      setPayLog(["Check: replay", "Payment blocked. This payment authorization was already used. Nothing was signed. Nothing was broadcast."]);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "This check was not a refusal. Nothing was signed. Nothing was broadcast.";
       setPayLog((lines) => [...lines, message]);
@@ -758,6 +832,14 @@ function TabDrawerBody({
               className="h-8 border border-white/10 bg-transparent px-2 text-xs text-foreground shadow-none hover:bg-white/[.04]"
             >
               Unavailable service
+            </Button>
+            <Button
+              type="button"
+              disabled={paying}
+              onClick={() => void runReplayCheck()}
+              className="h-8 border border-white/10 bg-transparent px-2 text-xs text-foreground shadow-none hover:bg-white/[.04]"
+            >
+              Replay
             </Button>
           </div>
           {shownDecision ? <div className="mt-3"><PaymentDecision record={shownDecision} /></div> : null}

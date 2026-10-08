@@ -87,3 +87,29 @@ export function unavailableServiceRefusal(status: number | null): { decision: "N
   if (status !== null && status < 500) return null;
   return { decision: "NO_PAYMENT", reason: ["service_unavailable"] };
 }
+
+export type SpentAuthorization = { from: string; to: string; value: string; nonce: string };
+
+/** The nonce inside a mined USDC transferWithAuthorization. Any other call is not a replay. */
+export function spentAuthorization(input: string): SpentAuthorization | null {
+  const body = input.toLowerCase().replace(/^0x/, "");
+  if (!body.startsWith("cf092995") || body.length < 8 + 64 * 6) return null;
+  const word = (index: number) => body.slice(8 + index * 64, 8 + (index + 1) * 64);
+  const fromWord = word(0);
+  const toWord = word(1);
+  const valueWord = word(2);
+  const nonce = word(5);
+  if (!fromWord.startsWith("0".repeat(24)) || !toWord.startsWith("0".repeat(24))) return null;
+  return {
+    from: `0x${fromWord.slice(24)}`,
+    to: `0x${toWord.slice(24)}`,
+    value: BigInt(`0x${valueWord}`).toString(),
+    nonce: `0x${nonce}`,
+  };
+}
+
+/** A used authorization cannot be paid again. An unused nonce is not reported as a replay. */
+export function replayRefusal(used: boolean): { decision: "REFUSE"; reason: ["replay"] } | null {
+  if (!used) return null;
+  return { decision: "REFUSE", reason: ["replay"] };
+}
