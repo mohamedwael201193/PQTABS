@@ -26,6 +26,7 @@ import { useActivity, useAgents, usePqtabsData, useRecipients, useTabs } from "@
 import { useAccountData } from "@/hooks/use-account-data";
 import { EmptyState, StatusChip } from "@/components/pqtabs/shared";
 import { ActivityRow } from "@/components/pqtabs/dashboard/shared/ActivityRow";
+import { PaymentDecision } from "@/components/pqtabs/dashboard/PaymentDecision";
 import { ViewSkeleton } from "@/components/pqtabs/dashboard/shared/ViewSkeleton";
 
 /**
@@ -73,7 +74,7 @@ function RecipientDetail({
   if (raw && root && raw.toLowerCase() === root.toLowerCase()) {
     return (
       <span className="block">
-        <span className="block text-sm text-foreground">Your treasury</span>
+        <span className="block text-sm text-foreground">Your root</span>
         <span className="mt-0.5 block font-mono text-[10px] text-muted-foreground">{root}</span>
       </span>
     );
@@ -432,8 +433,8 @@ export default function ActivityView() {
         )}
       </div>
 
-      <section aria-label="Decisions on this device" className="mt-6 border-t border-white/[.06] pt-4">
-        <h2 className={MICRO}>Decisions on this device</h2>
+      <section aria-label="Payment decision" className="mt-6 border-t border-white/[.06] pt-4">
+        <h2 className="font-display text-base font-semibold text-foreground">Payment decision</h2>
         <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
           These notes stay in this browser for this wallet. A transaction here is a payment only when that same hash is in the Arc list above.
         </p>
@@ -442,13 +443,8 @@ export default function ActivityView() {
         ) : (
           <ul className="mt-3 space-y-3">
             {decisions.map((record) => (
-              <li key={record.at} className="rounded-lg border border-white/[.06] px-3 py-2">
-                <p className="text-sm text-foreground">
-                  {record.decision} · {record.price || "no price"} · {record.payee || "no payee"}
-                </p>
-                <p className="mt-1 font-mono text-[10px] text-muted-foreground">{record.reason.join(", ") || "no reason"}</p>
-                {record.charge ? <p className="mt-1 font-mono text-[10px] text-muted-foreground">service charge {record.charge} raw</p> : null}
-                {record.txHash ? <p className="mt-1 font-mono text-[10px] text-muted-foreground">{record.txHash}</p> : null}
+              <li key={record.at}>
+                <PaymentDecision record={record} />
               </li>
             ))}
           </ul>

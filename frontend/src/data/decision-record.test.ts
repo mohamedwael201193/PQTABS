@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { decisionRecord, decisionsForRegistrar, settledDecision, type DecisionFacts } from "./decision-record.ts";
+import { decisionRecord, decisionsForRegistrar, paymentReasonSentence, settledDecision, type DecisionFacts } from "./decision-record.ts";
 
 const facts = (): DecisionFacts => ({
   task: "Reply with one word: pong",
@@ -86,4 +86,8 @@ test("one registrar's decision is not listed for another", () => {
   const visible = decisionsForRegistrar([own, other], "0xBDFCEE82BD42FEFA58EE850B3709636A8B6B0034");
   assert.equal(visible.length, 1);
   assert.equal(visible[0]?.at, "2026-10-08T02:01:00.000Z");
+});
+
+test("a per-payment refusal has a plain sentence", () => {
+  assert.equal(paymentReasonSentence("max_per_call"), "Service price exceeds the capability's per-payment limit.");
 });

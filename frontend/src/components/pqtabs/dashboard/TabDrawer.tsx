@@ -26,7 +26,7 @@ import {
 import { StatusChip } from "@/components/pqtabs/shared";
 import { relFuture, usd } from "@/data/formatters";
 import { isAddress } from "@/data/actions";
-import { decisionRecord, settledDecision, type DecisionFacts, type QuotedDecision } from "@/data/decision-record";
+import { decisionRecord, paymentReasonSentence, settledDecision, type DecisionFacts, type DecisionRecord, type QuotedDecision } from "@/data/decision-record";
 import { saveDecision } from "@/data/decision-store";
 import { arcClock, describeReturn, decideServicePrice, loadSnapshot, prepareClose, productionProvider, requestServicePrice, SERVICE_URL, settleService, submitPrepared, type PreparedAction, type ServiceDecision } from "@/data/production";
 import { agentAddress, authorizationBlob, recallAgentKey } from "@/data/spend";
@@ -34,6 +34,7 @@ import { agentCanSign, chainExpirySeconds, paymentDeadline, serviceTimeoutSecond
 import { backupMatchesRoot, backupRefusal } from "@/data/pq-key-match";
 import { lockRoot, rootUnlocked, signRootDigest, verifyingKey } from "@/data/pq-vault";
 import { SecurityKeyUnlock } from "@/components/pqtabs/dashboard/SecurityKeyUnlock";
+import { PaymentDecision } from "@/components/pqtabs/dashboard/PaymentDecision";
 import type { Tab } from "@/data/types";
 import { useActivity, useAgents, useDashboardUi, usePqtabsData, useRecipients, useTabs } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -211,6 +212,7 @@ function TabDrawerBody({
   const [closeReady, setCloseReady] = useState(() => rootUnlocked(usePqtabsData.getState().registrar));
   const [paying, setPaying] = useState(false);
   const [payLog, setPayLog] = useState<string[]>([]);
+  const [shownDecision, setShownDecision] = useState<DecisionRecord | null>(null);
   const payLock = useRef(false);
 
   const agent = agents.find((a) => a.id === tab.agentId);
@@ -476,9 +478,12 @@ function TabDrawerBody({
                 .then(async ({ paymentRequired, decision }) => {
                   facts = decisionFacts(asked, registrar, decision);
                   if (decision.decision !== "ALLOW") {
-                    return saveDecision(decisionRecord(facts, new Date().toISOString())).then(() => {
+                    const saved = decisionRecord(facts, new Date().toISOString());
+                    return saveDecision(saved).then(() => {
                       usePqtabsData.getState().noteDecision();
-                      block(decision.reason[0] ?? "The capability refused this price. Nothing was signed.");
+                      setShownDecision(saved);
+                      const sentence = paymentReasonSentence(decision.reason[0] ?? "capability_inactive");
+                      block(`${sentence} Nothing was signed. Nothing was broadcast.`);
                     });
                   }
                   if (!isAddress(decision.payee)) {
@@ -487,9 +492,11 @@ function TabDrawerBody({
                   setPayLog((lines) => [...lines, "Payee verified"]);
                   if (!agentCanSign(agentAddress(key), decision.agent)) {
                     facts = { ...facts, decision: "REFUSE", reason: ["wrong_agent"] };
-                    return saveDecision(decisionRecord(facts, new Date().toISOString())).then(() => {
+                    const saved = decisionRecord(facts, new Date().toISOString());
+                    return saveDecision(saved).then(() => {
                       usePqtabsData.getState().noteDecision();
-                      block("This device key is not the agent on this capability. Nothing was signed.");
+                      setShownDecision(saved);
+                      block("This device key is not the agent on this capability. Nothing was signed. Nothing was broadcast.");
                     });
                   }
                   const now = await arcClock();
@@ -518,7 +525,9 @@ function TabDrawerBody({
                 .then(async ({ transaction, result, receipt, charge }) => {
                   if (facts) {
                     try {
-                      await saveDecision(settledDecision(facts, { txHash: transaction, receipt, result, charge }, new Date().toISOString()));
+                      const saved = settledDecision(facts, { txHash: transaction, receipt, result, charge }, new Date().toISOString());
+                      await saveDecision(saved);
+                      setShownDecision(saved);
                       usePqtabsData.getState().noteDecision();
                     } catch {
                       toast.message("The receipt was not saved on this device.");
@@ -540,7 +549,9 @@ function TabDrawerBody({
                 .catch(async (error: unknown) => {
                   if (facts?.decision === "ALLOW") {
                     try {
-                      await saveDecision(decisionRecord(facts, new Date().toISOString()));
+                      const saved = decisionRecord(facts, new Date().toISOString());
+                      await saveDecision(saved);
+                      setShownDecision(saved);
                       usePqtabsData.getState().noteDecision();
                     } catch {
                       toast.message("The decision was not saved on this device.");
@@ -561,6 +572,7 @@ function TabDrawerBody({
           >
             {paying ? <Loader2 className="size-4 animate-spin" /> : "Run task"}
           </Button>
+          {shownDecision ? <div className="mt-3"><PaymentDecision record={shownDecision} /></div> : null}
           {payLog.length > 0 && (
             <ul className="mt-3 space-y-1" aria-live="polite">
               {payLog.map((line) => (

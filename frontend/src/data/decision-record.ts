@@ -87,3 +87,30 @@ export function decisionsForRegistrar(records: readonly DecisionRecord[], regist
   const wanted = registrar.toLowerCase();
   return records.filter((record) => record.registrar.toLowerCase() === wanted);
 }
+
+const REASON_SENTENCE: Record<string, string> = {
+  capability_inactive: "The capability is not active.",
+  expired: "The capability has expired.",
+  wrong_agent: "This device key is not the agent on this capability.",
+  wrong_payee: "The service recipient is not allowed.",
+  bad_amount: "The service price is not a payment.",
+  max_per_call: "Service price exceeds the capability's per-payment limit.",
+  balance: "The service price exceeds the remaining capability balance.",
+  exposure: "The root exposure ceiling is already full.",
+  service_unavailable: "The service was unavailable.",
+  receipt_missing: "No Arc receipt was recorded.",
+  result_unusable: "The service result was not usable.",
+  charge_above_payment: "The service charge was above the signed payment.",
+  capability_active: "The capability is active.",
+  payee_allowlisted: "The recipient is allowlisted.",
+  within_max_per_call: "The price is within the per-payment limit.",
+  within_balance: "The price is within the remaining balance.",
+  within_root_exposure: "The price is within the root exposure ceiling.",
+  not_expired: "The capability has not expired.",
+  agent_matches: "The agent matches the capability.",
+  no_arc_exact: "The service did not ask for an Arc exact payment.",
+};
+
+export function paymentReasonSentence(reason: string): string {
+  return REASON_SENTENCE[reason] ?? reason;
+}
