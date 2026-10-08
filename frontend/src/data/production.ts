@@ -1,5 +1,6 @@
 import { digestFor, encodeClose, encodeOpen, signatureBytes } from "./actions";
 import { usd } from "./formatters";
+import { paymentSignatureHeader, transactionFromPaymentResponse, type SpendAuthorization } from "./x402-pay";
 import { arcClient } from "./wallet";
 import type { Hex } from "viem";
 import type {
@@ -562,21 +563,44 @@ export async function submitSpend(input: {
 
 export const SERVICE_URL = "https://arcrouter.co/v1/chat/completions";
 
+function serviceBody(task: string) {
+  return {
+    model: "llama-3.3-70b-instruct",
+    messages: [{ role: "user", content: task }],
+    max_tokens: 16,
+  };
+}
+
 export async function requestServicePrice(task: string): Promise<unknown> {
   const response = await fetch(SERVICE_URL, {
     method: "POST",
     headers: { "content-type": "application/json", accept: "application/json" },
-    body: JSON.stringify({
-      model: "llama-3.3-70b-instruct",
-      messages: [{ role: "user", content: task }],
-      max_tokens: 16,
-    }),
+    body: JSON.stringify(serviceBody(task)),
   });
   const payload = await response.json().catch(() => null);
   if (response.status !== 402 || !payload) {
     throw new Error("The service did not return a price. Nothing was signed.");
   }
   return payload;
+}
+
+/** Retry the priced request. The service's facilitator broadcasts. This client does not. */
+export async function settleService(task: string, paymentRequired: unknown, authorization: SpendAuthorization, signature: string): Promise<{ transaction: string }> {
+  const header = paymentSignatureHeader(paymentRequired, authorization, signature);
+  const response = await fetch(SERVICE_URL, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      accept: "application/json",
+      "PAYMENT-SIGNATURE": header,
+    },
+    body: JSON.stringify(serviceBody(task)),
+  });
+  const transaction = transactionFromPaymentResponse(response.headers.get("PAYMENT-RESPONSE"));
+  if (response.status !== 200 || !transaction) {
+    throw new Error("The service did not settle the payment. No Arc transaction was recorded.");
+  }
+  return { transaction };
 }
 
 export async function decideServicePrice(tab: string, paymentRequired: unknown): Promise<{

@@ -46,4 +46,6 @@ A signature over domain name `USD Coin`, with `extra.name` set to `USDC`, also r
 
 The same USDC signature, with `extra.assetTransferMethod` set to `eip3009`, returned `invalid_exact_evm_insufficient_balance` and no transaction. The signature check passed. The unfunded account failed the balance check. `readVerify` treats that body as `NO_PAYMENT`. `arcPaymentAccept` adds the method field to the Arc accept from the captured 402. `/settle` was not called.
 
+The capability screen now retries the priced request with a `PAYMENT-SIGNATURE` header. That header uses the Arc accept, adds `assetTransferMethod: eip3009`, and carries the 213-byte tab blob. Barkeep's `isValidSignature` requires those 213 bytes. This client does not also call the spend relay. A response that is not HTTP 200, or a payment response without a 32-byte transaction hash, is not recorded as paid. No open capability was available, so this retry was not sent.
+
 `POST /v1/x402/decide` reads the tab from Arc and runs that same decision. It does not relay. `POST /v1/relay/spend` refuses with `quote_mismatch` unless the signed amount and recipient are the Arc requirement in `paymentRequired`. The capability screen asks the service for a price and signs only when the decision is `ALLOW`.

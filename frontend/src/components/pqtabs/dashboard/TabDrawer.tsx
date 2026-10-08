@@ -26,7 +26,7 @@ import {
 import { StatusChip } from "@/components/pqtabs/shared";
 import { relFuture, usd } from "@/data/formatters";
 import { isAddress } from "@/data/actions";
-import { describeReturn, decideServicePrice, loadSnapshot, prepareClose, productionProvider, requestServicePrice, submitPrepared, submitSpend, type PreparedAction } from "@/data/production";
+import { describeReturn, decideServicePrice, loadSnapshot, prepareClose, productionProvider, requestServicePrice, settleService, submitPrepared, type PreparedAction } from "@/data/production";
 import { authorizationBlob, recallAgentKey } from "@/data/spend";
 import { rootUnlocked, signRootDigest, unlockBackup } from "@/data/pq-vault";
 import type { Tab } from "@/data/types";
@@ -403,7 +403,7 @@ function TabDrawerBody({
         <div className="border-t border-white/[.06] px-5 py-4 md:px-6">
           <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Agent payment</p>
           <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-            The service sets the price and the recipient. This device signs only if the capability allows that price. A refusal is not a payment.
+            The service sets the price and the recipient. This device signs only if the capability allows that price. The service settles the payment. A refusal is not a payment.
           </p>
           <input
             value={task}
@@ -447,25 +447,21 @@ function TabDrawerBody({
                   if (usePqtabsData.getState().registrar.toLowerCase() !== registrar.toLowerCase()) {
                     throw new Error("The wallet changed. The payment was not submitted.");
                   }
-                  return submitSpend({
-                    registrar,
-                    tab: tab.id,
+                  return settleService(task.trim(), paymentRequired, {
+                    from: tab.id,
                     to: decision.payee,
                     value: decision.price,
+                    validAfter: "0",
                     validBefore: String(tab.expiryUnix),
                     nonce: signed.nonce,
-                    signature: signed.blob,
-                    paymentRequired,
-                  });
+                  }, signed.blob);
                 })
-                .then(({ hash, snapshot }) => {
-                  const now = usePqtabsData.getState();
-                  if (now.registrar.toLowerCase() !== registrar.toLowerCase()) {
+                .then(({ transaction }) => {
+                  if (usePqtabsData.getState().registrar.toLowerCase() !== registrar.toLowerCase()) {
                     toast.message("The wallet changed. The receipt belongs to the previous wallet.");
                     return;
                   }
-                  now.acceptPortfolio(snapshot);
-                  toast.success(`Payment receipt ${hash.slice(0, 10)}…`);
+                  toast.success(`Arc included ${transaction.slice(0, 10)}…`);
                 })
                 .catch((error: unknown) => {
                   toast.error(error instanceof Error ? error.message : "The payment was rejected.");
