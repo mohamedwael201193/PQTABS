@@ -145,6 +145,37 @@ export function capabilityRemaining(record: {
   return (left - price).toString();
 }
 
+const BLOCKING_REASONS = new Set([
+  "receipt_missing",
+  "facilitator_rejected",
+  "result_unusable",
+  "charge_above_payment",
+  "capability_inactive",
+  "expired",
+  "not_yet_expired",
+  "wrong_agent",
+  "wrong_payee",
+  "bad_amount",
+  "max_per_call",
+  "balance",
+  "exposure",
+  "service_unavailable",
+  "no_arc_exact",
+  "bad_signature_length",
+  "replay",
+]);
+
+/** Blocking reasons lead. A passed policy check stays after the reason the payment stopped. */
+export function orderedReasons(reasons: readonly string[]): string[] {
+  const blocking: string[] = [];
+  const passed: string[] = [];
+  for (const reason of reasons) {
+    if (BLOCKING_REASONS.has(reason)) blocking.push(reason);
+    else passed.push(reason);
+  }
+  return [...blocking, ...passed];
+}
+
 /** A facilitator rejection is recorded from the service's settle failure, not from a guessed hash. */
 export function settlementReasons(reasons: readonly string[], message: string): string[] {
   if (message.startsWith("The service did not settle the payment")) return [...reasons, "facilitator_rejected"];

@@ -1,7 +1,7 @@
 "use client";
 
 import type { DecisionRecord } from "@/data/decision-record";
-import { capabilityRemaining, expiryWhen, paymentReasonSentence, paymentStatusLines } from "@/data/decision-record";
+import { capabilityRemaining, expiryWhen, orderedReasons, paymentReasonSentence, paymentStatusLines } from "@/data/decision-record";
 
 function rawUsdc(value: string): string {
   if (!/^[0-9]+$/.test(value)) return "—";
@@ -69,7 +69,7 @@ export function PaymentDecision({ record }: { record: DecisionRecord }) {
       <div className="mt-3">
         <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Reasons</p>
         <ul className="mt-1 space-y-1">
-          {record.reason.map((reason) => (
+          {orderedReasons(record.reason).map((reason) => (
             <li key={reason} className="text-sm text-foreground">{paymentReasonSentence(reason)}</li>
           ))}
         </ul>
