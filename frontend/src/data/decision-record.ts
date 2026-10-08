@@ -109,6 +109,7 @@ const REASON_SENTENCE: Record<string, string> = {
   not_expired: "The capability has not expired.",
   agent_matches: "The agent matches the capability.",
   no_arc_exact: "The service did not ask for an Arc exact payment.",
+  bad_signature_length: "The signature is not a capability authorization.",
 };
 
 export function paymentReasonSentence(reason: string): string {

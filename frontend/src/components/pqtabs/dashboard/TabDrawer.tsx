@@ -28,7 +28,8 @@ import { relFuture, usd } from "@/data/formatters";
 import { isAddress } from "@/data/actions";
 import { decisionRecord, paymentReasonSentence, settledDecision, type DecisionFacts, type DecisionRecord, type QuotedDecision } from "@/data/decision-record";
 import { saveDecision } from "@/data/decision-store";
-import { arcClock, describeReturn, decideServicePrice, loadSnapshot, prepareClose, productionProvider, requestServicePrice, SERVICE_URL, settleService, submitPrepared, type PreparedAction, type ServiceDecision } from "@/data/production";
+import { arcClock, BACKEND_URL, describeReturn, decideServicePrice, loadSnapshot, prepareClose, productionProvider, requestServicePrice, SERVICE_URL, settleService, submitPrepared, type PreparedAction, type ServiceDecision } from "@/data/production";
+import { probeAmount, probePayment, probeRefusal, type ProbeName } from "@/data/refusal-probe";
 import { agentAddress, authorizationBlob, recallAgentKey } from "@/data/spend";
 import { agentCanSign, chainExpirySeconds, paymentDeadline, serviceTimeoutSeconds } from "@/data/x402-pay";
 import { backupMatchesRoot, backupRefusal } from "@/data/pq-key-match";
@@ -214,6 +215,98 @@ function TabDrawerBody({
   const [payLog, setPayLog] = useState<string[]>([]);
   const [shownDecision, setShownDecision] = useState<DecisionRecord | null>(null);
   const payLock = useRef(false);
+
+  async function runBlockedCheck(name: ProbeName | "malformed_signature") {
+    if (!tab || payLock.current) return;
+    const registrar = usePqtabsData.getState().registrar;
+    const payee = tab.policy.allowedRecipients.find((item) => isAddress(item));
+    const max = tab.maxPerCallRaw ?? "";
+    const balance = tab.balanceRaw ?? "";
+    if (!registrar || !payee) {
+      toast.error("The capability could not be read. Nothing was signed.");
+      return;
+    }
+    const labels: Record<ProbeName | "malformed_signature", string> = {
+      wrong_payee: "Check: wrong recipient",
+      above_per_payment: "Check: price above the per-payment limit",
+      above_balance: "Check: price above the remaining balance",
+      wrong_network: "Check: wrong network",
+      malformed_signature: "Check: malformed signature",
+    };
+    const amount = name === "malformed_signature" ? "1" : probeAmount(name, max, balance);
+    if (!amount) {
+      toast.error("The remaining balance is not below the per-payment limit, so that case is not separate. Nothing was signed.");
+      return;
+    }
+    payLock.current = true;
+    setPaying(true);
+    setPayLog([labels[name]]);
+    try {
+      const response = name === "malformed_signature"
+        ? await fetch(`${BACKEND_URL}/v1/relay/spend`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              tab: tab.id,
+              to: payee,
+              value: "1",
+              validAfter: "0",
+              validBefore: "1",
+              nonce: `0x${"00".repeat(32)}`,
+              signature: "0x11",
+            }),
+          })
+        : await fetch(`${BACKEND_URL}/v1/x402/decide`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ tab: tab.id, paymentRequired: probePayment(name, payee, amount) }),
+          });
+      const payload = (await response.json().catch(() => null)) as (ServiceDecision & { hash?: string; error?: string; detail?: string }) | null;
+      if (response.status === 429 || payload?.error === "rate_limited") {
+        throw new Error("Network reads are busy. Nothing was signed. Nothing was broadcast.");
+      }
+      const outcome = probeRefusal(response.status, payload);
+      if (!outcome || !payload) {
+        throw new Error("This check was not a refusal. Nothing was signed. Nothing was broadcast.");
+      }
+      const text = (value: unknown, fallback: string) => (typeof value === "string" && value ? value : fallback);
+      const facts: DecisionFacts = {
+        task: labels[name],
+        service: "Policy check",
+        resource: text(payload.resource, ""),
+        price: text(payload.price, amount),
+        asset: text(payload.asset, "0x3600000000000000000000000000000000000000"),
+        network: text(payload.network, name === "wrong_network" ? "eip155:1" : "eip155:5042"),
+        payee: text(payload.payee, name === "wrong_payee" ? "0x0000000000000000000000000000000000000001" : payee),
+        agent: text(payload.agent, tab.agentId),
+        capability: text(payload.capability, tab.id),
+        remaining_capability_balance: text(payload.remaining_capability_balance, balance),
+        maxPerCall: text(payload.maxPerCall, max),
+        root_exposure: text(payload.root_exposure, ""),
+        maxOpenExposure: text(payload.maxOpenExposure, ""),
+        expiry: text(payload.expiry, tab.expiryUnix ? String(tab.expiryUnix) : ""),
+        decision: outcome.decision,
+        reason: outcome.reason,
+        registrar,
+      };
+      const saved = decisionRecord(facts, new Date().toISOString());
+      if (saved.txHash || saved.decision === "NOT_SETTLED" || saved.decision === "ALLOW") {
+        throw new Error("This check was not a refusal. Nothing was signed. Nothing was broadcast.");
+      }
+      await saveDecision(saved);
+      usePqtabsData.getState().noteDecision();
+      setShownDecision(saved);
+      const sentence = paymentReasonSentence(outcome.reason[0] ?? "");
+      setPayLog([labels[name], `Payment blocked. ${sentence} Nothing was signed. Nothing was broadcast.`]);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "This check was not a refusal. Nothing was signed. Nothing was broadcast.";
+      setPayLog((lines) => [...lines, message]);
+      toast.error(message);
+    } finally {
+      payLock.current = false;
+      setPaying(false);
+    }
+  }
 
   const agent = agents.find((a) => a.id === tab.agentId);
   const vaultEpoch = usePqtabsData((state) => state.agentVaultEpoch);
@@ -572,6 +665,27 @@ function TabDrawerBody({
           >
             {paying ? <Loader2 className="size-4 animate-spin" /> : "Run task"}
           </Button>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {(
+              [
+                ["wrong_payee", "Wrong recipient"],
+                ["above_per_payment", "Price above limit"],
+                ["above_balance", "Price above balance"],
+                ["wrong_network", "Wrong network"],
+                ["malformed_signature", "Malformed signature"],
+              ] as const
+            ).map(([name, label]) => (
+              <Button
+                key={name}
+                type="button"
+                disabled={paying}
+                onClick={() => void runBlockedCheck(name)}
+                className="h-8 border border-white/10 bg-transparent px-2 text-xs text-foreground shadow-none hover:bg-white/[.04]"
+              >
+                {label}
+              </Button>
+            ))}
+          </div>
           {shownDecision ? <div className="mt-3"><PaymentDecision record={shownDecision} /></div> : null}
           {payLog.length > 0 && (
             <ul className="mt-3 space-y-1" aria-live="polite">
