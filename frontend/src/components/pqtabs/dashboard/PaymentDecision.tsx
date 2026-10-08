@@ -11,6 +11,11 @@ function rawUsdc(value: string): string {
   return fraction ? `${whole}.${fraction} USDC` : `${whole} USDC`;
 }
 
+function serviceName(service: string): string {
+  if (service === "https://arcrouter.co/v1/chat/completions") return "ArcRouter / paid inference";
+  return service || "—";
+}
+
 function short(value: string): string {
   if (!value) return "—";
   return value.length > 12 ? `${value.slice(0, 6)}…${value.slice(-4)}` : value;
@@ -21,7 +26,7 @@ export function PaymentDecision({ record }: { record: DecisionRecord }) {
   const refused = record.decision === "REFUSE" || record.decision === "NO_PAYMENT";
   const rows: Array<[string, string]> = [
     ["Task", record.task || "—"],
-    ["Service", record.service || "—"],
+    ["Service", serviceName(record.service)],
     ["Resource", record.resource || "—"],
     ["Agent", short(record.agent)],
     ["Capability", short(record.capability)],
