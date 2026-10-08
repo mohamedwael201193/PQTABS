@@ -19,5 +19,6 @@ Facts used by the current build. Status is VERIFIED when this environment observ
 | arc-guard uses a PQ vault and a 7-day wallet exit | https://github.com/Jayanthkoppala/arc-guard | 2026-10-07 | DOCUMENTED. It is not a spending capability. |
 | Pigeonhole pages logs and keeps no database | https://github.com/edycutjong/pigeonhole | 2026-10-07 | DOCUMENTED. |
 | ERC-8004 `agentId` to wallet is not used | https://docs.arc.io/arc/references/contract-addresses and `eth_getCode` on 2026-10-08 | 2026-10-08 | DOCUMENTED addresses, VERIFIED 130 bytes of code at each. A registry pointer does not bound a tab. Left out of v1. See `docs/ERC8004-INTEGRATION.md`. |
+| `POST https://arcrouter.co/v1/chat/completions` for `llama-3.3-70b-instruct` with `max_tokens` 16 returns HTTP 402, Arc exact USDC amount `12`, payee `0x6Bf001BB5f5E75396d92163325ca01FdEBe2e9A9` | The response body and the `PAYMENT-REQUIRED` header, which matched | 2026-10-08 | VERIFIED. No `PAYMENT-SIGNATURE` was sent. A Base accept in the same body is ignored. An earlier 402 quoted amount `4`. A Python user-agent received Cloudflare 403 and no price. |
 
 Do not search these sources again unless a later measurement contradicts a row.
