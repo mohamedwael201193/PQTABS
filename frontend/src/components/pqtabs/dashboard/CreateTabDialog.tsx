@@ -135,6 +135,7 @@ function CreateFlow() {
   const recipients = useRecipients();
   const totals = useTotals();
   const rootBalance = usePqtabsData((state) => state.snapshot.account.treasuryTotalUsd);
+  const treasuryKey = usePqtabsData((state) => state.snapshot.account.pqVk);
   const portfolioReady = usePqtabsData((state) => state.portfolioReady);
   const available = Math.min(rootBalance, totals.availableUsd);
 
@@ -1045,6 +1046,11 @@ function CreateFlow() {
                 <>
                   <p className="text-sm leading-relaxed text-muted-foreground">
                     Authorize this capability with your security key. The signature stays on this device.
+                  </p>
+                  <p className="text-sm leading-relaxed text-muted-foreground">
+                    {treasuryKey
+                      ? <>The backup must match verifying key <span className="break-all font-mono text-[10px] text-foreground">{treasuryKey}</span>. An older backup is not signed.</>
+                      : "The treasury verifying key is not loaded. Nothing will be signed."}
                   </p>
                   {!rootUnlocked(usePqtabsData.getState().registrar) && (
                     <div className="space-y-2">
