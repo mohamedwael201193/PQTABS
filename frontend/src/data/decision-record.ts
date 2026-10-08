@@ -32,6 +32,8 @@ export type DecisionRecord = Omit<DecisionFacts, "decision"> & {
   txHash: string;
   receipt: DecisionReceipt | null;
   result: string;
+  /** ArcRouter's metered charge in raw USDC. Empty when the header was absent. Not a chain balance. */
+  charge: string;
   at: string;
 };
 
@@ -39,6 +41,7 @@ export type SettlementProof = {
   txHash: string;
   receipt: DecisionReceipt;
   result: string;
+  charge?: string;
 };
 
 /** An allow without a receipt is not stored as a payment. */
@@ -52,6 +55,7 @@ export function decisionRecord(facts: DecisionFacts, at: string): DecisionRecord
     txHash: "",
     receipt: null,
     result: "",
+    charge: "",
     at,
   };
 }
@@ -62,14 +66,19 @@ export function settledDecision(facts: DecisionFacts, proof: SettlementProof, at
   if (!/^0x[0-9a-fA-F]{64}$/.test(proof.txHash)) throw new Error("A settled payment needs a transaction hash.");
   if (!proof.receipt?.status || !proof.receipt.blockNumber) throw new Error("A settled payment needs a receipt.");
   const result = proof.result.trim();
+  const rawCharge = (proof.charge ?? "").trim();
+  const charge = /^[0-9]+$/.test(rawCharge) ? rawCharge : "";
+  const reason = result ? [...facts.reason] : [...facts.reason, "result_unusable"];
+  if (charge && /^[0-9]+$/.test(facts.price) && BigInt(charge) > BigInt(facts.price)) reason.push("charge_above_payment");
   return {
     ...facts,
     decision: "ALLOW",
-    reason: result ? [...facts.reason] : [...facts.reason, "result_unusable"],
+    reason,
     agentId: null,
     txHash: proof.txHash,
     receipt: { status: proof.receipt.status, blockNumber: proof.receipt.blockNumber },
     result,
+    charge,
     at,
   };
 }

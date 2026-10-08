@@ -127,6 +127,12 @@ export function serviceAnswer(status: number, payload: unknown): string {
   return content;
 }
 
+/** The metered charge, when ArcRouter sends an integer. It is not the settlement amount. */
+export function quotedCharge(header: string | null): string {
+  const raw = (header ?? "").trim();
+  return /^[0-9]+$/.test(raw) ? raw : "";
+}
+
 export function transactionFromPaymentResponse(header: string | null): string {
   if (!header) return "";
   try {

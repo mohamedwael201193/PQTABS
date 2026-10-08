@@ -447,6 +447,7 @@ export default function ActivityView() {
                   {record.decision} · {record.price || "no price"} · {record.payee || "no payee"}
                 </p>
                 <p className="mt-1 font-mono text-[10px] text-muted-foreground">{record.reason.join(", ") || "no reason"}</p>
+                {record.charge ? <p className="mt-1 font-mono text-[10px] text-muted-foreground">service charge {record.charge} raw</p> : null}
                 {record.txHash ? <p className="mt-1 font-mono text-[10px] text-muted-foreground">{record.txHash}</p> : null}
               </li>
             ))}

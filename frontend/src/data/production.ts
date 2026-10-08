@@ -1,6 +1,6 @@
 import { digestFor, encodeClose, encodeOpen, signatureBytes } from "./actions";
 import { usd } from "./formatters";
-import { paymentSignatureHeader, receiptSettlesSpend, serviceAnswer, transactionFromPaymentResponse, type SpendAuthorization } from "./x402-pay";
+import { paymentSignatureHeader, quotedCharge, receiptSettlesSpend, serviceAnswer, transactionFromPaymentResponse, type SpendAuthorization } from "./x402-pay";
 import { arcClient } from "./wallet";
 import type { Hex } from "viem";
 import type {
@@ -597,7 +597,7 @@ export async function settleService(
   paymentRequired: unknown,
   authorization: SpendAuthorization,
   signature: string,
-): Promise<{ transaction: string; result: string; receipt: { status: string; blockNumber: string } }> {
+): Promise<{ transaction: string; result: string; receipt: { status: string; blockNumber: string }; charge: string }> {
   const header = paymentSignatureHeader(paymentRequired, authorization, signature);
   const response = await fetch(SERVICE_URL, {
     method: "POST",
@@ -621,6 +621,7 @@ export async function settleService(
     transaction,
     result: serviceAnswer(response.status, payload),
     receipt: { status: receipt.status, blockNumber: receipt.blockNumber.toString() },
+    charge: quotedCharge(response.headers.get("X-ArcRouter-Charge-USDC")),
   };
 }
 

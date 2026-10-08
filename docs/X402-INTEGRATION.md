@@ -28,7 +28,7 @@ A Python client then received HTTP 403 from Cloudflare, error 1010, with no `PAY
 
 From `https://pqtabs.vercel.app`, the same chat body returned HTTP 402. The page script could read `payment-required`. The raw response sets `access-control-expose-headers` to `PAYMENT-REQUIRED`, `PAYMENT-RESPONSE`, `X-ArcRouter-Receipt`, and `X-ArcRouter-Receipt-URL`, among others. This 402 did not include `PAYMENT-RESPONSE`. No `PAYMENT-SIGNATURE` was sent.
 
-ArcRouter describes amount `12` as a ceiling for the full input plus `max_tokens` of output, and says the unused part is refunded to the payer. That sentence is the service's own description. No payment was sent, so no refund transfer was observed. The client still records a payment only when a successful receipt has one 6-decimal USDC `Transfer` for the authorized amount. A settlement that moves a smaller amount, with no log for the authorized amount, would not be recorded.
+ArcRouter's pay-per-call document says the signed amount is a ceiling, `PAYMENT-RESPONSE` is the settlement of that amount, and `X-ArcRouter-Charge-USDC` is the metered cost. The unused difference is refunded later in a treasury batch, not in the settlement receipt. That refund was not observed. The client still records a payment only when a successful receipt has one 6-decimal USDC `Transfer` for the authorized amount. A numeric charge header is stored beside that receipt. It does not replace the transfer log. A charge above the signed amount is marked `charge_above_payment`. A settlement that moves a smaller amount, with no log for the authorized amount, would not be recorded.
 
 ## What the code does
 

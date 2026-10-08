@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { agentCanSign, arcExactAccept, chainExpirySeconds, paymentDeadline, paymentSignatureHeader, receiptSettlesSpend, serviceAnswer, servicePayee, serviceTimeoutSeconds, transactionFromPaymentResponse } from "./x402-pay.ts";
+import { agentCanSign, arcExactAccept, chainExpirySeconds, paymentDeadline, paymentSignatureHeader, quotedCharge, receiptSettlesSpend, serviceAnswer, servicePayee, serviceTimeoutSeconds, transactionFromPaymentResponse } from "./x402-pay.ts";
 
 const quoted = {
   x402Version: 2,
@@ -50,6 +50,10 @@ test("the payment header names the Arc accept and the EIP-3009 method", () => {
   assert.equal(arcExactAccept({ accepts: [quoted.accepts[1]] }), null);
   assert.equal(servicePayee(quoted), "0x6Bf001BB5f5E75396d92163325ca01FdEBe2e9A9");
   assert.equal(servicePayee({ accepts: [quoted.accepts[1]] }), null);
+  assert.equal(quotedCharge("4"), "4");
+  assert.equal(quotedCharge(" 12 "), "12");
+  assert.equal(quotedCharge("12.5"), "");
+  assert.equal(quotedCharge(null), "");
   assert.equal(transactionFromPaymentResponse(btoa(JSON.stringify({ transaction: "0x" + "cd".repeat(32) }))), "0x" + "cd".repeat(32));
   assert.equal(transactionFromPaymentResponse(btoa(JSON.stringify({ success: true }))), "");
   const from = "0x56377522376b5273a97313992c7970B106cB3837";

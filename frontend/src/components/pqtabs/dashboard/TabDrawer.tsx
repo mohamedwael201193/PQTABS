@@ -528,10 +528,10 @@ function TabDrawerBody({
                     nonce: signed.nonce,
                   }, signed.blob);
                 })
-                .then(async ({ transaction, result, receipt }) => {
+                .then(async ({ transaction, result, receipt, charge }) => {
                   if (facts) {
                     try {
-                      await saveDecision(settledDecision(facts, { txHash: transaction, receipt, result }, new Date().toISOString()));
+                      await saveDecision(settledDecision(facts, { txHash: transaction, receipt, result, charge }, new Date().toISOString()));
                       usePqtabsData.getState().noteDecision();
                     } catch {
                       toast.message("The receipt was not saved on this device.");
