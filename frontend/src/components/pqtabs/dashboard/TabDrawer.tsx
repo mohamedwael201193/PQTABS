@@ -26,7 +26,7 @@ import {
 import { StatusChip } from "@/components/pqtabs/shared";
 import { relFuture, usd } from "@/data/formatters";
 import { isAddress } from "@/data/actions";
-import { decisionRecord, paymentReasonSentence, settledDecision, settlementReasons, type DecisionFacts, type DecisionRecord, type QuotedDecision } from "@/data/decision-record";
+import { decisionRecord, orderedReasons, paymentReasonSentence, settledDecision, settlementReasons, type DecisionFacts, type DecisionRecord, type QuotedDecision } from "@/data/decision-record";
 import { saveDecision } from "@/data/decision-store";
 import { arcClock, BACKEND_URL, confirmRootSignature, describeReturn, decideServicePrice, loadSnapshot, prepareClose, productionProvider, requestServicePrice, settleService, submitPrepared, type PreparedAction, type ServiceDecision } from "@/data/production";
 import { probeAmount, probePayment, probeRefusal, replayRefusal, spentAuthorization, UNAVAILABLE_SERVICE_URL, unavailableServiceRefusal, capabilityPayment, expiredRefusal, expiryStillOpen, type ProbeName } from "@/data/refusal-probe";
@@ -213,6 +213,7 @@ function TabDrawerBody({
   const [task, setTask] = useState("Summarize what Arc mainnet settlement means for an agent payment.");
   const [servicePrice, setServicePrice] = useState<{ price: string; payee: string; network: string } | null>(null);
   const [servicePriceNote, setServicePriceNote] = useState("Reading the current service price.");
+  const [policyNote, setPolicyNote] = useState("");
   const [closingSig, setClosingSig] = useState(false);
   const [closeReady, setCloseReady] = useState(() => rootUnlocked(usePqtabsData.getState().registrar));
   const [paying, setPaying] = useState(false);
@@ -226,25 +227,41 @@ function TabDrawerBody({
     if (!asked) {
       setServicePrice(null);
       setServicePriceNote("Enter a question to read the service price. Nothing was signed.");
+      setPolicyNote("");
       return;
     }
     let cancelled = false;
     const timer = window.setTimeout(() => {
+      setPolicyNote("");
       void requestServicePrice(asked)
         .then((body) => {
-          if (cancelled) return;
+          if (cancelled) return null;
           const quote = serviceQuote(body);
           if (!quote) {
             setServicePrice(null);
             setServicePriceNote("The service did not offer an Arc price. Nothing was signed.");
-            return;
+            return null;
           }
           setServicePrice(quote);
           setServicePriceNote("");
+          return decideServicePrice(tab.id, body).catch(() => {
+            if (!cancelled) setPolicyNote("The price could not be checked against this capability. Nothing was signed. Nothing was broadcast.");
+            return null;
+          });
+        })
+        .then((decision) => {
+          if (cancelled || !decision) return;
+          if (decision.decision === "ALLOW") {
+            setPolicyNote("This capability allows this price and recipient. Nothing has been signed.");
+            return;
+          }
+          const reason = orderedReasons(decision.reason)[0] ?? "capability_inactive";
+          setPolicyNote(`Payment blocked. ${paymentReasonSentence(reason)} Nothing was signed. Nothing was broadcast.`);
         })
         .catch(() => {
           if (cancelled) return;
           setServicePrice(null);
+          setPolicyNote("");
           setServicePriceNote("The service did not return a price. Nothing was signed.");
         });
     }, 400);
@@ -252,7 +269,7 @@ function TabDrawerBody({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [task, tab.status, tab.expiryUnix]);
+  }, [task, tab.id, tab.status, tab.expiryUnix]);
 
   async function runBlockedCheck(name: ProbeName | "malformed_signature") {
     if (!tab || payLock.current) return;
@@ -885,6 +902,7 @@ function TabDrawerBody({
               ? `Current service price ${formatRawUsdc(servicePrice.price)} to ${payeeLabel(servicePrice.payee).name} on ${servicePrice.network}. Run task reads this again before any signature.`
               : servicePriceNote}
           </p>
+          {policyNote ? <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{policyNote}</p> : null}
           {!canPay && (
             <p className="mt-2 text-xs text-muted-foreground">
               This browser does not hold this agent's encrypted key, so it cannot sign a payment until you restore the backup.
