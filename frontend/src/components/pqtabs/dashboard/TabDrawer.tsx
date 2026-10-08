@@ -28,6 +28,7 @@ import { relFuture, usd } from "@/data/formatters";
 import { isAddress } from "@/data/actions";
 import { describeReturn, decideServicePrice, loadSnapshot, prepareClose, productionProvider, requestServicePrice, settleService, submitPrepared, type PreparedAction } from "@/data/production";
 import { authorizationBlob, recallAgentKey } from "@/data/spend";
+import { paymentDeadline, serviceTimeoutSeconds } from "@/data/x402-pay";
 import { rootUnlocked, signRootDigest, unlockBackup } from "@/data/pq-vault";
 import type { Tab } from "@/data/types";
 import { useActivity, useAgents, useDashboardUi, usePqtabsData, useRecipients, useTabs } from "@/lib/store";
@@ -437,13 +438,15 @@ function TabDrawerBody({
                   if (!isAddress(decision.payee)) {
                     throw new Error("The service price had no recipient. Nothing was signed.");
                   }
-                  return authorizationBlob(key, tab.id, decision.payee, BigInt(decision.price), BigInt(tab.expiryUnix!)).then((signed) => ({
+                  const deadline = paymentDeadline(Math.floor(Date.now() / 1000), tab.expiryUnix!, serviceTimeoutSeconds(paymentRequired));
+                  return authorizationBlob(key, tab.id, decision.payee, BigInt(decision.price), BigInt(deadline)).then((signed) => ({
                     paymentRequired,
                     decision,
                     signed,
+                    deadline,
                   }));
                 })
-                .then(({ paymentRequired, decision, signed }) => {
+                .then(({ paymentRequired, decision, signed, deadline }) => {
                   if (usePqtabsData.getState().registrar.toLowerCase() !== registrar.toLowerCase()) {
                     throw new Error("The wallet changed. The payment was not submitted.");
                   }
@@ -452,7 +455,7 @@ function TabDrawerBody({
                     to: decision.payee,
                     value: decision.price,
                     validAfter: "0",
-                    validBefore: String(tab.expiryUnix),
+                    validBefore: String(deadline),
                     nonce: signed.nonce,
                   }, signed.blob);
                 })

@@ -61,6 +61,30 @@ export function paymentSignatureHeader(
   return btoa(binary);
 }
 
+/** The service's own timeout. A missing or short window is not a reason to use the capability expiry. */
+export function serviceTimeoutSeconds(paymentRequired: unknown): number {
+  const accepted = arcExactAccept(paymentRequired);
+  const raw = accepted?.maxTimeoutSeconds;
+  if (typeof raw === "number" && Number.isInteger(raw)) return raw;
+  if (typeof raw === "string" && /^[0-9]+$/.test(raw)) return Number(raw);
+  return 0;
+}
+
+/**
+ * The signature dies at the service timeout, and never after the capability.
+ * The official exact client uses now + maxTimeoutSeconds.
+ */
+export function paymentDeadline(nowSeconds: number, expiryUnix: number, maxTimeoutSeconds: number): number {
+  if (!Number.isInteger(maxTimeoutSeconds) || maxTimeoutSeconds <= 6) {
+    throw new Error("The service did not set a usable payment window. Nothing was signed.");
+  }
+  const deadline = Math.min(expiryUnix, nowSeconds + maxTimeoutSeconds);
+  if (deadline < nowSeconds + 6) {
+    throw new Error("The capability expires too soon. Nothing was signed.");
+  }
+  return deadline;
+}
+
 export function transactionFromPaymentResponse(header: string | null): string {
   if (!header) return "";
   try {
