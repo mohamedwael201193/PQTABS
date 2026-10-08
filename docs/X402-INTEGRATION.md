@@ -31,3 +31,5 @@ A Python client then received HTTP 403 from Cloudflare, error 1010, with no `PAY
 `decideHttpPayment` in `backend/src/index/x402.ts` returns `NO_PAYMENT` / `service_unavailable` for any status other than 402. On a 402 it keeps only the Arc exact USDC requirement and passes that amount and payee to `decideSpend`. `backend/test/x402.test.ts` uses the captured amount-12 document. With `maxPerCall` 10 the decision is `REFUSE` / `max_per_call`. The same capability allows amount 4. A payee of `0xC485…3044` is `wrong_payee`. A Base-only document is `no_arc_exact`.
 
 No signature was created. No facilitator was called. No Arc transaction was broadcast. A 402 is not a receipt.
+
+`POST /v1/x402/decide` reads the tab from Arc and runs that same decision. It does not relay. `POST /v1/relay/spend` refuses with `quote_mismatch` unless the signed amount and recipient are the Arc requirement in `paymentRequired`. The capability screen asks the service for a price and signs only when the decision is `ALLOW`.
