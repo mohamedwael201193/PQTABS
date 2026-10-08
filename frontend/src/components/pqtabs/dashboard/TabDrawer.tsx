@@ -207,9 +207,24 @@ function TabDrawerBody({
   const [task, setTask] = useState("Reply with one word: pong");
   const [closingSig, setClosingSig] = useState(false);
   const [closePass, setClosePass] = useState("");
+  const [closeBackup, setCloseBackup] = useState<ArrayBuffer | null>(null);
   const [closeReady, setCloseReady] = useState(() => rootUnlocked(usePqtabsData.getState().registrar));
   const [paying, setPaying] = useState(false);
   const payLock = useRef(false);
+
+  function unlockClose(bytes: ArrayBuffer, secret: string) {
+    if (secret.length < 8) {
+      setCloseReady(false);
+      toast.error("Enter the backup passphrase (at least 8 characters). The file can be chosen first.");
+      return;
+    }
+    void unlockBackup(usePqtabsData.getState().registrar, bytes, secret)
+      .then(() => setCloseReady(true))
+      .catch((reason: unknown) => {
+        setCloseReady(false);
+        toast.error(reason instanceof Error ? reason.message : "Could not unlock the security key.");
+      });
+  }
 
   const agent = agents.find((a) => a.id === tab.agentId);
   const vaultEpoch = usePqtabsData((state) => state.agentVaultEpoch);
@@ -587,6 +602,9 @@ function TabDrawerBody({
                       placeholder="Passphrase for your backup"
                       className="h-9 w-full rounded-lg border border-white/10 bg-transparent px-3 text-sm outline-none"
                       onChange={(event) => setClosePass(event.target.value)}
+                      onBlur={() => {
+                        if (closeBackup) unlockClose(closeBackup, closePass);
+                      }}
                     />
                     <input
                       type="file"
@@ -594,9 +612,10 @@ function TabDrawerBody({
                       className="block w-full text-xs text-muted-foreground"
                       onChange={(event) => {
                         const file = event.target.files?.[0];
-                        if (!file || closePass.length < 8) return;
-                        void file.arrayBuffer().then((bytes) => unlockBackup(usePqtabsData.getState().registrar, bytes, closePass)).then(() => setCloseReady(true)).catch((reason: unknown) => {
-                          toast.error(reason instanceof Error ? reason.message : "Could not unlock the security key.");
+                        if (!file) return;
+                        void file.arrayBuffer().then((bytes) => {
+                          setCloseBackup(bytes);
+                          unlockClose(bytes, closePass);
                         });
                       }}
                     />

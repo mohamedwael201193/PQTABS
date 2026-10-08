@@ -154,6 +154,8 @@ function CreateFlow() {
   const [extraRecipients, setExtraRecipients] = useState<Recipient[]>([]);
   const [prepared, setPrepared] = useState<PreparedAction | null>(null);
   const [passphrase, setPassphrase] = useState("");
+  const [backupBytes, setBackupBytes] = useState<ArrayBuffer | null>(null);
+  const [unlockError, setUnlockError] = useState("");
   const [authorizing, setAuthorizing] = useState(false);
   const [keyReady, setKeyReady] = useState(() => rootUnlocked(usePqtabsData.getState().registrar));
   const [failure, setFailure] = useState("The capability was not opened.");
@@ -166,6 +168,23 @@ function CreateFlow() {
   const [stage, setStage] = useState(0);
   const [createdTab, setCreatedTab] = useState<Tab | null>(null);
   const [discardOpen, setDiscardOpen] = useState(false);
+
+  function unlockChosen(bytes: ArrayBuffer, secret: string) {
+    if (secret.length < 8) {
+      setKeyReady(false);
+      setUnlockError("Enter the backup passphrase (at least 8 characters). The file can be chosen first.");
+      return;
+    }
+    void unlockBackup(usePqtabsData.getState().registrar, bytes, secret)
+      .then(() => {
+        setKeyReady(true);
+        setUnlockError("");
+      })
+      .catch((reason: unknown) => {
+        setKeyReady(false);
+        setUnlockError(reason instanceof Error ? reason.message : "Could not unlock the security key.");
+      });
+  }
 
   const agentRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const budgetSliderRef = useRef<HTMLDivElement | null>(null);
@@ -1027,6 +1046,9 @@ function CreateFlow() {
                         placeholder="Passphrase for your backup"
                         className="h-9 w-full rounded-lg border border-white/10 bg-transparent px-3 text-sm outline-none"
                         onChange={(event) => setPassphrase(event.target.value)}
+                        onBlur={() => {
+                          if (backupBytes) unlockChosen(backupBytes, passphrase);
+                        }}
                       />
                       <input
                         type="file"
@@ -1034,12 +1056,16 @@ function CreateFlow() {
                         className="block w-full text-xs text-muted-foreground"
                         onChange={(event) => {
                           const file = event.target.files?.[0];
-                          if (!file || passphrase.length < 8) return;
-                          void file.arrayBuffer().then((bytes) => unlockBackup(usePqtabsData.getState().registrar, bytes, passphrase)).then(() => setKeyReady(true)).catch((reason: unknown) => {
-                            setFailure(reason instanceof Error ? reason.message : "Could not unlock the security key.");
+                          if (!file) return;
+                          void file.arrayBuffer().then((bytes) => {
+                            setBackupBytes(bytes);
+                            unlockChosen(bytes, passphrase);
                           });
                         }}
                       />
+                      {unlockError && (
+                        <p className="text-xs leading-relaxed text-danger" role="alert">{unlockError}</p>
+                      )}
                     </div>
                   )}
                   <details className="text-xs text-muted-foreground">
