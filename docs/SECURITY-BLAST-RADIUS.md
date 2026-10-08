@@ -9,3 +9,5 @@
 | Frontend | A payment is not marked successful before a receipt. The PQ key is not sent to the server. | A hostile page on the same origin can use the IndexedDB wrap key, because that key has no passphrase. |
 
 Losing the PQ backup leaves that root without an authority. The contract has no operator recovery. Reclaim after expiry still does not need the root key.
+
+Barkeep `Tab.sol` at `60f4b6082ec6bf88d2283201ea1e9e5f0f760901` says the funded balance is the spending limit. `isValidSignature` checks the agent, the payee, `maxPerCall`, expiry, and that the tab is open. It does not check the original cap. A later USDC transfer into an open tab can be spent by that agent, still only to an allowlisted payee and still at most `maxPerCall` per authorization. That spend does not move the root. `close()` sends whatever balance remains, including a later transfer, to the owner. This client’s `decideSpend` also allows an amount up to the current balance. No such transfer was sent in this audit.
