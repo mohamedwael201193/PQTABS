@@ -7,6 +7,7 @@ import { EmptyState } from "@/components/pqtabs/shared";
 import { parseUsdcRaw } from "@/data/actions";
 import { rememberRoot } from "@/data/production";
 import { createRootKey, rootUnlocked, verifyingKey } from "@/data/pq-vault";
+import { bindRootBackup, saveRootBackup } from "@/data/root-backup";
 import { arc, createSecurityDomain, estimateCreateRootFee, existingAccount, waitForRoot, walletClient } from "@/data/wallet";
 import { usePqtabsData } from "@/lib/store";
 import { keccak256, toHex, type Hex } from "viem";
@@ -76,7 +77,15 @@ export function DomainSetup({ onExit, onReady }: { onExit: () => void; onReady: 
       if (passphrase.length < 8) throw new Error("Choose a passphrase of at least 8 characters.");
       await sameWallet();
       const created = await createRootKey(registrar, passphrase);
+      let deviceCopy = true;
+      try {
+        await saveRootBackup(registrar, await created.backup.arrayBuffer());
+      } catch {
+        deviceCopy = false;
+      }
       downloadBackup(created.backup);
+      setSaved(true);
+      if (!deviceCopy) setError("The file downloaded. This browser did not keep the encrypted copy.");
       setSaved(true);
     } catch (reason: unknown) {
       setError(reason instanceof Error ? reason.message : "The security key was not created.");
@@ -122,6 +131,7 @@ export function DomainSetup({ onExit, onReady }: { onExit: () => void; onReady: 
         throw new Error("The wallet changed. The receipt belongs to the previous wallet.");
       }
       rememberRoot(root);
+      await bindRootBackup(registrar, root);
       pendingHash.current = null;
       onReady();
     } catch (reason: unknown) {
@@ -138,7 +148,7 @@ export function DomainSetup({ onExit, onReady }: { onExit: () => void; onReady: 
         <EmptyState
           icon={<ShieldCheck className="h-5 w-5" strokeWidth={1.75} />}
           title="Protect your treasury"
-          body="This wallet has no security domain yet. Your wallet identifies you. A separate security key authorizes what agents can spend. It is not saved in the browser. After this, you create an agent and give it a capability. The agent never holds this key."
+          body="This wallet has no security domain yet. Your wallet identifies you. A separate security key authorizes what agents can spend. This device keeps an encrypted copy. The passphrase is not stored. A new device needs the downloaded file. After this, you create an agent and give it a capability. The agent never holds this key."
           action={
             <form
               autoComplete="off"
@@ -189,7 +199,7 @@ export function DomainSetup({ onExit, onReady }: { onExit: () => void; onReady: 
                   <p className="mt-2 text-xs text-muted-foreground">Saved by you</p>
                   <p className="text-xs text-foreground">Downloads / your chosen secure location</p>
                   <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
-                    Stay on this page until the wallet confirms. This session matches the file you just downloaded. PQTABS does not keep another copy.
+                    Stay on this page until the wallet confirms. This device keeps the encrypted backup. The downloaded file is for a new device.
                   </p>
                 </div>
               ) : null}
@@ -218,7 +228,7 @@ export function DomainSetup({ onExit, onReady }: { onExit: () => void; onReady: 
                   <p className="text-foreground">{fee == null ? "—" : fee === "unavailable" ? "unavailable" : `${fee} USDC`}</p>
                   <p className="mt-2 text-muted-foreground">Creates</p>
                   <p className="text-foreground">1 post-quantum security domain</p>
-                  <p className="mt-3 leading-relaxed text-muted-foreground">No USDC allowance is granted. No agent receives treasury access yet.</p>
+                  <p className="mt-3 leading-relaxed text-muted-foreground">No USDC allowance is granted. No agent receives root access yet.</p>
                   <details className="mt-3">
                     <summary className="cursor-pointer text-muted-foreground">Technical details</summary>
                     <p className="mt-2 font-mono text-[11px] leading-relaxed text-muted-foreground">
@@ -235,7 +245,7 @@ export function DomainSetup({ onExit, onReady }: { onExit: () => void; onReady: 
                 {busy ?? (saved ? (sent ? "Check Arc again" : "Confirm in your wallet") : "Download backup")}
               </Button>
               <p className="text-center text-[11px] leading-relaxed text-muted-foreground">
-                Download backup only saves the file. Confirm in your wallet is the separate Arc transaction that creates the treasury.
+                Download backup saves the file and an encrypted copy on this device. Confirm in your wallet is the separate Arc transaction that creates the root.
               </p>
               <button type="button" onClick={onExit} className="text-center text-xs text-muted-foreground hover:text-foreground">
                 Back to site

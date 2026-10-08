@@ -173,7 +173,7 @@ export default function DashboardApp({ onExit }: { onExit: () => void }) {
     window.localStorage.removeItem("pqtabs.root");
     window.localStorage.removeItem("pqtabs.registrar");
     usePqtabsData.getState().setRegistrar("");
-    toast.message("Disconnected from PQTABS. To revoke this site's wallet permission completely, use your wallet's connected-sites settings.");
+    toast.message("Disconnected from PQTABS. This does not revoke the site's wallet permission. Use your wallet's connected-sites settings for that.");
     onExit();
   }
 
@@ -291,6 +291,7 @@ function Sidebar({ onExit, onDisconnect, loading }: { onExit: () => void; onDisc
   const setView = useDashboardUi((s) => s.setView);
   const setCreateOpen = useDashboardUi((s) => s.setCreateOpen);
   const accountReady = usePqtabsData((s) => s.accountReady);
+  const portfolioReady = usePqtabsData((s) => s.portfolioReady);
   const totals = useTotals();
   const account = usePqtabsData((s) => s.snapshot.account);
   const walletUsdc = useWalletUsdc(registrar);
@@ -365,7 +366,7 @@ function Sidebar({ onExit, onDisconnect, loading }: { onExit: () => void; onDisc
             {walletUsdc == null ? "—" : usd(walletUsdc, { decimals: 6 })}
           </p>
           <p className="mt-2 font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground">
-            Treasury
+            Your root
           </p>
           {loading ? (
             <Skeleton className="mt-1.5 h-5 w-24" />
@@ -374,12 +375,18 @@ function Sidebar({ onExit, onDisconnect, loading }: { onExit: () => void; onDisc
               {accountReady && account.treasuryKnown !== false ? usd(totals.treasuryTotalUsd) : "—"}
             </p>
           )}
+          <p className="mt-2 font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground">
+            Agent access
+          </p>
+          <p className="mt-1 font-mono text-sm font-medium tabular text-foreground">
+            {loading || !portfolioReady ? "—" : usd(totals.exposureUsd)}
+          </p>
         </div>
 
-        {/* User chip + settings */}
         <p className="truncate font-mono text-[9px] text-muted-foreground">
           Wallet {registrar.slice(0, 6)}…{registrar.slice(-4)}
         </p>
+        <p className="truncate font-mono text-[9px] text-muted-foreground">Arc Mainnet</p>
         <div className="flex items-center gap-2.5">
           <span
             aria-hidden="true"

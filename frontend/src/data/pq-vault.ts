@@ -32,6 +32,53 @@ function material(json: string, registrar: string): RootMaterial {
 let unlocked: RootMaterial | null = null;
 let creating: Promise<{ verifyingKey: string; backup: Blob }> | null = null;
 
+export const ROOT_IDLE_MS = 30 * 60 * 1000;
+export type RootSessionState = "LOCKED" | "UNLOCKING" | "UNLOCKED" | "EXPIRED";
+
+let idleLimit = ROOT_IDLE_MS;
+let idleTimer: ReturnType<typeof setTimeout> | null = null;
+let session: RootSessionState = "LOCKED";
+const sessionListeners = new Set<() => void>();
+
+function publish(next: RootSessionState): void {
+  session = next;
+  for (const listener of sessionListeners) listener();
+}
+
+export function rootSession(): RootSessionState {
+  return session;
+}
+
+export function subscribeRootSession(listener: () => void): () => void {
+  sessionListeners.add(listener);
+  return () => {
+    sessionListeners.delete(listener);
+  };
+}
+
+export function setRootIdleMs(ms: number): void {
+  idleLimit = ms;
+}
+
+function armIdle(): void {
+  if (idleTimer) clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => {
+    unlocked = null;
+    idleTimer = null;
+    publish("EXPIRED");
+  }, idleLimit);
+}
+
+function markUnlocked(): void {
+  publish("UNLOCKED");
+  armIdle();
+}
+
+function restoreSession(): void {
+  if (unlocked) markUnlocked();
+  else publish("LOCKED");
+}
+
 function holds(registrar: string): boolean {
   return Boolean(registrar) && unlocked !== null && unlocked.registrar.toLowerCase() === registrar.toLowerCase();
 }
@@ -58,6 +105,13 @@ export function verifyingKey(registrar: string): string | null {
 
 export function lockRoot(): void {
   unlocked = null;
+  if (idleTimer) clearTimeout(idleTimer);
+  idleTimer = null;
+  publish("LOCKED");
+}
+
+export function noteRootActivity(): void {
+  if (session === "UNLOCKED" && unlocked) armIdle();
 }
 
 export function createRootKey(registrar: string, passphrase: string): Promise<{ verifyingKey: string; backup: Blob }> {
@@ -79,6 +133,7 @@ async function mintRootKey(registrar: string, passphrase: string): Promise<{ ver
   const blobHex = api.backup_encrypt_hex(passphrase, json);
   const bytes = hexToBytes(blobHex);
   unlocked = parsed;
+  markUnlocked();
   return {
     verifyingKey: `0x${parsed.verifyingKeyHex}`,
     backup: new Blob([bytes.slice()], { type: "application/octet-stream" }),
@@ -86,15 +141,23 @@ async function mintRootKey(registrar: string, passphrase: string): Promise<{ ver
 }
 
 export async function unlockBackup(registrar: string, file: ArrayBuffer, passphrase: string): Promise<string> {
-  const api = await signer();
-  const json = api.backup_decrypt_utf8(passphrase, bytesToHex(new Uint8Array(file)));
-  const parsed = material(json, registrar);
-  unlocked = parsed;
-  return `0x${parsed.verifyingKeyHex}`;
+  publish("UNLOCKING");
+  try {
+    const api = await signer();
+    const json = api.backup_decrypt_utf8(passphrase, bytesToHex(new Uint8Array(file)));
+    const parsed = material(json, registrar);
+    unlocked = parsed;
+    markUnlocked();
+    return `0x${parsed.verifyingKeyHex}`;
+  } catch (error) {
+    restoreSession();
+    throw error;
+  }
 }
 
 export async function signRootDigest(registrar: string, digestHex: string): Promise<string> {
   if (!holds(registrar) || !unlocked) throw new Error("Unlock your security key to authorize this.");
+  noteRootActivity();
   const api = await signer();
   const signature = api.sign_hex(unlocked.signingKeyHex, digestHex.replace(/^0x/, ""));
   return signature.startsWith("0x") ? signature : `0x${signature}`;

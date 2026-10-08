@@ -32,7 +32,8 @@ import { arcClock, describeReturn, decideServicePrice, loadSnapshot, prepareClos
 import { agentAddress, authorizationBlob, recallAgentKey } from "@/data/spend";
 import { agentCanSign, chainExpirySeconds, paymentDeadline, serviceTimeoutSeconds } from "@/data/x402-pay";
 import { backupMatchesRoot, backupRefusal } from "@/data/pq-key-match";
-import { lockRoot, rootUnlocked, signRootDigest, unlockBackup, verifyingKey } from "@/data/pq-vault";
+import { lockRoot, rootUnlocked, signRootDigest, verifyingKey } from "@/data/pq-vault";
+import { SecurityKeyUnlock } from "@/components/pqtabs/dashboard/SecurityKeyUnlock";
 import type { Tab } from "@/data/types";
 import { useActivity, useAgents, useDashboardUi, usePqtabsData, useRecipients, useTabs } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -205,38 +206,12 @@ function TabDrawerBody({
   const recipients = useRecipients();
   const activity = useActivity();
   const [closePrep, setClosePrep] = useState<PreparedAction | null>(null);
-  const [task, setTask] = useState("Reply with one word: pong");
+  const [task, setTask] = useState("Summarize what Arc mainnet settlement means for an agent payment.");
   const [closingSig, setClosingSig] = useState(false);
-  const [closePass, setClosePass] = useState("");
-  const [closeBackup, setCloseBackup] = useState<ArrayBuffer | null>(null);
   const [closeReady, setCloseReady] = useState(() => rootUnlocked(usePqtabsData.getState().registrar));
   const [paying, setPaying] = useState(false);
   const [payLog, setPayLog] = useState<string[]>([]);
   const payLock = useRef(false);
-
-  function unlockClose(bytes: ArrayBuffer, secret: string) {
-    if (secret.length < 8) {
-      setCloseReady(false);
-      toast.error("Enter the backup passphrase (at least 8 characters). The file can be chosen first.");
-      return;
-    }
-    void unlockBackup(usePqtabsData.getState().registrar, bytes, secret)
-      .then(() => {
-        const live = usePqtabsData.getState();
-        const verdict = backupMatchesRoot(verifyingKey(live.registrar), live.snapshot.account.pqVk);
-        if (verdict !== "match") {
-          lockRoot();
-          setCloseReady(false);
-          toast.error(backupRefusal(verdict));
-          return;
-        }
-        setCloseReady(true);
-      })
-      .catch((reason: unknown) => {
-        setCloseReady(false);
-        toast.error(reason instanceof Error ? reason.message : "Could not unlock the security key.");
-      });
-  }
 
   const agent = agents.find((a) => a.id === tab.agentId);
   const vaultEpoch = usePqtabsData((state) => state.agentVaultEpoch);
@@ -458,14 +433,15 @@ function TabDrawerBody({
 
       {tab.status === "active" && tab.expiryUnix && (
         <div className="border-t border-white/[.06] px-5 py-4 md:px-6">
-          <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Agent payment</p>
+          <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Research agent</p>
           <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-            The service sets the price and the recipient. This device signs only if the capability allows that price. The service settles the payment. A refusal is not a payment.
+            Pays for external inference when the requested service fits this capability. Enter a question. Run task asks the service for its price and pays only if the capability allows it.
           </p>
           <input
             value={task}
             onChange={(event) => setTask(event.target.value)}
-            aria-label="Task for the paid service"
+            aria-label="Research question"
+            placeholder="Enter a research question"
             className="mt-3 h-9 w-full rounded-lg border border-white/10 bg-transparent px-3 text-sm text-foreground outline-none"
           />
           {!canPay && (
@@ -583,7 +559,7 @@ function TabDrawerBody({
             }}
             className="mt-3 h-9 bg-gold text-[#171204] hover:bg-[#eec95e]"
           >
-            {paying ? <Loader2 className="size-4 animate-spin" /> : "Pay the service price"}
+            {paying ? <Loader2 className="size-4 animate-spin" /> : "Run task"}
           </Button>
           {payLog.length > 0 && (
             <ul className="mt-3 space-y-1" aria-live="polite">
@@ -637,34 +613,7 @@ function TabDrawerBody({
                 ) : (
                   <p className="text-xs text-muted-foreground">Preparing the close from the current nonce.</p>
                 )}
-                {!closeReady && (
-                  <div className="space-y-2">
-                    <input
-                      type="password"
-                      value={closePass}
-                      aria-label="Security key passphrase"
-                      placeholder="Passphrase for your backup"
-                      className="h-9 w-full rounded-lg border border-white/10 bg-transparent px-3 text-sm outline-none"
-                      onChange={(event) => setClosePass(event.target.value)}
-                      onBlur={() => {
-                        if (closeBackup) unlockClose(closeBackup, closePass);
-                      }}
-                    />
-                    <input
-                      type="file"
-                      aria-label="Security key backup"
-                      className="block w-full text-xs text-muted-foreground"
-                      onChange={(event) => {
-                        const file = event.target.files?.[0];
-                        if (!file) return;
-                        void file.arrayBuffer().then((bytes) => {
-                          setCloseBackup(bytes);
-                          unlockClose(bytes, closePass);
-                        });
-                      }}
-                    />
-                  </div>
-                )}
+                <SecurityKeyUnlock onReady={setCloseReady} />
                 <AlertDialogFooter>
                   <AlertDialogCancel className="border-white/10 bg-white/[.03] text-foreground shadow-none hover:bg-white/[.06] hover:text-foreground">
                     Cancel

@@ -63,7 +63,7 @@ function FundNotice() {
         setMessage(`Arc included the deposit. ${detail}`);
         return;
       }
-      setMessage("Confirmed. The treasury balance is the onchain USDC balance.");
+      setMessage("Confirmed. Root cash is the onchain USDC balance of the root.");
     } catch (reason: unknown) {
       setMessage(reason instanceof Error ? reason.message : "The deposit was not confirmed.");
     } finally {
@@ -73,13 +73,13 @@ function FundNotice() {
 
   return (
     <section className="rounded-xl border border-white/[.08] bg-[#0e1013] p-5">
-      <h2 className="font-display text-lg font-semibold">Your treasury is ready</h2>
-      <p className="mt-1 text-sm text-foreground">Treasury: 0 USDC</p>
+      <h2 className="font-display text-lg font-semibold">Your root is ready</h2>
+      <p className="mt-1 text-sm text-foreground">Root cash: 0 USDC</p>
       <p className="mt-1 text-sm text-foreground">Your wallet: {walletUsdc == null ? "—" : usd(walletUsdc, { decimals: 6 })}</p>
-      <p className="mt-1 text-sm text-muted-foreground">Fund your treasury to give agents a spending budget.</p>
+      <p className="mt-1 text-sm text-muted-foreground">Fund your root to give agents a spending budget. Wallet funds stay in the wallet until you deposit them.</p>
       <p className="mt-3 break-all font-mono text-[11px] text-muted-foreground">Deposit address {root}</p>
       <div className="mt-4 rounded-lg border border-white/10 px-3 py-3 text-xs">
-        <p className="text-sm text-foreground">Fund the treasury</p>
+        <p className="text-sm text-foreground">Fund the root</p>
         <p className="mt-2 text-muted-foreground">Network</p>
         <p className="text-foreground">Arc Mainnet</p>
         <p className="mt-2 text-muted-foreground">You send</p>
@@ -87,7 +87,7 @@ function FundNotice() {
         <p className="mt-2 text-muted-foreground">To</p>
         <p className="break-all font-mono text-foreground">{root}</p>
         <p className="mt-3 leading-relaxed text-muted-foreground">
-          This is a USDC transfer to your treasury. It does not grant an allowance, and no agent can spend it until you authorize a capability.
+          This is a USDC transfer to your root. It does not grant an allowance, and no agent can spend it until you authorize a capability.
         </p>
         <details className="mt-3">
           <summary className="cursor-pointer text-muted-foreground">Technical details</summary>
@@ -113,6 +113,8 @@ function FundNotice() {
 }
 
 export default function OverviewView() {
+  const registrar = usePqtabsData((state) => state.registrar);
+  const walletUsdc = useWalletUsdc(registrar);
   const portfolioReady = usePqtabsData((state) => state.portfolioReady);
   const portfolioError = usePqtabsData((state) => state.portfolioError);
   const treasuryKnown = usePqtabsData((state) => state.snapshot.account.treasuryKnown !== false);
@@ -134,7 +136,7 @@ export default function OverviewView() {
   const securityStrip = [
     { label: "Root protection", value: "Post-quantum · Secured", dot: "bg-success" },
     { label: "Agent capabilities", value: "Bounded by policy", dot: "bg-success" },
-    { label: "Treasury exposure", value: portfolioReady ? `${pct(exposurePct)} of funds` : "list not loaded", dot: "bg-gold" },
+    { label: "Agent reachable", value: portfolioReady ? `${pct(exposurePct)} of funds` : "list not loaded", dot: "bg-gold" },
     { label: "Enforcement", value: "Onchain policy", dot: "bg-success" },
   ];
 
@@ -163,45 +165,48 @@ export default function OverviewView() {
       {treasuryKnown && totals.treasuryTotalUsd === 0 && totals.activeTabCount === 0 && <FundNotice />}
 
       {/* Key figures */}
-      <section aria-label="Treasury figures" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <section aria-label="Account figures" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <StatCard
-          label="Treasury"
+          label="Wallet"
+          icon={<Wallet strokeWidth={1.75} />}
+          value={walletUsdc == null ? "—" : <CountUp value={walletUsdc} format={(value) => usd(value, { decimals: 6 })} />}
+          sub="connected account"
+        />
+        <StatCard
+          label="Root cash"
           icon={<Landmark strokeWidth={1.75} />}
           accent="gold"
           value={treasuryKnown ? <CountUp value={totals.treasuryTotalUsd} format={usd} /> : "—"}
-          sub="under root control"
+          sub="held by the root"
         />
         <StatCard
           delay={0.06}
-          label="Open exposure"
-          icon={<Wallet strokeWidth={1.75} />}
-          value={<CountUp value={totals.allocatedUsd} format={usd} />}
-          sub={portfolioReady ? `${totals.activeTabCount} active capabilities` : "capability list not loaded"}
+          label="In capabilities"
+          icon={<Layers strokeWidth={1.75} />}
+          value={portfolioReady ? <CountUp value={totals.exposureUsd + totals.reclaimableUsd} format={usd} /> : "—"}
+          sub="moved into capabilities"
         />
         <StatCard
           delay={0.12}
-          label="Exposure room"
+          label="Agent reachable"
           icon={<Coins strokeWidth={1.75} />}
-          value={<CountUp value={totals.availableUsd} format={usd} />}
-          sub="ceiling minus open exposure"
+          accent="teal"
+          value={portfolioReady ? <CountUp value={totals.exposureUsd} format={usd} /> : "—"}
+          sub="the agent can spend this"
         />
         <StatCard
           delay={0.18}
-          label="Active capabilities"
-          icon={<Layers strokeWidth={1.75} />}
-          accent="teal"
-          value={<span>{portfolioReady ? totals.activeTabCount : "—"}</span>}
-          sub={
-            !portfolioReady ? (
-              "list not loaded"
-            ) : totals.reclaimableTabCount > 0 ? (
-              <span className="text-warning">
-                {totals.reclaimableTabCount} ready to reclaim
-              </span>
-            ) : (
-              "none ready to reclaim"
-            )
-          }
+          label="Open exposure"
+          icon={<Wallet strokeWidth={1.75} />}
+          value={portfolioReady ? <CountUp value={totals.allocatedUsd} format={usd} /> : "—"}
+          sub="sum of capability caps"
+        />
+        <StatCard
+          delay={0.24}
+          label="Exposure room"
+          icon={<Coins strokeWidth={1.75} />}
+          value={portfolioReady ? <CountUp value={totals.availableUsd} format={usd} /> : "—"}
+          sub="ceiling minus open exposure"
         />
       </section>
 
@@ -235,11 +240,11 @@ export default function OverviewView() {
       {/* Treasury exposure */}
       <Reveal y={12}>
         <section
-          aria-label="Treasury exposure"
+          aria-label="Where funds sit"
           className="rounded-xl border border-white/[.07] bg-[#0e1013] p-5 md:p-6"
         >
           <h2 className="font-display text-base font-semibold tracking-tight">
-            Treasury exposure
+            Where funds sit
           </h2>
           <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
             Where every dollar can reach

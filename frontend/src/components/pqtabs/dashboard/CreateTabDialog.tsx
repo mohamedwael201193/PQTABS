@@ -35,7 +35,8 @@ import {
 import { isAddress, parseUsdcRaw } from "@/data/actions";
 import { tabForReceipt } from "@/data/opened-tab";
 import { backupMatchesRoot, backupRefusal } from "@/data/pq-key-match";
-import { lockRoot, rootUnlocked, signRootDigest, unlockBackup, verifyingKey } from "@/data/pq-vault";
+import { lockRoot, rootUnlocked, signRootDigest, verifyingKey } from "@/data/pq-vault";
+import { SecurityKeyUnlock } from "@/components/pqtabs/dashboard/SecurityKeyUnlock";
 import { initials, relFuture, usd } from "@/data/formatters";
 import { loadSnapshot, prepareOpen, requestServicePrice, submitPrepared, type PreparedAction } from "@/data/production";
 import { servicePayee } from "@/data/x402-pay";
@@ -60,11 +61,11 @@ const BTN_GOLD = "bg-gold text-[#171204] shadow-none hover:bg-[#eec95e]";
 const BTN_GHOST = "border border-white/10 bg-white/[.03] text-foreground shadow-none hover:bg-white/[.06]";
 
 const STEP_META = [
-  { label: "AGENT", title: "Who will spend?", sub: "Pick the agent that will hold this spending capability." },
-  { label: "BUDGET", title: "How much can this agent spend?", sub: "Set a hard ceiling, then the most it can move in one payment." },
-  { label: "RULES", title: "Where can it pay?", sub: "Approve the recipients this capability may pay. Everything else is rejected." },
-  { label: "EXPIRY", title: "When should this capability expire?", sub: "Choose how long the agent keeps spending authority." },
-  { label: "REVIEW", title: "Review capability", sub: "Read it back before you open it." },
+  { label: "AGENT", title: "Who may spend?", sub: "Pick the agent that will hold this spending capability." },
+  { label: "BUDGET", title: "How much may it spend?", sub: "Set a hard ceiling, then the most it can move in one payment." },
+  { label: "RULES", title: "Where may it pay?", sub: "Approve the recipients this capability may pay. Everything else is rejected." },
+  { label: "EXPIRY", title: "When does authority end?", sub: "Choose how long the agent keeps spending authority." },
+  { label: "REVIEW", title: "What exactly are you approving?", sub: "Read the capability back before you open it." },
 ] as const;
 
 const CAP_MIN = 0.01;
@@ -156,9 +157,6 @@ function CreateFlow() {
   const [readingService, setReadingService] = useState(false);
   const [extraRecipients, setExtraRecipients] = useState<Recipient[]>([]);
   const [prepared, setPrepared] = useState<PreparedAction | null>(null);
-  const [passphrase, setPassphrase] = useState("");
-  const [backupBytes, setBackupBytes] = useState<ArrayBuffer | null>(null);
-  const [unlockError, setUnlockError] = useState("");
   const [authorizing, setAuthorizing] = useState(false);
   const [keyReady, setKeyReady] = useState(() => rootUnlocked(usePqtabsData.getState().registrar));
   const [failure, setFailure] = useState("The capability was not opened.");
@@ -171,31 +169,6 @@ function CreateFlow() {
   const [stage, setStage] = useState(0);
   const [createdTab, setCreatedTab] = useState<Tab | null>(null);
   const [discardOpen, setDiscardOpen] = useState(false);
-
-  function unlockChosen(bytes: ArrayBuffer, secret: string) {
-    if (secret.length < 8) {
-      setKeyReady(false);
-      setUnlockError("Enter the backup passphrase (at least 8 characters). The file can be chosen first.");
-      return;
-    }
-    void unlockBackup(usePqtabsData.getState().registrar, bytes, secret)
-      .then(() => {
-        const live = usePqtabsData.getState();
-        const verdict = backupMatchesRoot(verifyingKey(live.registrar), live.snapshot.account.pqVk);
-        if (verdict !== "match") {
-          lockRoot();
-          setKeyReady(false);
-          setUnlockError(backupRefusal(verdict));
-          return;
-        }
-        setKeyReady(true);
-        setUnlockError("");
-      })
-      .catch((reason: unknown) => {
-        setKeyReady(false);
-        setUnlockError(reason instanceof Error ? reason.message : "Could not unlock the security key.");
-      });
-  }
 
   const agentRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const budgetSliderRef = useRef<HTMLDivElement | null>(null);
@@ -811,7 +784,7 @@ function CreateFlow() {
                   onClick={() => {
                     setReadingService(true);
                     setPayeeNote(null);
-                    void requestServicePrice("Reply with one word: pong")
+                    void requestServicePrice("Summarize what Arc mainnet settlement means for an agent payment.")
                       .then((payload) => {
                         const address = servicePayee(payload);
                         if (!address) throw new Error("The service did not name an Arc recipient. Nothing was added.");
@@ -1000,11 +973,11 @@ function CreateFlow() {
                   <dd className="font-mono text-sm tabular text-foreground">{usd(rootBalance)}</dd>
                 </div>
                 <div className="flex items-center justify-between gap-4 px-4 py-3">
-                  <dt className="text-sm text-muted-foreground">Becomes available to this agent</dt>
+                  <dt className="text-sm text-muted-foreground">Capability balance</dt>
                   <dd className="font-mono text-sm tabular text-gold">{usd(cap)}</dd>
                 </div>
                 <div className="flex items-center justify-between gap-4 px-4 py-3">
-                  <dt className="text-sm text-muted-foreground">Still in the root</dt>
+                  <dt className="text-sm text-muted-foreground">Root cash after open</dt>
                   <dd className="font-mono text-sm tabular text-foreground">{usd(Math.max(0, rootBalance - cap))}</dd>
                 </div>
                 <div className="flex items-center justify-between gap-4 px-4 py-3">
@@ -1025,7 +998,7 @@ function CreateFlow() {
               <div className="mt-5 rounded-lg border border-white/[.06] bg-white/[.015] p-4">
                 <p className={MICRO}>Why this is safe</p>
                 <ul className="mt-3 space-y-2 text-sm leading-relaxed text-muted-foreground">
-                  <li>Your agent does not receive control of the root treasury.</li>
+                  <li>Your agent cannot access the rest of your wallet or root cash.</li>
                   <li>Every spend remains inside this capability&apos;s rules.</li>
                   <li>Root authority remains protected by PQ authorization.</li>
                 </ul>
@@ -1050,57 +1023,7 @@ function CreateFlow() {
             <div className="space-y-3 py-2">
               {prepared ? (
                 <>
-                  <p className="text-sm leading-relaxed text-muted-foreground">
-                    Use the security-key backup you downloaded when you created this treasury.
-                  </p>
-                  {!rootUnlocked(usePqtabsData.getState().registrar) && (
-                    <div className="space-y-2">
-                      <label className="block text-xs text-muted-foreground" htmlFor="security-key-backup">
-                        Security-key backup
-                      </label>
-                      <input
-                        id="security-key-backup"
-                        type="file"
-                        aria-label="Choose backup file"
-                        className="block w-full text-xs text-muted-foreground"
-                        onChange={(event) => {
-                          const file = event.target.files?.[0];
-                          if (!file) return;
-                          void file.arrayBuffer().then((bytes) => {
-                            setBackupBytes(bytes);
-                            unlockChosen(bytes, passphrase);
-                          });
-                        }}
-                      />
-                      <p className="text-[11px] leading-relaxed text-muted-foreground">
-                        Usually found in Downloads as pqtabs-security-key.pqtabs.
-                      </p>
-                      <details className="text-[11px] text-muted-foreground">
-                        <summary className="cursor-pointer">Can&apos;t find it?</summary>
-                        <p className="mt-2 leading-relaxed">
-                          Check your Downloads folder or the secure location where you saved it. PQTABS never stores another copy of this private security key.
-                        </p>
-                      </details>
-                      <label className="block text-xs text-muted-foreground" htmlFor="security-key-passphrase">
-                        Backup passphrase
-                      </label>
-                      <input
-                        id="security-key-passphrase"
-                        type="password"
-                        value={passphrase}
-                        aria-label="Enter your backup passphrase"
-                        placeholder="Enter your backup passphrase"
-                        className="h-9 w-full rounded-lg border border-white/10 bg-transparent px-3 text-sm outline-none"
-                        onChange={(event) => setPassphrase(event.target.value)}
-                        onBlur={() => {
-                          if (backupBytes) unlockChosen(backupBytes, passphrase);
-                        }}
-                      />
-                      {unlockError && (
-                        <p className="text-xs leading-relaxed text-danger" role="alert">{unlockError}</p>
-                      )}
-                    </div>
-                  )}
+                  <SecurityKeyUnlock onReady={setKeyReady} />
                   <details className="text-xs text-muted-foreground">
                     <summary className="cursor-pointer">Technical details</summary>
                     <p className="mt-2 break-all font-mono text-[10px]">{prepared.digest}</p>

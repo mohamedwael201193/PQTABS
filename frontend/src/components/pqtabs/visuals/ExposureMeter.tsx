@@ -61,7 +61,7 @@ export function ExposureMeter({
       <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
         <div>
           <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-            Treasury
+            Funds held
           </p>
           <p className="mt-1 font-display text-xl font-semibold leading-none tabular text-foreground">
             {treasuryKnown ? usd(held) : "—"}
@@ -78,7 +78,7 @@ export function ExposureMeter({
         role="img"
         aria-label={
           capabilitiesKnown
-            ? `Funds held ${usd(held)}: ${usd(inRoot)} still in the root, ${usd(reach)} an agent can reach, ${usd(reclaimable)} awaiting reclaim`
+            ? `Funds held ${usd(held)}: ${usd(inRoot)} root cash, ${usd(reach)} agent reachable, ${usd(reclaimable)} awaiting reclaim`
             : `Root balance ${usd(inRoot)}. What an agent can reach is not loaded yet.`
         }
       >
@@ -120,8 +120,8 @@ export function ExposureMeter({
 
       {/* Legend */}
       <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2">
-        <LegendRow dot="bg-white/25" label="Still in the root" value={usd(inRoot)} />
-        <LegendRow dot="bg-gold" label="An agent can reach" value={capabilitiesKnown ? usd(reach) : "not loaded"} />
+        <LegendRow dot="bg-white/25" label="Root cash" value={usd(inRoot)} />
+        <LegendRow dot="bg-gold" label="Agent reachable" value={capabilitiesKnown ? usd(reach) : "not loaded"} />
         {reclaimable > 0 && (
           <LegendRow dot="bg-warning" label="Awaiting reclaim" value={usd(reclaimable)} />
         )}
@@ -130,8 +130,8 @@ export function ExposureMeter({
         {!capabilitiesKnown
           ? "The capability list has not finished, so what an agent can reach is not shown yet."
           : reach > 0
-            ? `An agent can reach ${usd(reach)}. The ${usd(inRoot)} still in the root is outside that capability.`
-            : "No capability is open, so an agent cannot spend this treasury."}
+            ? `An agent can reach ${usd(reach)}. The ${usd(inRoot)} root cash is outside that capability.`
+            : "No capability is open, so an agent cannot spend this root."}
       </p>
     </div>
   );
