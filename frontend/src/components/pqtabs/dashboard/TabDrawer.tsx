@@ -29,7 +29,7 @@ import { isAddress } from "@/data/actions";
 import { decisionRecord, paymentReasonSentence, settledDecision, type DecisionFacts, type DecisionRecord, type QuotedDecision } from "@/data/decision-record";
 import { saveDecision } from "@/data/decision-store";
 import { arcClock, BACKEND_URL, describeReturn, decideServicePrice, loadSnapshot, prepareClose, productionProvider, requestServicePrice, SERVICE_URL, settleService, submitPrepared, type PreparedAction, type ServiceDecision } from "@/data/production";
-import { probeAmount, probePayment, probeRefusal, type ProbeName } from "@/data/refusal-probe";
+import { probeAmount, probePayment, probeRefusal, UNAVAILABLE_SERVICE_URL, unavailableServiceRefusal, type ProbeName } from "@/data/refusal-probe";
 import { agentAddress, authorizationBlob, recallAgentKey } from "@/data/spend";
 import { agentCanSign, chainExpirySeconds, paymentDeadline, serviceTimeoutSeconds } from "@/data/x402-pay";
 import { backupMatchesRoot, backupRefusal } from "@/data/pq-key-match";
@@ -298,6 +298,69 @@ function TabDrawerBody({
       setShownDecision(saved);
       const sentence = paymentReasonSentence(outcome.reason[0] ?? "");
       setPayLog([labels[name], `Payment blocked. ${sentence} Nothing was signed. Nothing was broadcast.`]);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "This check was not a refusal. Nothing was signed. Nothing was broadcast.";
+      setPayLog((lines) => [...lines, message]);
+      toast.error(message);
+    } finally {
+      payLock.current = false;
+      setPaying(false);
+    }
+  }
+
+  async function runUnavailableService() {
+    if (!tab || payLock.current) return;
+    const registrar = usePqtabsData.getState().registrar;
+    if (!registrar) {
+      toast.error("The capability could not be read. Nothing was signed.");
+      return;
+    }
+    payLock.current = true;
+    setPaying(true);
+    setPayLog(["Check: unavailable service"]);
+    try {
+      let status: number | null = null;
+      try {
+        const response = await fetch(UNAVAILABLE_SERVICE_URL, {
+          method: "POST",
+          headers: { "content-type": "application/json", accept: "application/json" },
+          body: JSON.stringify({ messages: [{ role: "user", content: "ping" }] }),
+        });
+        status = response.status;
+      } catch {
+        status = null;
+      }
+      const outcome = unavailableServiceRefusal(status);
+      if (!outcome) {
+        throw new Error("This check was not a refusal. Nothing was signed. Nothing was broadcast.");
+      }
+      const facts: DecisionFacts = {
+        task: "Check: unavailable service",
+        service: UNAVAILABLE_SERVICE_URL,
+        resource: UNAVAILABLE_SERVICE_URL,
+        price: "",
+        asset: "",
+        network: "",
+        payee: "",
+        agent: tab.agentId,
+        capability: tab.id,
+        remaining_capability_balance: tab.balanceRaw ?? "",
+        maxPerCall: tab.maxPerCallRaw ?? "",
+        root_exposure: "",
+        maxOpenExposure: "",
+        expiry: tab.expiryUnix ? String(tab.expiryUnix) : "",
+        decision: outcome.decision,
+        reason: [...outcome.reason],
+        registrar,
+      };
+      const saved = decisionRecord(facts, new Date().toISOString());
+      if (saved.txHash || saved.decision !== "NO_PAYMENT") {
+        throw new Error("This check was not a refusal. Nothing was signed. Nothing was broadcast.");
+      }
+      await saveDecision(saved);
+      usePqtabsData.getState().noteDecision();
+      setShownDecision(saved);
+      setPayLog(["Check: unavailable service", "Payment blocked. The service was unavailable. Nothing was signed. Nothing was broadcast."]);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "This check was not a refusal. Nothing was signed. Nothing was broadcast.";
       setPayLog((lines) => [...lines, message]);
@@ -688,6 +751,14 @@ function TabDrawerBody({
                 {label}
               </Button>
             ))}
+            <Button
+              type="button"
+              disabled={paying}
+              onClick={() => void runUnavailableService()}
+              className="h-8 border border-white/10 bg-transparent px-2 text-xs text-foreground shadow-none hover:bg-white/[.04]"
+            >
+              Unavailable service
+            </Button>
           </div>
           {shownDecision ? <div className="mt-3"><PaymentDecision record={shownDecision} /></div> : null}
           {payLog.length > 0 && (

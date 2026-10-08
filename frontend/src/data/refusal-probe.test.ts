@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { probeAmount, probePayment, probeRefusal } from "./refusal-probe.ts";
+import { probeAmount, probePayment, probeRefusal, unavailableServiceRefusal } from "./refusal-probe.ts";
 
 const PAYEE = "0x6Bf001BB5f5E75396d92163325ca01FdEBe2e9A9";
 
@@ -37,4 +37,11 @@ test("a refusal without a hash is blocked, and an allow is not", () => {
     decision: "NO_PAYMENT",
     reason: ["no_arc_exact"],
   });
+});
+
+test("an unreachable service is a refusal, and a priced 402 is not", () => {
+  assert.deepEqual(unavailableServiceRefusal(null), { decision: "NO_PAYMENT", reason: ["service_unavailable"] });
+  assert.deepEqual(unavailableServiceRefusal(503), { decision: "NO_PAYMENT", reason: ["service_unavailable"] });
+  assert.equal(unavailableServiceRefusal(402), null);
+  assert.equal(unavailableServiceRefusal(200), null);
 });

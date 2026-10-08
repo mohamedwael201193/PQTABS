@@ -1,3 +1,5 @@
+export const UNAVAILABLE_SERVICE_URL = "https://service.invalid/v1/chat/completions";
+
 const USDC = "0x3600000000000000000000000000000000000000";
 const ARC = "eip155:5042";
 const RESOURCE = "https://arcrouter.co/v1/chat/completions";
@@ -77,4 +79,11 @@ export function probeRefusal(
     return { decision: "NO_PAYMENT", reason: ["no_arc_exact"] };
   }
   return null;
+}
+
+/** A service that never returned HTTP 402. A priced 402 is not this check. */
+export function unavailableServiceRefusal(status: number | null): { decision: "NO_PAYMENT"; reason: ["service_unavailable"] } | null {
+  if (status === 402) return null;
+  if (status !== null && status < 500) return null;
+  return { decision: "NO_PAYMENT", reason: ["service_unavailable"] };
 }
