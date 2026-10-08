@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { decisionRecord, decisionsForRegistrar, expiryWhen, paymentReasonSentence, paymentStatusLines, settledDecision, settlementReasons, type DecisionFacts } from "./decision-record.ts";
+import { capabilityRemaining, decisionRecord, decisionsForRegistrar, expiryWhen, paymentReasonSentence, paymentStatusLines, settledDecision, settlementReasons, type DecisionFacts } from "./decision-record.ts";
 
 const facts = (): DecisionFacts => ({
   task: "Reply with one word: pong",
@@ -102,6 +102,19 @@ test("an unsettled allow says nothing was broadcast and does not say nothing was
   ]);
   assert.deepEqual(paymentStatusLines("REFUSE", ""), ["Payment blocked", "Nothing was signed.", "Nothing was broadcast."]);
   assert.deepEqual(paymentStatusLines("ALLOW", "0x" + "ab".repeat(32)), []);
+});
+
+test("a settled payment shows the capability balance after that price", () => {
+  const settled = settledDecision(
+    { ...facts(), decision: "ALLOW", reason: ["capability_active"], remaining_capability_balance: "10000", price: "12" },
+    { txHash: "0x" + "ab".repeat(32), receipt: { status: "success", blockNumber: "24923635" }, result: "Tabletennis" },
+    "2026-10-08T02:00:00.000Z",
+  );
+  assert.equal(capabilityRemaining(settled), "9988");
+  const refused = decisionRecord(facts(), "2026-10-08T02:00:00.000Z");
+  assert.equal(capabilityRemaining({ ...refused, remaining_capability_balance: "9988" }), "9988");
+  const unsettled = decisionRecord({ ...facts(), decision: "ALLOW", reason: ["capability_active"], remaining_capability_balance: "9988" }, "2026-10-08T02:01:00.000Z");
+  assert.equal(capabilityRemaining(unsettled), "9988");
 });
 
 test("a chain expiry is shown in UTC and a settle failure names the facilitator", () => {

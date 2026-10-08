@@ -1,7 +1,7 @@
 "use client";
 
 import type { DecisionRecord } from "@/data/decision-record";
-import { expiryWhen, paymentReasonSentence, paymentStatusLines } from "@/data/decision-record";
+import { capabilityRemaining, expiryWhen, paymentReasonSentence, paymentStatusLines } from "@/data/decision-record";
 
 function rawUsdc(value: string): string {
   if (!/^[0-9]+$/.test(value)) return "—";
@@ -34,7 +34,7 @@ export function PaymentDecision({ record }: { record: DecisionRecord }) {
     ["Asset", short(record.asset)],
     ["Price", rawUsdc(record.price)],
     ["Payee", short(record.payee)],
-    ["Capability remaining", rawUsdc(record.remaining_capability_balance)],
+    ["Capability remaining", rawUsdc(capabilityRemaining(record))],
     ["Max per payment", rawUsdc(record.maxPerCall)],
     ["Expiry", expiryWhen(record.expiry)],
     ["Decision", record.decision === "ALLOW" ? "ALLOW" : record.decision],

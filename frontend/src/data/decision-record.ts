@@ -129,6 +129,22 @@ export function expiryWhen(value: string): string {
   return date.toISOString().replace(".000Z", " UTC").replace("T", " ");
 }
 
+/** The stored balance is the one read before payment. A settled receipt means that price left the capability. */
+export function capabilityRemaining(record: {
+  decision: string;
+  txHash: string;
+  remaining_capability_balance: string;
+  price: string;
+}): string {
+  const remaining = record.remaining_capability_balance;
+  if (record.decision !== "ALLOW" || !/^0x[0-9a-fA-F]{64}$/.test(record.txHash)) return remaining;
+  if (!/^[0-9]+$/.test(remaining) || !/^[0-9]+$/.test(record.price)) return remaining;
+  const left = BigInt(remaining);
+  const price = BigInt(record.price);
+  if (price > left) return remaining;
+  return (left - price).toString();
+}
+
 /** A facilitator rejection is recorded from the service's settle failure, not from a guessed hash. */
 export function settlementReasons(reasons: readonly string[], message: string): string[] {
   if (message.startsWith("The service did not settle the payment")) return [...reasons, "facilitator_rejected"];
