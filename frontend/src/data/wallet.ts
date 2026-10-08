@@ -205,6 +205,21 @@ export async function fundRoot(root: Address, amountRaw: bigint): Promise<Hex> {
   });
 }
 
+/** Native-USDC gas for createRoot. Value stays 0. This does not send a transaction. */
+export async function estimateCreateRootFee(registrar: Address, vk: Hex, maxOpenExposure: bigint): Promise<bigint> {
+  const client = arcClient();
+  const salt = "0x0000000000000000000000000000000000000000000000000000000000000000" as Hex;
+  const gas = await client.estimateContractGas({
+    account: registrar,
+    address: FACTORY,
+    abi: factoryAbi,
+    functionName: "createRoot",
+    args: [vk, maxOpenExposure, salt],
+  });
+  const price = await client.getGasPrice();
+  return gas * price;
+}
+
 /** The connected wallet's USDC. This is not the treasury balance. */
 export async function readWalletUsdc(account: Address): Promise<bigint> {
   return arcClient().readContract({

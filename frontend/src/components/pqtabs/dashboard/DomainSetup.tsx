@@ -1,13 +1,13 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/pqtabs/shared";
 import { parseUsdcRaw } from "@/data/actions";
 import { rememberRoot } from "@/data/production";
 import { createRootKey, rootUnlocked, verifyingKey } from "@/data/pq-vault";
-import { arc, createSecurityDomain, existingAccount, waitForRoot, walletClient } from "@/data/wallet";
+import { arc, createSecurityDomain, estimateCreateRootFee, existingAccount, waitForRoot, walletClient } from "@/data/wallet";
 import { usePqtabsData } from "@/lib/store";
 import { keccak256, toHex, type Hex } from "viem";
 
@@ -33,6 +33,29 @@ export function DomainSetup({ onExit, onReady }: { onExit: () => void; onReady: 
   const [sent, setSent] = useState(false);
   const lock = useRef(false);
   const pendingHash = useRef<Hex | null>(null);
+  const [fee, setFee] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!saved || !kept || !registrar) return;
+    const vk = verifyingKey(registrar);
+    if (!vk) return;
+    let cancelled = false;
+    setFee(null);
+    void (async () => {
+      try {
+        const maxOpenExposure = parseUsdcRaw(ceiling);
+        const native = await estimateCreateRootFee(registrar as `0x${string}`, vk as Hex, maxOpenExposure);
+        const whole = native / 10n ** 18n;
+        const fraction = (native % 10n ** 18n).toString().padStart(18, "0").slice(0, 6).replace(/0+$/, "");
+        if (!cancelled) setFee(fraction ? `${whole}.${fraction}` : `${whole}`);
+      } catch {
+        if (!cancelled) setFee("unavailable");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [saved, kept, registrar, ceiling]);
 
   async function sameWallet() {
     if (!registrar) throw new Error("Connect a wallet before creating a security domain.");
@@ -181,6 +204,28 @@ export function DomainSetup({ onExit, onReady }: { onExit: () => void; onReady: 
                   />
                   I saved my backup
                 </label>
+              ) : null}
+              {saved && kept ? (
+                <div className="rounded-lg border border-white/10 px-3 py-3 text-xs">
+                  <p className="text-sm text-foreground">Create security domain</p>
+                  <p className="mt-2 text-muted-foreground">Network</p>
+                  <p className="text-foreground">Arc Mainnet</p>
+                  <p className="mt-2 text-muted-foreground">Contract</p>
+                  <p className="text-foreground">PQTABS RootFactory</p>
+                  <p className="mt-2 text-muted-foreground">You send</p>
+                  <p className="text-foreground">0 USDC</p>
+                  <p className="mt-2 text-muted-foreground">Estimated network fee</p>
+                  <p className="text-foreground">{fee == null ? "—" : fee === "unavailable" ? "unavailable" : `${fee} USDC`}</p>
+                  <p className="mt-2 text-muted-foreground">Creates</p>
+                  <p className="text-foreground">1 post-quantum security domain</p>
+                  <p className="mt-3 leading-relaxed text-muted-foreground">No USDC allowance is granted. No agent receives treasury access yet.</p>
+                  <details className="mt-3">
+                    <summary className="cursor-pointer text-muted-foreground">Technical details</summary>
+                    <p className="mt-2 font-mono text-[11px] leading-relaxed text-muted-foreground">
+                      chainId 5042 · createRoot(bytes32,uint256,bytes32) · value 0 · 0x05545F026b75f03aE9Cf1eA8a8373473c94ed323
+                    </p>
+                  </details>
+                </div>
               ) : null}
               <Button
                 type="submit"
