@@ -37,7 +37,7 @@ import { rootUnlocked, signRootDigest, unlockBackup } from "@/data/pq-vault";
 import { initials, relFuture, usd } from "@/data/formatters";
 import { loadSnapshot, prepareOpen, requestServicePrice, submitPrepared, type PreparedAction } from "@/data/production";
 import { servicePayee } from "@/data/x402-pay";
-import { createAgentKey, recallAgentKey } from "@/data/spend";
+import { browserHoldsAgentKey, createAgentKey } from "@/data/spend";
 import type { Recipient, Tab } from "@/data/types";
 import { useAgents, useDashboardUi, usePqtabsData, useRecipients, useTotals } from "@/lib/store";
 
@@ -130,7 +130,6 @@ function CreateFlow() {
   const setCreateOpen = useDashboardUi((s) => s.setCreateOpen);
   const setView = useDashboardUi((s) => s.setView);
   const agents = useAgents();
-  const labels = usePqtabsData((state) => state.agentLabels);
   const vaultEpoch = usePqtabsData((state) => state.agentVaultEpoch);
   const recipients = useRecipients();
   const totals = useTotals();
@@ -173,18 +172,15 @@ function CreateFlow() {
   const perCallSliderRef = useRef<HTMLDivElement | null>(null);
 
   // ----- derived --------------------------------------------------------------
-  const eligibleAgents = useMemo(
-    () =>
-      agents.filter((agent) => {
-        if (agent.status === "revoked") return false;
-        const namedHere = Boolean(labels[agent.id.toLowerCase()]);
-        if (namedHere && vaultEpoch >= 0 && !recallAgentKey(agent.id)) return false;
-        return true;
-      }),
-    [agents, labels, vaultEpoch],
-  );
+  const eligibleAgents = useMemo(() => {
+    void vaultEpoch;
+    return agents.filter(
+      (agent) => agent.status !== "revoked" && browserHoldsAgentKey(agent.id),
+    );
+  }, [agents, vaultEpoch]);
   const directory = useMemo(() => [...recipients, ...extraRecipients], [recipients, extraRecipients]);
-  const typedAgent = isAddress(agentDraft) ? agentDraft : null;
+  const typedAgent = isAddress(agentDraft) && browserHoldsAgentKey(agentDraft) ? agentDraft : null;
+  const pastedWithoutKey = isAddress(agentDraft) && !browserHoldsAgentKey(agentDraft);
   const selectedAgent = typedAgent
     ? {
         id: typedAgent,
@@ -580,6 +576,11 @@ function CreateFlow() {
                     className="mt-2 border-white/10 bg-transparent font-mono text-xs"
                   />
                   {agentNote && <p className="mt-2 text-xs text-danger">{agentNote}</p>}
+                  {pastedWithoutKey && (
+                    <p className="mt-2 text-xs text-danger">
+                      This browser does not hold that agent&apos;s encrypted key. Create one here, or restore its backup, before opening a capability.
+                    </p>
+                  )}
                 </details>
               </div>
               {eligibleAgents.map((a, idx) => {

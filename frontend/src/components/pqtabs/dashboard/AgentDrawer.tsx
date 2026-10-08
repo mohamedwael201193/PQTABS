@@ -80,9 +80,8 @@ function AgentDrawerBody({ agent }: { agent: Agent }) {
   const openDrawer = useDashboardUi((s) => s.openDrawer);
   const setCreateOpen = useDashboardUi((s) => s.setCreateOpen);
 
-  const labels = usePqtabsData((state) => state.agentLabels);
   const vaultEpoch = usePqtabsData((state) => state.agentVaultEpoch);
-  const keyGone = Boolean(labels[agent.id.toLowerCase()]) && vaultEpoch >= 0 && !recallAgentKey(agent.id);
+  const keyGone = vaultEpoch >= 0 && !recallAgentKey(agent.id);
   const activeTabs = tabs.filter(
     (t) => t.agentId.toLowerCase() === agent.id.toLowerCase() && t.status === "active",
   );

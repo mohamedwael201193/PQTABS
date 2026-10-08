@@ -17,7 +17,6 @@ export default function AgentsView() {
   const portfolioReady = usePqtabsData((state) => state.portfolioReady);
   const portfolioError = usePqtabsData((state) => state.portfolioError);
   const agents = useAgents();
-  const labels = usePqtabsData((state) => state.agentLabels);
   const vaultEpoch = usePqtabsData((state) => state.agentVaultEpoch);
   const tabs = useTabs();
   const openDrawer = useDashboardUi((s) => s.openDrawer);
@@ -96,7 +95,7 @@ export default function AgentsView() {
             );
             const authorized = activeTabs.reduce((s, t) => s + t.capUsd, 0);
             const canSign = vaultEpoch >= 0 && Boolean(recallAgentKey(agent.id));
-            const keyGone = Boolean(labels[agent.id.toLowerCase()]) && !canSign;
+            const keyGone = vaultEpoch >= 0 && !canSign;
             return (
               <li key={agent.id}>
                 <button

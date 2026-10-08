@@ -1,11 +1,18 @@
 import { encodeAbiParameters, getAddress, hexToBytes, keccak256, toHex, type Hex } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { loadAgentKeys, openAgentBackup, saveAgentKey, sealAgentBackup } from "./agent-vault";
+import {
+  clearRememberedKeys,
+  nextVaultTicket,
+  recallAgentKey,
+  rememberAgentKey,
+  rememberFromPrivateKey,
+  vaultTicketCurrent,
+} from "./agent-session";
+
+export { browserHoldsAgentKey, forgetAgentKeys, recallAgentKey, rememberAgentKey } from "./agent-session";
 
 export const USDC = "0x3600000000000000000000000000000000000000" as const;
-
-const agentKeys = new Map<string, Hex>();
-let vaultGeneration = 0;
 
 function registrarNow(): string {
   if (typeof window === "undefined") return "";
@@ -13,21 +20,8 @@ function registrarNow(): string {
   return stored && stored.startsWith("0x") && stored.length === 42 ? stored : "";
 }
 
-export function rememberAgentKey(address: string, privateKey: Hex): void {
-  agentKeys.set(getAddress(address).toLowerCase(), privateKey);
-}
-
-export function recallAgentKey(address: string): Hex | null {
-  return agentKeys.get(address.toLowerCase()) ?? null;
-}
-
-export function forgetAgentKeys(): void {
-  vaultGeneration += 1;
-  agentKeys.clear();
-}
-
 export async function createAgentKey(): Promise<{ address: Hex }> {
-  vaultGeneration += 1;
+  nextVaultTicket();
   const privateKey = generatePrivateKey();
   const address = privateKeyToAccount(privateKey).address;
   const registrar = registrarNow();
@@ -37,11 +31,11 @@ export async function createAgentKey(): Promise<{ address: Hex }> {
 }
 
 export async function restoreAgentKeys(registrar: string): Promise<void> {
-  const ticket = ++vaultGeneration;
+  const ticket = nextVaultTicket();
   const keys = await loadAgentKeys(registrar);
-  if (ticket !== vaultGeneration) return;
-  agentKeys.clear();
-  for (const privateKey of keys) rememberAgentKey(privateKeyToAccount(privateKey).address, privateKey);
+  if (!vaultTicketCurrent(ticket)) return;
+  clearRememberedKeys();
+  for (const privateKey of keys) rememberFromPrivateKey(privateKey);
 }
 
 export async function downloadAgentBackup(address: string, passphrase: string): Promise<void> {
