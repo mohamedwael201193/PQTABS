@@ -117,7 +117,7 @@ function ConnectGate({ onExit }: { onExit: () => void }) {
         <EmptyState
           icon={<Wallet className="h-5 w-5" strokeWidth={1.75} />}
           title="Connect wallet"
-          body="Your wallet identifies you. Connecting does not move USDC. The backup download comes next, and the treasury transaction comes only after you save that file."
+          body="Your wallet identifies you. Connecting does not move USDC. The backup download comes next, and the root transaction comes only after you save that file."
           action={
             <div className="flex flex-col items-center gap-3">
               <Button onClick={connect} disabled={busy} className="bg-gold text-[#171204] hover:bg-[#eec95e]">
@@ -196,7 +196,7 @@ export default function DashboardApp({ onExit }: { onExit: () => void }) {
         <EmptyState
           icon={<Wallet className="h-5 w-5" strokeWidth={1.75} />}
           title="Wrong network"
-          body={`Wallet ${registrar.slice(0, 6)}…${registrar.slice(-4)} is connected. PQTABS settles on Arc mainnet. Switch before the treasury can load.`}
+          body={`Wallet ${registrar.slice(0, 6)}…${registrar.slice(-4)} is connected. PQTABS settles on Arc mainnet. Switch before this wallet's root can load.`}
           action={
             <div className="flex flex-col items-center gap-3">
               <Button

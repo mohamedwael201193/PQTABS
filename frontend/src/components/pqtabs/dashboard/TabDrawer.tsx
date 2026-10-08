@@ -133,7 +133,7 @@ export default function TabDrawer() {
       if (row.needsSweep || row.balanceUsd > 0) {
         toast.message("The capability is closed. USDC is still on it until Return funds succeeds.");
       } else {
-        toast.success("Close confirmed on Arc. The remaining USDC is back in the treasury.");
+        toast.success("Close confirmed on Arc. The remaining USDC is back in root cash.");
       }
       closeDrawer();
     } catch (error) {

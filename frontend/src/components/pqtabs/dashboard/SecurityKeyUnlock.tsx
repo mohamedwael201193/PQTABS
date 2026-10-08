@@ -108,7 +108,7 @@ export function SecurityKeyUnlock({ onReady }: { onReady: (ready: boolean) => vo
           <input
             id="security-key-backup"
             type="file"
-            aria-label="Use another backup file"
+            aria-label={local ? "Use another backup file" : "Choose backup file"}
             className="mt-1 block w-full text-xs text-muted-foreground"
             onChange={(event) => {
               const file = event.target.files?.[0];

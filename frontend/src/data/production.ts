@@ -393,7 +393,7 @@ function activitySummary(event: PortfolioEvent, root: string): string {
   }
   if (event.kind === "closed") return `Closed a capability and released its ${amount} USDC limit.`;
   if (event.kind === "spend" && event.to?.toLowerCase() === root.toLowerCase()) {
-    return `The capability returned ${amount} USDC to the treasury.`;
+    return `The capability returned ${amount} USDC to root cash.`;
   }
   if (event.kind === "spend") return `Agent paid ${amount} USDC to ${event.to ? short(event.to) : "a recipient"}.`;
   if (event.kind === "rotated") return "Root verifying key rotated. Older signatures no longer verify.";
@@ -412,7 +412,7 @@ export function describeReturn(
     return {
       settled: true,
       leftover: false,
-      message: priorBalanceUsd > 0 ? `${usd(priorBalanceUsd)} returned to the treasury` : "The capability no longer holds USDC.",
+      message: priorBalanceUsd > 0 ? `${usd(priorBalanceUsd)} returned to root cash` : "The capability no longer holds USDC.",
     };
   }
   if (!row || row.status !== "closed") {
@@ -424,7 +424,7 @@ export function describeReturn(
   return {
     settled: true,
     leftover: false,
-    message: priorBalanceUsd > 0 ? `${usd(priorBalanceUsd)} returned to the treasury` : "The exposure limit was released.",
+    message: priorBalanceUsd > 0 ? `${usd(priorBalanceUsd)} returned to root cash` : "The exposure limit was released.",
   };
 }
 

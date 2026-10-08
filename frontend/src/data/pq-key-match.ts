@@ -10,5 +10,5 @@ export function backupMatchesRoot(unlockedVk: string | null | undefined, rootVk:
 
 export function backupRefusal(verdict: Exclude<BackupVerdict, "match">): string {
   if (verdict === "mismatch") return "This backup belongs to an older security key.";
-  return "The treasury verifying key could not be read. Nothing was signed.";
+  return "The root verifying key could not be read. Nothing was signed.";
 }

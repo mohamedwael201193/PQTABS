@@ -146,7 +146,7 @@ export function useAccountData(): {
       })
       .catch((reason: unknown) => {
         if (cancelled) return;
-        const message = reason instanceof Error ? reason.message : "Couldn't load your treasury.";
+        const message = reason instanceof Error ? reason.message : "Couldn't load this wallet's root.";
         if (treasuryShown) setPortfolioError(message);
         if (!treasuryShown) setSnapshot(null);
         setSettled({ key, error: message });
