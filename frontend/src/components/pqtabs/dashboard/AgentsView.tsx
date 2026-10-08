@@ -24,6 +24,13 @@ export default function AgentsView() {
   const [name, setName] = useState("");
   const [purpose, setPurpose] = useState("");
   const [keyError, setKeyError] = useState("");
+  const heldHere = vaultEpoch < 0 ? null : agents.filter((agent) => recallAgentKey(agent.id)).length;
+  const keyLine =
+    heldHere == null
+      ? "Checking which signing keys this browser holds."
+      : heldHere === 0
+        ? "No agent on this page can pay from this browser. Create one here, or restore an encrypted backup. A key stored here can sign after a reload. Another device needs that backup."
+        : `This browser holds the encrypted signing key for ${heldHere} ${heldHere === 1 ? "agent" : "agents"}. That key can sign after a reload. Another device needs an encrypted backup.`;
 
   function createAgent() {
     const label = name.trim();
@@ -58,7 +65,7 @@ export default function AgentsView() {
             Agents
           </h1>
           <p className="mt-1.5 max-w-xl text-sm text-muted-foreground">
-            Who can act, and under which capabilities. The signing key stays encrypted in this browser. It can pay after a reload. Another device needs an encrypted backup.
+            Who can act, and under which capabilities. {keyLine}
           </p>
         </div>
         <Button onClick={createAgent} disabled={!name.trim()} className="bg-gold text-[#171204] hover:bg-[#eec95e]">
@@ -101,7 +108,13 @@ export default function AgentsView() {
                 <button
                   type="button"
                   onClick={() => openDrawer({ type: "agent", id: agent.id })}
-                  aria-label={`Open ${agent.name} details`}
+                  aria-label={
+                    keyGone
+                      ? `Open ${agent.name} details. This browser does not hold the encrypted key.`
+                      : canSign
+                        ? `Open ${agent.name} details. This browser holds the encrypted key.`
+                        : `Open ${agent.name} details.`
+                  }
                   className="focus-ring group flex w-full flex-wrap items-center gap-x-4 gap-y-2.5 rounded-xl border border-white/[.07] bg-[#0e1013] p-4 text-left transition-all duration-200 hover:border-gold/20 hover:bg-[#101318] md:flex-nowrap"
                 >
                   {/* Identity */}
