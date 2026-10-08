@@ -85,6 +85,18 @@ export function paymentDeadline(nowSeconds: number, expiryUnix: number, maxTimeo
   return deadline;
 }
 
+/** A paid chat result is the assistant text. A 402 body, an error, or an empty completion is not a result. */
+export function serviceAnswer(status: number, payload: unknown): string {
+  if (status !== 200) return "";
+  const body = record(payload);
+  if (!body || body.error || body.accepts) return "";
+  if (!Array.isArray(body.choices) || body.choices.length === 0) return "";
+  const choice = record(body.choices[0]);
+  const message = choice ? record(choice.message) : null;
+  const content = message && typeof message.content === "string" ? message.content.trim() : "";
+  return content;
+}
+
 export function transactionFromPaymentResponse(header: string | null): string {
   if (!header) return "";
   try {

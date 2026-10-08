@@ -459,12 +459,16 @@ function TabDrawerBody({
                     nonce: signed.nonce,
                   }, signed.blob);
                 })
-                .then(({ transaction }) => {
+                .then(({ transaction, result }) => {
                   if (usePqtabsData.getState().registrar.toLowerCase() !== registrar.toLowerCase()) {
                     toast.message("The wallet changed. The receipt belongs to the previous wallet.");
                     return;
                   }
-                  toast.success(`Arc included ${transaction.slice(0, 10)}…`);
+                  if (!result) {
+                    toast.error(`Arc included ${transaction.slice(0, 10)}… The service result was not usable. No further payment was sent.`);
+                    return;
+                  }
+                  toast.success(result);
                 })
                 .catch((error: unknown) => {
                   toast.error(error instanceof Error ? error.message : "The payment was rejected.");

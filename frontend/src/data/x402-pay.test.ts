@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { arcExactAccept, paymentDeadline, paymentSignatureHeader, receiptSettlesSpend, serviceTimeoutSeconds, transactionFromPaymentResponse } from "./x402-pay.ts";
+import { arcExactAccept, paymentDeadline, paymentSignatureHeader, receiptSettlesSpend, serviceAnswer, serviceTimeoutSeconds, transactionFromPaymentResponse } from "./x402-pay.ts";
 
 const quoted = {
   x402Version: 2,
@@ -71,4 +71,8 @@ test("the payment header names the Arc accept and the EIP-3009 method", () => {
   assert.equal(paymentDeadline(1_000, 1_030, 60), 1_030);
   assert.throws(() => paymentDeadline(1_000, 1_005, 60), /expires too soon/);
   assert.throws(() => paymentDeadline(1_000, 9_000, 0), /usable payment window/);
+  assert.equal(serviceAnswer(402, quoted), "");
+  assert.equal(serviceAnswer(200, { error: "payment required", accepts: [] }), "");
+  assert.equal(serviceAnswer(200, { choices: [{ message: { content: "pong" } }] }), "pong");
+  assert.equal(serviceAnswer(200, { choices: [{ message: { content: "  " } }] }), "");
 });
