@@ -585,7 +585,12 @@ export async function requestServicePrice(task: string): Promise<unknown> {
 }
 
 /** Retry the priced request. The service's facilitator broadcasts. This client does not. */
-export async function settleService(task: string, paymentRequired: unknown, authorization: SpendAuthorization, signature: string): Promise<{ transaction: string; result: string }> {
+export async function settleService(
+  task: string,
+  paymentRequired: unknown,
+  authorization: SpendAuthorization,
+  signature: string,
+): Promise<{ transaction: string; result: string; receipt: { status: string; blockNumber: string } }> {
   const header = paymentSignatureHeader(paymentRequired, authorization, signature);
   const response = await fetch(SERVICE_URL, {
     method: "POST",
@@ -605,32 +610,59 @@ export async function settleService(task: string, paymentRequired: unknown, auth
     throw new Error("Arc did not include this payment. No receipt was recorded.");
   }
   const payload = await response.json().catch(() => null);
-  return { transaction, result: serviceAnswer(response.status, payload) };
+  return {
+    transaction,
+    result: serviceAnswer(response.status, payload),
+    receipt: { status: receipt.status, blockNumber: receipt.blockNumber.toString() },
+  };
 }
 
-export async function decideServicePrice(tab: string, paymentRequired: unknown): Promise<{
+export type ServiceDecision = {
   decision: string;
   reason: string[];
   price: string;
   payee: string;
-}> {
+  resource: string;
+  asset: string;
+  network: string;
+  agent: string;
+  capability: string;
+  remaining_capability_balance: string;
+  maxPerCall: string;
+  root_exposure: string;
+  maxOpenExposure: string;
+  expiry: string;
+};
+
+export async function decideServicePrice(tab: string, paymentRequired: unknown): Promise<ServiceDecision> {
   const response = await fetch(`${BACKEND_URL}/v1/x402/decide`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ tab, paymentRequired }),
   });
-  const payload = (await response.json().catch(() => null)) as {
-    decision?: string;
-    reason?: string[];
-    price?: string;
-    payee?: string;
+  const payload = (await response.json().catch(() => null)) as (Partial<ServiceDecision> & {
     error?: string;
     detail?: string;
-  } | null;
+  }) | null;
   if (!response.ok || !payload?.decision || !payload.price || !payload.payee) {
     throw new Error(readableError(payload?.detail || payload?.error, "The price could not be checked. Nothing was signed."));
   }
-  return { decision: payload.decision, reason: payload.reason ?? [], price: payload.price, payee: payload.payee };
+  return {
+    decision: payload.decision,
+    reason: payload.reason ?? [],
+    price: payload.price,
+    payee: payload.payee,
+    resource: payload.resource ?? "",
+    asset: payload.asset ?? "",
+    network: payload.network ?? "",
+    agent: payload.agent ?? "",
+    capability: payload.capability ?? tab,
+    remaining_capability_balance: payload.remaining_capability_balance ?? "",
+    maxPerCall: payload.maxPerCall ?? "",
+    root_exposure: payload.root_exposure ?? "",
+    maxOpenExposure: payload.maxOpenExposure ?? "",
+    expiry: payload.expiry ?? "",
+  };
 }
 
 const PQ_REQUIRED =

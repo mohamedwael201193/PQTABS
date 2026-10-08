@@ -26,7 +26,9 @@ import {
 import { StatusChip } from "@/components/pqtabs/shared";
 import { relFuture, usd } from "@/data/formatters";
 import { isAddress } from "@/data/actions";
-import { describeReturn, decideServicePrice, loadSnapshot, prepareClose, productionProvider, requestServicePrice, settleService, submitPrepared, type PreparedAction } from "@/data/production";
+import { decisionRecord, settledDecision, type DecisionFacts, type QuotedDecision } from "@/data/decision-record";
+import { saveDecision } from "@/data/decision-store";
+import { describeReturn, decideServicePrice, loadSnapshot, prepareClose, productionProvider, requestServicePrice, SERVICE_URL, settleService, submitPrepared, type PreparedAction, type ServiceDecision } from "@/data/production";
 import { authorizationBlob, recallAgentKey } from "@/data/spend";
 import { paymentDeadline, serviceTimeoutSeconds } from "@/data/x402-pay";
 import { rootUnlocked, signRootDigest, unlockBackup } from "@/data/pq-vault";
@@ -37,6 +39,33 @@ import { ActivityRow } from "./shared/ActivityRow";
 
 const SHEET_CLASS =
   "w-full gap-0 border-l border-white/[.08] bg-[#0a0b0d] p-0 sm:w-[480px] sm:max-w-[480px]";
+
+function quotedDecision(value: string): QuotedDecision {
+  if (value === "ALLOW" || value === "REFUSE" || value === "NO_PAYMENT") return value;
+  return "REFUSE";
+}
+
+function decisionFacts(task: string, registrar: string, decision: ServiceDecision): DecisionFacts {
+  return {
+    task,
+    service: SERVICE_URL,
+    resource: decision.resource,
+    price: decision.price,
+    asset: decision.asset,
+    network: decision.network,
+    payee: decision.payee,
+    agent: decision.agent,
+    capability: decision.capability,
+    remaining_capability_balance: decision.remaining_capability_balance,
+    maxPerCall: decision.maxPerCall,
+    root_exposure: decision.root_exposure,
+    maxOpenExposure: decision.maxOpenExposure,
+    expiry: decision.expiry,
+    decision: quotedDecision(decision.decision),
+    reason: decision.reason,
+    registrar,
+  };
+}
 
 /**
  * TabDrawer — the full anatomy of one capability: holder, balance against
@@ -429,11 +458,16 @@ function TabDrawerBody({
               }
               payLock.current = true;
               setPaying(true);
-              void requestServicePrice(task.trim())
+              const asked = task.trim();
+              let facts: DecisionFacts | null = null;
+              void requestServicePrice(asked)
                 .then((paymentRequired) => decideServicePrice(tab.id, paymentRequired).then((decision) => ({ paymentRequired, decision })))
                 .then(({ paymentRequired, decision }) => {
+                  facts = decisionFacts(asked, registrar, decision);
                   if (decision.decision !== "ALLOW") {
-                    throw new Error(`The capability refused this price. Nothing was signed. ${decision.reason.join(", ")}`);
+                    return saveDecision(decisionRecord(facts, new Date().toISOString())).then(() => {
+                      throw new Error(`The capability refused this price. Nothing was signed. ${decision.reason.join(", ")}`);
+                    });
                   }
                   if (!isAddress(decision.payee)) {
                     throw new Error("The service price had no recipient. Nothing was signed.");
@@ -450,7 +484,7 @@ function TabDrawerBody({
                   if (usePqtabsData.getState().registrar.toLowerCase() !== registrar.toLowerCase()) {
                     throw new Error("The wallet changed. The payment was not submitted.");
                   }
-                  return settleService(task.trim(), paymentRequired, {
+                  return settleService(asked, paymentRequired, {
                     from: tab.id,
                     to: decision.payee,
                     value: decision.price,
@@ -459,7 +493,14 @@ function TabDrawerBody({
                     nonce: signed.nonce,
                   }, signed.blob);
                 })
-                .then(({ transaction, result }) => {
+                .then(async ({ transaction, result, receipt }) => {
+                  if (facts) {
+                    try {
+                      await saveDecision(settledDecision(facts, { txHash: transaction, receipt, result }, new Date().toISOString()));
+                    } catch {
+                      toast.message("The receipt was not saved on this device.");
+                    }
+                  }
                   if (usePqtabsData.getState().registrar.toLowerCase() !== registrar.toLowerCase()) {
                     toast.message("The wallet changed. The receipt belongs to the previous wallet.");
                     return;
@@ -470,7 +511,14 @@ function TabDrawerBody({
                   }
                   toast.success(result);
                 })
-                .catch((error: unknown) => {
+                .catch(async (error: unknown) => {
+                  if (facts?.decision === "ALLOW") {
+                    try {
+                      await saveDecision(decisionRecord(facts, new Date().toISOString()));
+                    } catch {
+                      toast.message("The decision was not saved on this device.");
+                    }
+                  }
                   toast.error(error instanceof Error ? error.message : "The payment was rejected.");
                 })
                 .finally(() => {

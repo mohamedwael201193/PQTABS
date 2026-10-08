@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -20,6 +20,8 @@ import type {
   Recipient,
   Tab,
 } from "@/data/types";
+import { loadDecisions } from "@/data/decision-store";
+import type { DecisionRecord } from "@/data/decision-record";
 import { useActivity, useAgents, usePqtabsData, useRecipients, useTabs } from "@/lib/store";
 import { useAccountData } from "@/hooks/use-account-data";
 import { EmptyState, StatusChip } from "@/components/pqtabs/shared";
@@ -169,6 +171,22 @@ export default function ActivityView() {
   const portfolioReady = usePqtabsData((state) => state.portfolioReady);
   const portfolioError = usePqtabsData((state) => state.portfolioError);
   const indexNote = usePqtabsData((state) => state.indexNote);
+  const registrar = usePqtabsData((state) => state.registrar);
+  const [decisions, setDecisions] = useState<DecisionRecord[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadDecisions(registrar)
+      .then((rows) => {
+        if (!cancelled) setDecisions(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setDecisions([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [registrar]);
 
   const activeCount =
     (agentFilter !== "all" ? 1 : 0) +
@@ -412,6 +430,28 @@ export default function ActivityView() {
           })
         )}
       </div>
+
+      <section aria-label="Decisions on this device" className="mt-6 border-t border-white/[.06] pt-4">
+        <h2 className={MICRO}>Decisions on this device</h2>
+        <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+          These notes stay in this browser for this wallet. A transaction here is a payment only when that same hash is in the Arc list above.
+        </p>
+        {decisions.length === 0 ? (
+          <p className="mt-3 text-sm text-muted-foreground">No payment decision has been saved on this device.</p>
+        ) : (
+          <ul className="mt-3 space-y-3">
+            {decisions.map((record) => (
+              <li key={record.at} className="rounded-lg border border-white/[.06] px-3 py-2">
+                <p className="text-sm text-foreground">
+                  {record.decision} · {record.price || "no price"} · {record.payee || "no payee"}
+                </p>
+                <p className="mt-1 font-mono text-[10px] text-muted-foreground">{record.reason.join(", ") || "no reason"}</p>
+                {record.txHash ? <p className="mt-1 font-mono text-[10px] text-muted-foreground">{record.txHash}</p> : null}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </div>
   );
 }
