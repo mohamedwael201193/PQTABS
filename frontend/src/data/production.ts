@@ -574,7 +574,7 @@ function serviceBody(task: string) {
   return {
     model: "llama-3.3-70b-instruct",
     messages: [{ role: "user", content: task }],
-    max_tokens: 16,
+    max_tokens: 64,
   };
 }
 

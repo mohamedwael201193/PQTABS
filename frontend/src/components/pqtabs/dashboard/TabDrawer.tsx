@@ -28,7 +28,7 @@ import { relFuture, usd } from "@/data/formatters";
 import { isAddress } from "@/data/actions";
 import { decisionRecord, paymentReasonSentence, settledDecision, type DecisionFacts, type DecisionRecord, type QuotedDecision } from "@/data/decision-record";
 import { saveDecision } from "@/data/decision-store";
-import { arcClock, BACKEND_URL, describeReturn, decideServicePrice, loadSnapshot, prepareClose, productionProvider, requestServicePrice, SERVICE_URL, settleService, submitPrepared, type PreparedAction, type ServiceDecision } from "@/data/production";
+import { arcClock, BACKEND_URL, describeReturn, decideServicePrice, loadSnapshot, prepareClose, productionProvider, requestServicePrice, settleService, submitPrepared, type PreparedAction, type ServiceDecision } from "@/data/production";
 import { probeAmount, probePayment, probeRefusal, replayRefusal, spentAuthorization, UNAVAILABLE_SERVICE_URL, unavailableServiceRefusal, type ProbeName } from "@/data/refusal-probe";
 import { agentAddress, authorizationBlob, recallAgentKey, USDC } from "@/data/spend";
 import { arcClient } from "@/data/wallet";
@@ -54,7 +54,7 @@ function quotedDecision(value: string): QuotedDecision {
 function decisionFacts(task: string, registrar: string, decision: ServiceDecision): DecisionFacts {
   return {
     task,
-    service: SERVICE_URL,
+    service: "ArcRouter / paid inference",
     resource: decision.resource,
     price: decision.price,
     asset: decision.asset,

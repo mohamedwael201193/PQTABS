@@ -22,6 +22,7 @@ export function PaymentDecision({ record }: { record: DecisionRecord }) {
   const rows: Array<[string, string]> = [
     ["Task", record.task || "—"],
     ["Service", record.service || "—"],
+    ["Resource", record.resource || "—"],
     ["Agent", short(record.agent)],
     ["Capability", short(record.capability)],
     ["Network", record.network || "—"],
