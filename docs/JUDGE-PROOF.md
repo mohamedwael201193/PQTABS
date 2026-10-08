@@ -25,10 +25,11 @@ Arc mainnet is chain id 5042. The SLH-DSA-SHA2-128s precompile is `0x18000000000
 - Root `0x846f56a8547Fe5cC3120c189c5640e84DAAB65Cf`
 - The open, payment, and close receipts named in `docs/USER-FLOW.md`
 - Local tests: `forge test` in the repo root, `cargo test` in `signer/`, `npm test` in `backend/`, `npm run test:agent-vault` in `frontend/`
+- `forge test --match-contract ExposureInvariantTest` on 2026-10-08: `invariant_open_exposure_equals_sum_of_open_caps` passed, 64 runs, 2048 calls, 0 reverts. The harness etches `MockPQ` at the precompile address. This is the accounting invariant in that harness, not a mainnet trace.
 
 ## What is not proven yet
 
-- Warm portfolio latency under 500ms. The two production samples were 0.62s and 0.96s. One later sample was 0.52s with `app;dur=193`. That is not a percentile.
+- A portfolio P95 under 500ms. The 2026-10-08 series in `docs/PERFORMANCE.md` has portfolio P50 354ms and P95 3160ms on 11 requests. One later handler time was `app;dur=413`.
 - An agent payment after a browser refresh on the production origin.
 - A new wallet creating a root, funding it, opening a capability, paying, and closing, in this audit.
 - A second account inside the current Chrome wallet. The selected account `0xBDfC…0034` has no root. The page still says "Protect your treasury". The wallet could not be switched from this session.

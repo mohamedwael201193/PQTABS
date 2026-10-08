@@ -1,17 +1,20 @@
 # Performance
 
-Measured against production after the portfolio read stopped calling Arc. Two samples are not a percentile.
+Measured from this machine against `https://pqtabs.onrender.com` on 2026-10-08, while Render `dep-db3evfeq1p3s73f5nmag` of `0e1efca` was already awake. The rank is `round(percentile / 100 * (n - 1))` on the sorted client times. These times include the path to Frankfurt. `/v1/index` and the registrar route do not set `Server-Timing`.
 
-| Read | When | Result |
-|---|---|---|
-| `GET /v1/index` | Render `dep-db39mggg6u5c73cifnm0`, commit `fbbd232` | HTTP 200 in 0.36s. Cursor 24779278. Head 24779282. Lag 4. |
-| Portfolio, first sample | same deploy, root A | HTTP 200 in 0.62s. `freshness: recent`. 5 capabilities, 0 open, 23 activity rows. Balances and per-payment limits were already stored. |
-| Portfolio, second sample | same deploy, immediately after | HTTP 200 in 0.96s. `freshness: live`. Same 5 capabilities. |
-| Portfolio, after one round trip | Render `dep-db3a8vk9v7es73ckrpi0`, commit `b36c2d0` | HTTP 200 in 0.52s. `Server-Timing: app;dur=193`. `freshness: recent`. 5 capabilities, 23 activity rows. |
+| Read | n | HTTP | P50 | P95 | P99 | Min | Max |
+|---|---|---|---|---|---|---|---|
+| `GET /v1/index` | 21 | 200 | 306ms | 414ms | 475ms | 242ms | 475ms |
+| `GET /v1/registrars/0xBDfC…0034/roots` | 21 | 200 | 276ms | 347ms | 408ms | 258ms | 408ms |
+| `GET /v1/roots/0x846f…65Cf/portfolio` | 11 | 200 | 354ms | 3160ms | 3160ms | 282ms | 3160ms |
 
-The 0.52s sample is one request, not a percentile. The handler finished in 193ms. The rest is the path from this machine to Frankfurt. The warm target under 500ms is still not shown by a series. The typical target under 1s includes this sample.
+The portfolio P95 and P99 are the same request because this sample has 11 rows and that request was the slowest. The other portfolio times in the summary sit at or below the 354ms median. `Server-Timing` was not captured on those 11. One later portfolio read was HTTP 200 in 734ms with `Server-Timing: app;dur=413`. An earlier single portfolio read, on `dep-db3a8vk9v7es73ckrpi0`, was 0.52s with `app;dur=193`. Handler time is not stable at 193ms.
 
-Earlier reads on the previous deploys: 2.15s then 0.39s while live Arc calls were paused (`ab2ece0`), 1.64s stored (`9cc4040`), 3.46s HTTP 429 (`18984cc`), and a 25s timeout when the request waited on the backfill (`9eb8dbf`). Those paths are not what the current deploy serves. No P50 or P95 series exists yet.
+The first registrar request after the index series returned HTTP 503. Its body was not saved, so the cause is not identified. The 21 registrar times above are the requests that followed.
+
+A cache-bypass reload of `https://pqtabs.vercel.app` in the user's Chrome, wallet `0xBDfC…0034`, recorded one `GET /v1/config` at 3692ms and one registrar read at 1698ms. Both were HTTP 200. The page did not call the portfolio route, did not call Arc RPC, and did not receive 429. The loaded script `1-1w82nt3ognk.js` contains "No further payment was sent".
+
+Earlier single samples, before this series: index 0.36s on `fbbd232`; portfolio 0.62s and 0.96s on that deploy; then 2.15s and 0.39s while live Arc calls were paused (`ab2ece0`), 1.64s stored (`9cc4040`), 3.46s HTTP 429 (`18984cc`), and a 25s timeout when the request waited on the backfill (`9eb8dbf`). Those paths are not what the current portfolio route does.
 
 What a normal portfolio request does now:
 
