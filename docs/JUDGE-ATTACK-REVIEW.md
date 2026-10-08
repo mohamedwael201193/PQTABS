@@ -18,7 +18,7 @@ Arc is required because the verifier is the precompile at `0x1800…0004`. Found
 
 ## Product review
 
-A user who wants an agent to pay for things without handing it the whole balance gets a tab with a cap, a payee list, a per-call maximum, and an expiry. After expiry, anyone can call `reclaim` and the unspent USDC returns to that user's root. The mainnet numbers were 100,000 funded, 10,000 spent, 90,000 returned, on two roots at once.
+A user who wants an agent to pay for things without handing it the whole balance gets a tab with a cap, a payee list, a per-call maximum, and an expiry. After expiry, anyone can call `reclaim` and the unspent USDC returns to that user's root. The mainnet numbers were 100,000 funded, 10,000 spent, 90,000 returned, on two roots at once. The cap is what the root pulls in at open. Barkeep `Tab.sol` at `60f4b608` then treats the tab's USDC balance as the spending limit, so a later transfer into an open tab can be spent by that agent, still only to an allowlisted payee and still at most `maxPerCall` per authorization. That does not move the root. No such transfer was sent.
 
 The user signs root actions locally. The backend at `docs/API.md` reads chain state and relays a signed payload. It cannot raise the cap. Raising exposure is action kind 5, and `test_set_exposure_cannot_undercut_open_caps` shows the ceiling cannot move below open caps. The same signature path is required to raise it.
 
