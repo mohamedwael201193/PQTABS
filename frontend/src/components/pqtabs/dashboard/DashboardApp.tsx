@@ -18,8 +18,9 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { EmptyState, Logo } from "@/components/pqtabs/shared";
-import { switchRegistrar, useAccountData } from "@/hooks/use-account-data";
+import { switchRegistrar, useAccountData, useWalletUsdc } from "@/hooks/use-account-data";
 import { connectWallet, existingAccount, switchToArc, walletClient } from "@/data/wallet";
+import { resumeWalletSession, pauseWalletSession } from "@/data/wallet-session";
 import { initials, usd } from "@/data/formatters";
 import { useDashboardUi, usePqtabsData, useTotals, type DashboardView } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -96,6 +97,7 @@ function ConnectGate({ onExit }: { onExit: () => void }) {
     setBusy(true);
     setMessage(null);
     try {
+      resumeWalletSession();
       const session = await connectWallet();
       if (session.chainId !== 5042) await switchToArc();
       window.localStorage.removeItem("pqtabs.root");
@@ -278,6 +280,7 @@ function Sidebar({ onExit, loading }: { onExit: () => void; loading: boolean }) 
   const accountReady = usePqtabsData((s) => s.accountReady);
   const totals = useTotals();
   const account = usePqtabsData((s) => s.snapshot.account);
+  const walletUsdc = useWalletUsdc(registrar);
 
   return (
     <aside
@@ -343,7 +346,13 @@ function Sidebar({ onExit, loading }: { onExit: () => void; loading: boolean }) 
         {/* Treasury mini-card */}
         <div className="rounded-lg border border-white/[.06] bg-white/[.02] px-3 py-2.5">
           <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground">
-            Root balance
+            Your wallet
+          </p>
+          <p className="mt-1 font-mono text-sm font-medium tabular text-foreground">
+            {walletUsdc == null ? "—" : usd(walletUsdc, { decimals: 6 })}
+          </p>
+          <p className="mt-2 font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground">
+            Treasury
           </p>
           {loading ? (
             <Skeleton className="mt-1.5 h-5 w-24" />
@@ -392,6 +401,28 @@ function Sidebar({ onExit, loading }: { onExit: () => void; loading: boolean }) 
           </Tooltip>
         </div>
 
+        <a
+          href={`https://explorer.arc.io/address/${registrar}`}
+          target="_blank"
+          rel="noreferrer"
+          className="block px-1 font-mono text-[10px] text-muted-foreground hover:text-foreground"
+        >
+          View on Arc Explorer
+        </a>
+        <button
+          type="button"
+          onClick={() => {
+            pauseWalletSession();
+            window.localStorage.removeItem("pqtabs.root");
+            window.localStorage.removeItem("pqtabs.registrar");
+            usePqtabsData.getState().setRegistrar("");
+            toast.message("Disconnected from PQTABS. To revoke this site's wallet permission completely, use your wallet's connected-sites settings.");
+            onExit();
+          }}
+          className="focus-ring flex w-full items-center gap-2 rounded-md px-1 py-1 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground transition-colors hover:text-foreground"
+        >
+          Disconnect
+        </button>
         <button
           type="button"
           onClick={onExit}

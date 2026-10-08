@@ -50,6 +50,10 @@ export function PqtabsRoot() {
       for (let attempt = 0; attempt < 8; attempt++) {
         if (cancelled || stayOnLanding.current) return;
         const ethereum = (window as Window & { ethereum?: unknown }).ethereum;
+        if (window.sessionStorage.getItem("pqtabs.paused") === "1") {
+          setPending(false);
+          return;
+        }
         if (ethereum) {
           const address = await permittedAccount().catch(() => null);
           if (cancelled || stayOnLanding.current) return;

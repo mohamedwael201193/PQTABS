@@ -9,6 +9,7 @@ import { parseUsdcRaw } from "@/data/actions";
 import { pct, usd } from "@/data/formatters";
 import { loadSnapshot } from "@/data/production";
 import { arcClient, fundRoot } from "@/data/wallet";
+import { useWalletUsdc } from "@/hooks/use-account-data";
 import { useActivity, useDashboardUi, usePqtabsData, useTabs, useTotals } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { ActivityRow } from "./shared/ActivityRow";
@@ -23,6 +24,7 @@ import { TabCard } from "./shared/TabCard";
 function FundNotice() {
   const root = usePqtabsData((s) => s.snapshot.account.rootAddress);
   const registrar = usePqtabsData((s) => s.registrar);
+  const walletUsdc = useWalletUsdc(registrar);
   const acceptPortfolio = usePqtabsData((s) => s.acceptPortfolio);
   const [amount, setAmount] = useState("0.01");
   const [busy, setBusy] = useState(false);
@@ -64,7 +66,8 @@ function FundNotice() {
   return (
     <section className="rounded-xl border border-white/[.08] bg-[#0e1013] p-5">
       <h2 className="font-display text-lg font-semibold">Your treasury is ready</h2>
-      <p className="mt-1 text-sm text-foreground">Balance: 0 USDC</p>
+      <p className="mt-1 text-sm text-foreground">Treasury: 0 USDC</p>
+      <p className="mt-1 text-sm text-foreground">Your wallet: {walletUsdc == null ? "—" : usd(walletUsdc, { decimals: 6 })}</p>
       <p className="mt-1 text-sm text-muted-foreground">Fund your treasury to give agents a spending budget.</p>
       <p className="mt-3 break-all font-mono text-[11px] text-muted-foreground">Deposit address {root}</p>
       <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -136,7 +139,7 @@ export default function OverviewView() {
       {/* Key figures */}
       <section aria-label="Treasury figures" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          label="Root balance"
+          label="Treasury"
           icon={<Landmark strokeWidth={1.75} />}
           accent="gold"
           value={treasuryKnown ? <CountUp value={totals.treasuryTotalUsd} format={usd} /> : "—"}

@@ -197,3 +197,13 @@ export async function fundRoot(root: Address, amountRaw: bigint): Promise<Hex> {
     chain: arc,
   });
 }
+
+/** The connected wallet's USDC. This is not the treasury balance. */
+export async function readWalletUsdc(account: Address): Promise<bigint> {
+  return arcClient().readContract({
+    address: USDC,
+    abi: usdcAbi,
+    functionName: "balanceOf",
+    args: [account],
+  });
+}

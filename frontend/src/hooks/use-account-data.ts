@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import type { AccountSnapshot } from "@/data/types";
 import { loadAccount, rememberRegistrar } from "@/data/production";
 import { restoreAgentKeys } from "@/data/spend";
-import { existingAccount, watchChain, watchWallet, walletClient } from "@/data/wallet";
+import { existingAccount, readWalletUsdc, watchChain, watchWallet, walletClient } from "@/data/wallet";
+import { walletSessionPaused } from "@/data/wallet-session";
 import { usePqtabsData } from "@/lib/store";
 
 /**
@@ -30,6 +31,12 @@ export function useAccountData(): {
 
   useEffect(() => {
     let cancelled = false;
+    if (walletSessionPaused()) {
+      setHydrated(true);
+      return () => {
+        cancelled = true;
+      };
+    }
     existingAccount()
       .then((address) => {
         if (cancelled) return;
@@ -68,6 +75,7 @@ export function useAccountData(): {
     let stop = () => {};
     try {
       stop = watchWallet((address) => {
+        if (walletSessionPaused()) return;
         window.localStorage.removeItem("pqtabs.root");
         if (address) {
           rememberRegistrar(address);
@@ -160,4 +168,28 @@ export function useAccountData(): {
 export function switchRegistrar(address: string): void {
   rememberRegistrar(address);
   usePqtabsData.getState().setRegistrar(address);
+}
+
+/** The connected wallet's USDC, in whole units. Null until the read returns. */
+export function useWalletUsdc(address: string): number | null {
+  const [value, setValue] = useState<number | null>(null);
+  useEffect(() => {
+    if (!address) {
+      setValue(null);
+      return;
+    }
+    let cancelled = false;
+    setValue(null);
+    readWalletUsdc(address as `0x${string}`)
+      .then((raw) => {
+        if (!cancelled) setValue(Number(raw) / 1_000_000);
+      })
+      .catch(() => {
+        if (!cancelled) setValue(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [address]);
+  return value;
 }
