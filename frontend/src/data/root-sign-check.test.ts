@@ -35,6 +35,16 @@ test("a changed nonce is not signed", () => {
   }) ?? "", /nonce changed/);
 });
 
+test("an omitted expiry is not signed", () => {
+  assert.match(rootSignatureBlock({
+    unlockedVk: vk,
+    chainVk: vk,
+    chainNonce: "1",
+    preparedNonce: "1",
+    now: BigInt(1_700_000_000),
+  }) ?? "", /expiry/);
+});
+
 test("a missing clock or expiry is not signed", () => {
   assert.match(rootSignatureBlock({
     unlockedVk: vk,

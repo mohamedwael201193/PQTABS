@@ -1074,6 +1074,7 @@ function TabDrawerBody({
                     <summary className="cursor-pointer">Technical details</summary>
                     <p className="mt-2 font-mono text-[10px] leading-relaxed">chainId 5042</p>
                     <p className="mt-2 font-mono text-[10px] leading-relaxed">nonce {closePrep.nonce}</p>
+                    <p className="mt-2 font-mono text-[10px] leading-relaxed">expiry {closePrep.expiry}</p>
                     <p className="mt-2 font-mono text-[10px] leading-relaxed">precompile 0x1800000000000000000000000000000000000004</p>
                     {verifyingKeyText ? <p className="mt-2 break-all font-mono text-[10px] leading-relaxed">verifying key {verifyingKeyText}</p> : null}
                     <p className="mt-2 break-all font-mono text-[10px] leading-relaxed">digest {closePrep.digest}</p>

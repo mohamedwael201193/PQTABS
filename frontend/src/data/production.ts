@@ -56,6 +56,20 @@ type RootJson = {
   balancesConfirmed?: boolean;
 };
 
+type TabStateJson = {
+  expiry?: string;
+  tabExpiry?: string;
+};
+
+/** The root's recorded expiry and the capability contract must be the same integer. */
+function capabilityExpiry(state: TabStateJson): string {
+  const expiry = state.tabExpiry ?? "";
+  if (!/^[0-9]+$/.test(expiry) || expiry !== state.expiry) {
+    throw new Error("The capability expiry could not be read. Nothing was signed.");
+  }
+  return expiry;
+}
+
 type PortfolioTab = {
   tab: string;
   agent: string;
@@ -478,6 +492,7 @@ export type PreparedAction = {
   deadline: string;
   digest: Hex;
   expiry?: string;
+  tab?: string;
 };
 
 export async function arcClock(): Promise<number> {
@@ -519,29 +534,44 @@ export async function prepareOpen(input: {
 
 /** Read the root again. A stale nonce, key, clock, or expiry is not signed. */
 export async function confirmRootSignature(prepared: PreparedAction, unlockedVk: string | null): Promise<void> {
-  const [state, now] = await Promise.all([getJson<RootJson>(`/v1/roots/${prepared.root}`), chainNow()]);
+  const [state, now, tab] = await Promise.all([
+    getJson<RootJson>(`/v1/roots/${prepared.root}`),
+    chainNow(),
+    prepared.tab ? getJson<TabStateJson>(`/v1/roots/${prepared.root}/tabs/${prepared.tab}`) : Promise.resolve(null),
+  ]);
+  const expiry = tab ? capabilityExpiry(tab) : prepared.expiry;
+  if (tab && expiry !== prepared.expiry) {
+    throw new Error("The capability expiry could not be read. Nothing was signed.");
+  }
   const blocked = rootSignatureBlock({
     unlockedVk,
     chainVk: state.pqVk,
     chainNonce: state.nextNonce,
     preparedNonce: prepared.nonce,
     now,
-    expiry: prepared.expiry,
+    expiry,
   });
   if (blocked) throw new Error(blocked);
 }
 
 export async function prepareClose(root: string, tab: string): Promise<PreparedAction> {
-  const [state, now] = await Promise.all([getJson<RootJson>(`/v1/roots/${root}`), chainNow()]);
+  const [state, now, tabState] = await Promise.all([
+    getJson<RootJson>(`/v1/roots/${root}`),
+    chainNow(),
+    getJson<TabStateJson>(`/v1/roots/${root}/tabs/${tab}`),
+  ]);
+  const expiry = capabilityExpiry(tabState);
   const nonce = BigInt(state.nextNonce);
   const deadline = now + BigInt(3600);
   const action = encodeClose(tab);
   return {
     root,
+    tab,
     action,
     nonce: nonce.toString(),
     deadline: deadline.toString(),
     digest: digestFor(root, nonce, deadline, action),
+    expiry,
   };
 }
 

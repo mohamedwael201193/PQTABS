@@ -17,9 +17,7 @@ export function rootSignatureBlock(input: {
     return "The root nonce changed. Nothing was signed.";
   }
   if (input.now <= BigInt(0)) return "Could not read Arc's clock. Nothing was signed.";
-  if (input.expiry !== undefined) {
-    if (!/^[0-9]+$/.test(input.expiry)) return "The capability expiry could not be read. Nothing was signed.";
-    if (input.now >= BigInt(input.expiry)) return "The capability expires too soon. Nothing was signed.";
-  }
+  if (!input.expiry || !/^[0-9]+$/.test(input.expiry)) return "The capability expiry could not be read. Nothing was signed.";
+  if (input.now >= BigInt(input.expiry)) return "The capability expires too soon. Nothing was signed.";
   return null;
 }
