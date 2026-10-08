@@ -25,8 +25,8 @@ import {
 } from "@/components/ui/sheet";
 import { StatusChip } from "@/components/pqtabs/shared";
 import { relFuture, usd } from "@/data/formatters";
-import { isAddress, parseUsdcRaw } from "@/data/actions";
-import { describeReturn, loadSnapshot, prepareClose, productionProvider, submitPrepared, submitSpend, type PreparedAction } from "@/data/production";
+import { isAddress } from "@/data/actions";
+import { describeReturn, decideServicePrice, loadSnapshot, prepareClose, productionProvider, requestServicePrice, submitPrepared, submitSpend, type PreparedAction } from "@/data/production";
 import { authorizationBlob, recallAgentKey } from "@/data/spend";
 import { rootUnlocked, signRootDigest, unlockBackup } from "@/data/pq-vault";
 import type { Tab } from "@/data/types";
@@ -36,23 +36,6 @@ import { ActivityRow } from "./shared/ActivityRow";
 
 const SHEET_CLASS =
   "w-full gap-0 border-l border-white/[.08] bg-[#0a0b0d] p-0 sm:w-[480px] sm:max-w-[480px]";
-
-function paymentRaw(amount: string, tab: Tab): { raw: bigint } | { error: string } {
-  let raw: bigint;
-  try {
-    raw = parseUsdcRaw(amount);
-  } catch (reason: unknown) {
-    return { error: reason instanceof Error ? reason.message : "Enter an amount with at most 6 decimal places." };
-  }
-  if (raw <= BigInt(0)) return { error: "Enter an amount above zero. Nothing was signed." };
-  if (tab.maxPerCallRaw && raw > BigInt(tab.maxPerCallRaw)) {
-    return { error: "That amount is above this capability's per-payment limit. Nothing was signed." };
-  }
-  if (tab.balanceRaw && raw > BigInt(tab.balanceRaw)) {
-    return { error: "This capability does not hold that much USDC. Nothing was signed." };
-  }
-  return { raw };
-}
 
 /**
  * TabDrawer — the full anatomy of one capability: holder, balance against
@@ -191,14 +174,12 @@ function TabDrawerBody({
   const recipients = useRecipients();
   const activity = useActivity();
   const [closePrep, setClosePrep] = useState<PreparedAction | null>(null);
-  const [spendTo, setSpendTo] = useState("");
-  const [spendAmount, setSpendAmount] = useState("0.000001");
+  const [task, setTask] = useState("Reply with one word: pong");
   const [closingSig, setClosingSig] = useState(false);
   const [closePass, setClosePass] = useState("");
   const [closeReady, setCloseReady] = useState(() => rootUnlocked(usePqtabsData.getState().registrar));
   const [paying, setPaying] = useState(false);
   const payLock = useRef(false);
-  const amountCheck = paymentRaw(spendAmount, tab);
 
   const agent = agents.find((a) => a.id === tab.agentId);
   const vaultEpoch = usePqtabsData((state) => state.agentVaultEpoch);
@@ -422,62 +403,59 @@ function TabDrawerBody({
         <div className="border-t border-white/[.06] px-5 py-4 md:px-6">
           <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Agent payment</p>
           <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-            The agent signs this payment from this device. An amount above the per-payment limit or the remaining balance is rejected here, before this device signs.
+            The service sets the price and the recipient. This device signs only if the capability allows that price. A refusal is not a payment.
           </p>
-          <select
-            value={spendTo || tab.policy.allowedRecipients[0] || ""}
-            onChange={(event) => setSpendTo(event.target.value)}
-            aria-label="Payment recipient"
-            className="mt-3 h-9 w-full rounded-lg border border-white/10 bg-transparent px-3 text-sm text-foreground outline-none"
-          >
-            {tab.policy.allowedRecipients.map((recipient) => (
-              <option key={recipient} value={recipient}>
-                {recipient.slice(0, 6)}…{recipient.slice(-4)}
-              </option>
-            ))}
-          </select>
           <input
-            value={spendAmount}
-            onChange={(event) => setSpendAmount(event.target.value.trim())}
-            placeholder="Amount in USDC"
-            aria-label="Payment amount"
-            className="mt-2 h-9 w-full rounded-lg border border-white/10 bg-transparent px-3 font-mono text-[11px] text-foreground outline-none"
+            value={task}
+            onChange={(event) => setTask(event.target.value)}
+            aria-label="Task for the paid service"
+            className="mt-3 h-9 w-full rounded-lg border border-white/10 bg-transparent px-3 text-sm text-foreground outline-none"
           />
-          {"error" in amountCheck && (
-            <p className="mt-2 text-xs text-danger">{amountCheck.error}</p>
-          )}
           {!canPay && (
             <p className="mt-2 text-xs text-muted-foreground">
               This browser does not hold this agent's encrypted key, so it cannot sign a payment until you restore the backup.
             </p>
           )}
           <Button
-            disabled={paying || !canPay || "error" in amountCheck}
+            disabled={paying || !canPay || task.trim().length === 0}
             onClick={() => {
-              if (payLock.current || "error" in amountCheck) return;
+              if (payLock.current) return;
               const key = (recallAgentKey(tab.agentId) || "") as `0x${string}`;
-              const payee = spendTo || tab.policy.allowedRecipients[0] || "";
               const registrar = usePqtabsData.getState().registrar;
-              if (!key.startsWith("0x") || !isAddress(payee) || !tab.expiryUnix || !registrar) {
-                toast.error("Choose a recipient. This device must already hold the agent.");
+              if (!key.startsWith("0x") || !tab.expiryUnix || !registrar) {
+                toast.error("This device must already hold the agent. Nothing was signed.");
                 return;
               }
               payLock.current = true;
               setPaying(true);
-              const raw = amountCheck.raw;
-              void authorizationBlob(key, tab.id, payee, raw, BigInt(tab.expiryUnix))
-                .then((signed) => {
+              void requestServicePrice(task.trim())
+                .then((paymentRequired) => decideServicePrice(tab.id, paymentRequired).then((decision) => ({ paymentRequired, decision })))
+                .then(({ paymentRequired, decision }) => {
+                  if (decision.decision !== "ALLOW") {
+                    throw new Error(`The capability refused this price. Nothing was signed. ${decision.reason.join(", ")}`);
+                  }
+                  if (!isAddress(decision.payee)) {
+                    throw new Error("The service price had no recipient. Nothing was signed.");
+                  }
+                  return authorizationBlob(key, tab.id, decision.payee, BigInt(decision.price), BigInt(tab.expiryUnix!)).then((signed) => ({
+                    paymentRequired,
+                    decision,
+                    signed,
+                  }));
+                })
+                .then(({ paymentRequired, decision, signed }) => {
                   if (usePqtabsData.getState().registrar.toLowerCase() !== registrar.toLowerCase()) {
                     throw new Error("The wallet changed. The payment was not submitted.");
                   }
                   return submitSpend({
                     registrar,
                     tab: tab.id,
-                    to: payee,
-                    value: raw.toString(),
+                    to: decision.payee,
+                    value: decision.price,
                     validBefore: String(tab.expiryUnix),
                     nonce: signed.nonce,
                     signature: signed.blob,
+                    paymentRequired,
                   });
                 })
                 .then(({ hash, snapshot }) => {
@@ -499,7 +477,7 @@ function TabDrawerBody({
             }}
             className="mt-3 h-9 bg-gold text-[#171204] hover:bg-[#eec95e]"
           >
-            {paying ? <Loader2 className="size-4 animate-spin" /> : "Submit payment"}
+            {paying ? <Loader2 className="size-4 animate-spin" /> : "Pay the service price"}
           </Button>
         </div>
       )}

@@ -545,6 +545,7 @@ export async function submitSpend(input: {
   validBefore: string;
   nonce: string;
   signature: string;
+  paymentRequired: unknown;
 }): Promise<{ hash: string; snapshot: AccountSnapshot }> {
   const result = await relay("/v1/relay/spend", {
     tab: input.tab,
@@ -554,8 +555,53 @@ export async function submitSpend(input: {
     validBefore: input.validBefore,
     nonce: input.nonce,
     signature: input.signature,
+    paymentRequired: input.paymentRequired,
   });
   return { hash: result.hash, snapshot: await loadSnapshot(input.registrar) };
+}
+
+export const SERVICE_URL = "https://arcrouter.co/v1/chat/completions";
+
+export async function requestServicePrice(task: string): Promise<unknown> {
+  const response = await fetch(SERVICE_URL, {
+    method: "POST",
+    headers: { "content-type": "application/json", accept: "application/json" },
+    body: JSON.stringify({
+      model: "llama-3.3-70b-instruct",
+      messages: [{ role: "user", content: task }],
+      max_tokens: 16,
+    }),
+  });
+  const payload = await response.json().catch(() => null);
+  if (response.status !== 402 || !payload) {
+    throw new Error("The service did not return a price. Nothing was signed.");
+  }
+  return payload;
+}
+
+export async function decideServicePrice(tab: string, paymentRequired: unknown): Promise<{
+  decision: string;
+  reason: string[];
+  price: string;
+  payee: string;
+}> {
+  const response = await fetch(`${BACKEND_URL}/v1/x402/decide`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ tab, paymentRequired }),
+  });
+  const payload = (await response.json().catch(() => null)) as {
+    decision?: string;
+    reason?: string[];
+    price?: string;
+    payee?: string;
+    error?: string;
+    detail?: string;
+  } | null;
+  if (!response.ok || !payload?.decision || !payload.price || !payload.payee) {
+    throw new Error(readableError(payload?.detail || payload?.error, "The price could not be checked. Nothing was signed."));
+  }
+  return { decision: payload.decision, reason: payload.reason ?? [], price: payload.price, payee: payload.payee };
 }
 
 const PQ_REQUIRED =

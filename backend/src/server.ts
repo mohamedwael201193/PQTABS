@@ -9,6 +9,7 @@ import { indexHealth } from "./index/lane.js";
 import { readIndexedPortfolio } from "./index/portfolio.js";
 import { decideSpend } from "./index/decide.js";
 import { parseSpendBlob, recoverSpendSigner, sameSpendTerms } from "./index/spend-blob.js";
+import { arcQuote, decideHttpPayment } from "./index/x402.js";
 import { openIndex, type Sql } from "./index/sql.js";
 import { RateLimiter } from "./limit.js";
 import { log } from "./log.js";
@@ -19,6 +20,37 @@ const limits = new RateLimiter();
 
 function clientIp(header: string | undefined): string {
   return header?.split(",")[0]?.trim() || "unknown";
+}
+
+async function readCapability(clients: Clients, tab: Address) {
+  const owner = await withRpcRetry(
+    () => clients.public.readContract({ address: tab, abi: tabAbi, functionName: "owner" }),
+    1,
+  );
+  await assertOurRoot(clients, owner);
+  const [agent, maxPerCall, expiry, payees, balance, tabState, head] = await withRpcRetry(
+    () =>
+      Promise.all([
+        clients.public.readContract({ address: tab, abi: tabAbi, functionName: "agent" }),
+        clients.public.readContract({ address: tab, abi: tabAbi, functionName: "maxPerCall" }),
+        clients.public.readContract({ address: tab, abi: tabAbi, functionName: "expiry" }),
+        clients.public.readContract({ address: tab, abi: tabAbi, functionName: "payees" }),
+        clients.public.readContract({ address: USDC, abi: usdcAbi, functionName: "balanceOf", args: [tab] }),
+        clients.public.readContract({ address: owner, abi: rootAbi, functionName: "tabs", args: [tab] }),
+        clients.public.getBlock({ blockTag: "latest" }),
+      ]),
+    1,
+  );
+  return {
+    owner,
+    agent: String(agent),
+    maxPerCall,
+    expiry,
+    payees,
+    balance,
+    open: tabState[2] === true,
+    now: head.timestamp,
+  };
 }
 
 export function createApp(clients: Clients = loadClients(), getIndex?: () => Sql | null) {
@@ -227,6 +259,24 @@ export function createApp(clients: Clients = loadClients(), getIndex?: () => Sql
     return c.json(result);
   });
 
+  app.post("/v1/x402/decide", async (c) => {
+    const body = await readBody(c);
+    const tab = asAddress(body.tab, "tab");
+    if (!arcQuote(body.paymentRequired)) throw new RequestError(400, "policy_refused", "no_arc_exact");
+    const facts = await readCapability(clients, tab);
+    const decision = decideHttpPayment(402, body.paymentRequired, {
+      now: facts.now,
+      signer: null,
+      tabAgent: facts.agent,
+      payees: facts.payees,
+      maxPerCall: facts.maxPerCall,
+      balance: facts.balance,
+      expiry: facts.expiry,
+      open: facts.open,
+    });
+    return c.json(decision);
+  });
+
   app.post("/v1/relay/spend", async (c) => {
     const body = await readBody(c);
     const tab = asAddress(body.tab, "tab");
@@ -247,35 +297,23 @@ export function createApp(clients: Clients = loadClients(), getIndex?: () => Sql
     } catch {
       throw new RequestError(400, "policy_refused", "invalid_signature");
     }
-    const owner = await withRpcRetry(
-      () => clients.public.readContract({ address: tab, abi: tabAbi, functionName: "owner" }),
-      1,
-    );
-    await assertOurRoot(clients, owner);
-    const [agent, maxPerCall, expiry, payees, balance, tabState, head] = await withRpcRetry(
-      () =>
-        Promise.all([
-          clients.public.readContract({ address: tab, abi: tabAbi, functionName: "agent" }),
-          clients.public.readContract({ address: tab, abi: tabAbi, functionName: "maxPerCall" }),
-          clients.public.readContract({ address: tab, abi: tabAbi, functionName: "expiry" }),
-          clients.public.readContract({ address: tab, abi: tabAbi, functionName: "payees" }),
-          clients.public.readContract({ address: USDC, abi: usdcAbi, functionName: "balanceOf", args: [tab] }),
-          clients.public.readContract({ address: owner, abi: rootAbi, functionName: "tabs", args: [tab] }),
-          clients.public.getBlock({ blockTag: "latest" }),
-        ]),
-      1,
-    );
+    const quote = arcQuote(body.paymentRequired);
+    if (!quote) throw new RequestError(400, "policy_refused", "no_arc_exact");
+    if (quote.price !== value.toString() || quote.payee.toLowerCase() !== to.toLowerCase()) {
+      throw new RequestError(400, "policy_refused", "quote_mismatch");
+    }
+    const facts = await readCapability(clients, tab);
     const decision = decideSpend({
-      now: head.timestamp,
+      now: facts.now,
       amount: value,
       payee: to,
       signer,
-      tabAgent: String(agent),
-      payees,
-      maxPerCall,
-      balance,
-      expiry,
-      open: tabState[2] === true,
+      tabAgent: facts.agent,
+      payees: facts.payees,
+      maxPerCall: facts.maxPerCall,
+      balance: facts.balance,
+      expiry: facts.expiry,
+      open: facts.open,
       serviceAvailable: true,
     });
     if (decision.decision !== "ALLOW") {
@@ -283,7 +321,7 @@ export function createApp(clients: Clients = loadClients(), getIndex?: () => Sql
     }
     const data = encodeSpend({ tab, to, value, validAfter, validBefore, nonce, signature });
     const result = await relay(clients, USDC, data, seen);
-    log({ route: "/v1/relay/spend", root: owner, tab, tx: result.hash });
+    log({ route: "/v1/relay/spend", root: facts.owner, tab, tx: result.hash });
     return c.json({ ...result, decision });
   });
 
