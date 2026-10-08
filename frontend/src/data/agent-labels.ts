@@ -40,6 +40,17 @@ export function labelsFor(registrar: string): Record<string, AgentLabel> {
   return bucket && typeof bucket === "object" ? bucket : {};
 }
 
+/** The old pay harness is not the product. Show the research agent instead. */
+export function presentedAgent(name: string, purpose: string): { name: string; role: string } {
+  if (name.trim().toLowerCase() === "arc payer") {
+    return {
+      name: "Research agent",
+      role: "Pays for external inference when the requested service fits its capability.",
+    };
+  }
+  return { name, role: purpose };
+}
+
 export function saveAgentLabel(registrar: string, label: AgentLabel): void {
   const store = storage();
   if (!store || !registrar || !label.address) return;

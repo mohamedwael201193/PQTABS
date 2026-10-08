@@ -2,7 +2,7 @@
 
 import { create } from "zustand";
 import type { AccountSnapshot, ActivityRecord, Agent, Tab } from "@/data/types";
-import { labelsFor, saveAgentLabel, type AgentLabel } from "@/data/agent-labels";
+import { labelsFor, presentedAgent, saveAgentLabel, type AgentLabel } from "@/data/agent-labels";
 import { lockRoot } from "@/data/pq-vault";
 import { totalsFrom } from "@/data/production";
 import { forgetAgentKeys } from "@/data/spend";
@@ -222,19 +222,23 @@ export function useTabs(): Tab[] {
 function applyLabel(agent: Agent, labels: Record<string, AgentLabel>): Agent {
   const label = labels[agent.id.toLowerCase()];
   if (!label?.name) return agent;
-  return { ...agent, name: label.name, role: label.purpose || agent.role };
+  const shown = presentedAgent(label.name, label.purpose || agent.role);
+  return { ...agent, name: shown.name, role: shown.role };
 }
 
 function agentsFromLabels(labels: Record<string, AgentLabel>): Agent[] {
-  return Object.values(labels).map((label) => ({
-    id: label.address,
-    name: label.name,
-    address: label.address,
-    status: "active" as const,
-    role: label.purpose || "Named on this device.",
-    addedHoursAgo: 0,
-    lastActiveHoursAgo: null,
-  }));
+  return Object.values(labels).map((label) => {
+    const shown = presentedAgent(label.name, label.purpose || "Named on this device.");
+    return {
+      id: label.address,
+      name: shown.name,
+      address: label.address,
+      status: "active" as const,
+      role: shown.role,
+      addedHoursAgo: 0,
+      lastActiveHoursAgo: null,
+    };
+  });
 }
 
 export function useAgents(): Agent[] {
