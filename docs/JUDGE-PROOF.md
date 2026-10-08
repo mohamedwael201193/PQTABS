@@ -26,7 +26,8 @@ Arc mainnet is chain id 5042. The SLH-DSA-SHA2-128s precompile is `0x18000000000
 
 ## What is not proven yet
 
-- Warm portfolio latency under 500ms. The two production samples were 0.62s and 0.96s.
+- Warm portfolio latency under 500ms. The two production samples were 0.62s and 0.96s. One later sample was 0.52s with `app;dur=193`. That is not a percentile.
 - An agent payment after a browser refresh on the production origin.
 - A new wallet creating a root, funding it, opening a capability, paying, and closing, in this audit.
-- A second account inside the current Chrome wallet. The selected account has no root, and the wallet could not be switched from this session.
+- A second account inside the current Chrome wallet. The selected account `0xBDfC…0034` has no root. The page still says "Protect your treasury". The wallet could not be switched from this session.
+- An x402 payment and the paid resource. Arc USDC accepts the EIP-3009 signature. The ArcRouter facilitator refuses it before the balance check. No `PAYMENT-SIGNATURE` was sent. No open capability exists for that payee.
