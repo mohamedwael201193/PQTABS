@@ -34,4 +34,8 @@ No signature was sent to ArcRouter. A throwaway EIP-3009 signature was sent only
 
 ArcRouter's own description says the resource is returned only after a retry that carries `PAYMENT-SIGNATURE`, and that its facilitator broadcasts the transfer. PQTABS does not send that header. A chain receipt, if one existed, would still not be the model output.
 
+The live descriptor at `https://arcrouter.co/.well-known/x402` names the Arc facilitator `https://facilitator.arcusnetwork.co`. `GET /supported` lists `exact` on `eip155:5042`. `POST /verify` does not include a transaction hash. Two verifies were sent and `/settle` was not called.
+
+`eth_call` of USDC `name()` returned `USDC` and `version()` returned `2`. A verify whose `extra.name` was `USD Coin` returned `invalid_exact_evm_token_name_mismatch`. A verify signed over the domain name `USDC`, version `2`, chain id 5042, and the USDC contract, with `from` equal to the signer, returned `isValid: false` and `invalid_exact_evm_signature`. A 213-byte blob whose `from` was closed tab `0x5637…3837` returned the same signature reason. Neither response contained a transaction. Whether that facilitator accepts an ERC-1271 blob from an open tab is still unknown, because no open tab signed these calls.
+
 `POST /v1/x402/decide` reads the tab from Arc and runs that same decision. It does not relay. `POST /v1/relay/spend` refuses with `quote_mismatch` unless the signed amount and recipient are the Arc requirement in `paymentRequired`. The capability screen asks the service for a price and signs only when the decision is `ALLOW`.
