@@ -12,12 +12,12 @@ A plain native send emits only the system log. Gas emits no `Transfer`. For EIP-
 | Movement | Emitter | Event | Sender | Decimals stored | What this indexer does | Status |
 |---|---|---|---|---|---|---|
 | ERC-20 spend from a known tab | `0x3600…0000` | `Transfer` | log `from` | 6-decimal raw | Queried and stored | VERIFIED in code |
-| Native twin of that same transfer | `0xffff…fffe` | `Transfer` | log `from` | 18-decimal raw | Rejected by `erc20SpendRaw` | VERIFIED by `backend/test/usdc-event.test.ts` |
+| Native twin of that same transfer | `0xffff…fffe` | `Transfer` | log `from` | 18-decimal raw | Rejected by `erc20SpendRaw`. Receipt `0xc0c5213e…fd08` contains this twin at log index 1 with value `10000000000000000` and the indexer did not store it | VERIFIED on that receipt and in `backend/test/usdc-event.test.ts` |
 | Native-only send | `0xffff…fffe` | `Transfer` | log `from` | 18 | Not stored. A native send that never touches the ERC-20 interface is absent from activity | DOCUMENTED limitation |
 | Gas | none | none | receipt `gasUsed * effectiveGasPrice` | 18 on the receipt | Not indexed. Balance drift from gas is a reconciliation concern, not a second spend row | DOCUMENTED |
-| EIP-3009 payment | ERC-20 contract if it emits `Transfer` | `Transfer` | log `from`, not `tx.from` | 6-decimal raw | Same filter as an ERC-20 spend | DOCUMENTED for sender semantics. One live payment receipt is in HISTORY. This test does not re-fetch that receipt |
+| EIP-3009 payment | ERC-20 contract if it emits `Transfer` | `Transfer` | log `from`, not `tx.from` | 6-decimal raw | Same filter as an ERC-20 spend | VERIFIED on receipt `0xc0c5213e…fd08`, block 24,623,356, status `0x1`. `tx.from` is registrar `0xf76e6B…71a3`. Both `Transfer` logs use tab `0xE3051e…5109` as sender and payee `0xC485B6…3044` as recipient. The ERC-20 log is index 2 and value `10000`. The portfolio row for that transaction is one `spend` of `10000`. `freshness` was `recent`. |
 | Root funding from outside a tab | either emitter | `Transfer` | log `from` is not a known tab | — | Not stored as an agent spend | VERIFIED as a query filter (`from` must be a known tab) |
 | Open, close, reclaim | the root contract | `TabOpened`, `TabClosed` | event args | cap raw | Stored as capability activity, not added to the spend sum | VERIFIED |
 | Replay of one log | the stored log | — | — | — | One row per `tx_hash` + `log_index`. A second log index is a second movement | VERIFIED |
 
-`erc20SpendRaw` returns the 6-decimal raw value for the ERC-20 emitter and null for the native emitter. The unit test applies both representations of a 7-raw movement and keeps only `"7"`.
+`erc20SpendRaw` returns the 6-decimal raw value for the ERC-20 emitter and null for the native emitter. The unit test applies both representations of a 7-raw movement and keeps only `"7"`. Receipt `0xc0c5213e…fd08` is the same shape on mainnet: the native log is `10000 * 10^12` and the stored activity amount is `10000`.
