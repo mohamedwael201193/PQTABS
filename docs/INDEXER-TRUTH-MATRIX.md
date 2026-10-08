@@ -19,5 +19,6 @@ A plain native send emits only the system log. Gas emits no `Transfer`. For EIP-
 | Root funding from outside a tab | either emitter | `Transfer` | log `from` is not a known tab | — | Not stored as an agent spend | VERIFIED as a query filter (`from` must be a known tab) |
 | Open, close, reclaim | the root contract | `TabOpened`, `TabClosed` | event args | cap raw | Stored as capability activity, not added to the spend sum | VERIFIED |
 | Replay of one log | the stored log | — | — | — | One row per `tx_hash` + `log_index`. A second log index is a second movement | VERIFIED |
+| Reverted call with no logs | none | none | — | — | Not stored. Receipt `0x971e0398…ddbc` in block 24,826,606 reverted with 0 logs. After the cursor passed that block, root A still had 23 activity rows and that hash was not one of them | VERIFIED |
 
 `erc20SpendRaw` returns the 6-decimal raw value for the ERC-20 emitter and null for the native emitter. The unit test applies both representations of a 7-raw movement and keeps only `"7"`. Receipt `0xc0c5213e…fd08` is the same shape on mainnet: the native log is `10000 * 10^12` and the stored activity amount is `10000`.
