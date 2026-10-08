@@ -134,7 +134,7 @@ export default function OverviewView() {
   const exposurePct = held > 0 ? (totals.exposureUsd / held) * 100 : 0;
 
   const securityStrip = [
-    { label: "Root protection", value: "Post-quantum · Secured", dot: "bg-success" },
+    { label: "Root protection", value: "SLH-DSA verified on Arc", dot: "bg-success" },
     { label: "Agent capabilities", value: "Bounded by policy", dot: "bg-success" },
     { label: "Agent reachable", value: portfolioReady ? `${pct(exposurePct)} of funds` : "list not loaded", dot: "bg-gold" },
     { label: "Enforcement", value: "Onchain policy", dot: "bg-success" },
