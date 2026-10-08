@@ -68,7 +68,7 @@ export function ExposureMeter({
           </p>
         </div>
         <p className="font-mono text-[11px] tabular text-muted-foreground">
-          {pct(reachPct)} an agent can reach
+          {pct(reachPct)} of funds held
         </p>
       </div>
 
