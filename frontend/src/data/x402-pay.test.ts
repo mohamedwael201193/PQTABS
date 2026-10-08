@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { agentCanSign, arcExactAccept, chainExpirySeconds, payeeLabel, paymentDeadline, paymentSignatureHeader, quotedCharge, receiptSettlesSpend, serviceAnswer, servicePayee, serviceTimeoutSeconds, settlementFailure, transactionFromPaymentResponse } from "./x402-pay.ts";
+import { agentCanSign, arcExactAccept, chainExpirySeconds, formatRawUsdc, payeeLabel, paymentDeadline, paymentSignatureHeader, quotedCharge, receiptSettlesSpend, serviceAnswer, servicePayee, serviceQuote, serviceTimeoutSeconds, settlementFailure, transactionFromPaymentResponse } from "./x402-pay.ts";
 
 const quoted = {
   x402Version: 2,
@@ -50,6 +50,16 @@ test("the payment header names the Arc accept and the EIP-3009 method", () => {
   assert.equal(arcExactAccept({ accepts: [quoted.accepts[1]] }), null);
   assert.equal(servicePayee(quoted), "0x6Bf001BB5f5E75396d92163325ca01FdEBe2e9A9");
   assert.equal(servicePayee({ accepts: [quoted.accepts[1]] }), null);
+  assert.deepEqual(serviceQuote(quoted), {
+    price: "12",
+    payee: "0x6Bf001BB5f5E75396d92163325ca01FdEBe2e9A9",
+    network: "eip155:5042",
+  });
+  assert.equal(serviceQuote({ accepts: [quoted.accepts[1]] }), null);
+  assert.equal(formatRawUsdc("12"), "0.000012 USDC");
+  assert.equal(formatRawUsdc("32"), "0.000032 USDC");
+  assert.equal(formatRawUsdc("1000000"), "1 USDC");
+  assert.equal(formatRawUsdc("12.5"), "—");
   assert.equal(quotedCharge("4"), "4");
   assert.equal(quotedCharge(" 12 "), "12");
   assert.equal(quotedCharge("12.5"), "");

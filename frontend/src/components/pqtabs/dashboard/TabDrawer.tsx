@@ -33,7 +33,7 @@ import { probeAmount, probePayment, probeRefusal, replayRefusal, spentAuthorizat
 import { agentAddress, authorizationBlob, recallAgentKey, USDC } from "@/data/spend";
 import { arcClient } from "@/data/wallet";
 import { generatePrivateKey } from "viem/accounts";
-import { agentCanSign, chainExpirySeconds, paymentDeadline, serviceTimeoutSeconds } from "@/data/x402-pay";
+import { agentCanSign, chainExpirySeconds, formatRawUsdc, payeeLabel, paymentDeadline, serviceQuote, serviceTimeoutSeconds } from "@/data/x402-pay";
 import { lockRoot, rootUnlocked, signRootDigest, verifyingKey } from "@/data/pq-vault";
 import { SecurityKeyUnlock } from "@/components/pqtabs/dashboard/SecurityKeyUnlock";
 import { PaymentDecision } from "@/components/pqtabs/dashboard/PaymentDecision";
@@ -211,12 +211,48 @@ function TabDrawerBody({
   const verifyingKeyText = usePqtabsData((state) => state.snapshot.account.pqVk);
   const [closePrep, setClosePrep] = useState<PreparedAction | null>(null);
   const [task, setTask] = useState("Summarize what Arc mainnet settlement means for an agent payment.");
+  const [servicePrice, setServicePrice] = useState<{ price: string; payee: string; network: string } | null>(null);
+  const [servicePriceNote, setServicePriceNote] = useState("Reading the current service price.");
   const [closingSig, setClosingSig] = useState(false);
   const [closeReady, setCloseReady] = useState(() => rootUnlocked(usePqtabsData.getState().registrar));
   const [paying, setPaying] = useState(false);
   const [payLog, setPayLog] = useState<string[]>([]);
   const [shownDecision, setShownDecision] = useState<DecisionRecord | null>(null);
   const payLock = useRef(false);
+
+  useEffect(() => {
+    if (tab.status !== "active" || !tab.expiryUnix) return;
+    const asked = task.trim();
+    if (!asked) {
+      setServicePrice(null);
+      setServicePriceNote("Enter a question to read the service price. Nothing was signed.");
+      return;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void requestServicePrice(asked)
+        .then((body) => {
+          if (cancelled) return;
+          const quote = serviceQuote(body);
+          if (!quote) {
+            setServicePrice(null);
+            setServicePriceNote("The service did not offer an Arc price. Nothing was signed.");
+            return;
+          }
+          setServicePrice(quote);
+          setServicePriceNote("");
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setServicePrice(null);
+          setServicePriceNote("The service did not return a price. Nothing was signed.");
+        });
+    }, 400);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [task, tab.status, tab.expiryUnix]);
 
   async function runBlockedCheck(name: ProbeName | "malformed_signature") {
     if (!tab || payLock.current) return;
@@ -844,6 +880,11 @@ function TabDrawerBody({
             placeholder="Enter a research question"
             className="mt-3 h-9 w-full rounded-lg border border-white/10 bg-transparent px-3 text-sm text-foreground outline-none"
           />
+          <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+            {servicePrice
+              ? `Current service price ${formatRawUsdc(servicePrice.price)} to ${payeeLabel(servicePrice.payee).name} on ${servicePrice.network}. Run task reads this again before any signature.`
+              : servicePriceNote}
+          </p>
           {!canPay && (
             <p className="mt-2 text-xs text-muted-foreground">
               This browser does not hold this agent's encrypted key, so it cannot sign a payment until you restore the backup.

@@ -38,7 +38,23 @@ export function arcExactAccept(paymentRequired: unknown): Record<string, unknown
   return null;
 }
 
-/** The Arc exact recipient. A Base row in the same 402 is ignored. */
+/** The Arc exact price from a 402. A Base row is not a quote. */
+export function serviceQuote(paymentRequired: unknown): { price: string; payee: string; network: string } | null {
+  const accepted = arcExactAccept(paymentRequired);
+  const payee = servicePayee(paymentRequired);
+  const price = accepted && typeof accepted.amount === "string" ? accepted.amount : "";
+  if (!accepted || !payee || !/^[0-9]+$/.test(price)) return null;
+  return { price, payee, network: ARC };
+}
+
+/** 6-decimal USDC raw units. A non-integer is not a price. */
+export function formatRawUsdc(value: string): string {
+  if (!/^[0-9]+$/.test(value)) return "—";
+  const raw = BigInt(value);
+  const whole = raw / 1_000_000n;
+  const fraction = (raw % 1_000_000n).toString().padStart(6, "0").replace(/0+$/, "");
+  return fraction ? `${whole}.${fraction} USDC` : `${whole} USDC`;
+}
 export function servicePayee(paymentRequired: unknown): string | null {
   const accepted = arcExactAccept(paymentRequired);
   const payTo = accepted && typeof accepted.payTo === "string" ? accepted.payTo : "";
