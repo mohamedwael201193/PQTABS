@@ -396,7 +396,11 @@ function activitySummary(event: PortfolioEvent, root: string): string {
   if (event.kind === "spend" && event.to?.toLowerCase() === root.toLowerCase()) {
     return `The capability returned ${amount} USDC to root cash.`;
   }
-  if (event.kind === "spend") return `Agent paid ${amount} USDC to ${event.to ? short(event.to) : "a recipient"}.`;
+  if (event.kind === "spend") {
+    const named = event.to ? payeeLabel(event.to) : null;
+    const who = named?.category === "Service" ? named.name : event.to ? short(event.to) : "a recipient";
+    return `Agent paid ${amount} USDC to ${who}.`;
+  }
   if (event.kind === "rotated") return "Root verifying key rotated. Older signatures no longer verify.";
   return `Root transferred ${amount} USDC.`;
 }
