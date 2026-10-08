@@ -24,8 +24,7 @@ Arc mainnet is chain id 5042. The SLH-DSA-SHA2-128s precompile is `0x18000000000
 - Factory `0x05545F026b75f03aE9Cf1eA8a8373473c94ed323` on https://explorer.arc.io
 - Root `0x846f56a8547Fe5cC3120c189c5640e84DAAB65Cf`
 - The open, payment, and close receipts named in `docs/USER-FLOW.md`
-- Local tests: `forge test` in the repo root, `cargo test` in `signer/`, `npm test` in `backend/`, `npm run test:agent-vault` in `frontend/`
-- `forge test --match-contract ExposureInvariantTest` on 2026-10-08: `invariant_open_exposure_equals_sum_of_open_caps` passed, 64 runs, 2048 calls, 0 reverts. The harness etches `MockPQ` at the precompile address. This is the accounting invariant in that harness, not a mainnet trace.
+- Local tests run on 2026-10-08: `forge test --no-match-path lib/*` passed 17 tests, including `testFuzz_exposure_never_exceeds_max` for 1024 runs and `invariant_open_exposure_equals_sum_of_open_caps` for 64 runs and 2048 calls. Those Foundry tests etch `MockPQ`. `cargo test` in `signer/` passed 8 tests, including the three pinned Arc SLH-DSA vectors in `signer/testdata/pq_test_vectors.json` (two valid, one invalid). Backend `decide`, `x402`, `usdc-event`, `spend-blob`, `index`, `validate`, `rpc-error`, and `http` passed 25 tests. `live.test.ts` was not run.
 
 ## What is not proven yet
 
