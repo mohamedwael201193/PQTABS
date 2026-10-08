@@ -115,6 +115,14 @@ export function paymentDeadline(nowSeconds: number, expiryUnix: number, maxTimeo
   return deadline;
 }
 
+/** The service named a facilitator rejection and did not return a transaction. */
+export function settlementFailure(payload: unknown): string {
+  const body = record(payload);
+  const reason = body && typeof body.error === "string" ? body.error.trim() : "";
+  if (!reason) return "The service did not settle the payment. No Arc transaction was recorded.";
+  return `The service did not settle the payment (${reason}). No Arc transaction was recorded.`;
+}
+
 /** A paid chat result is the assistant text. A 402 body, an error, or an empty completion is not a result. */
 export function serviceAnswer(status: number, payload: unknown): string {
   if (status !== 200) return "";

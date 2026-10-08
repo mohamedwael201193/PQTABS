@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { agentCanSign, arcExactAccept, chainExpirySeconds, paymentDeadline, paymentSignatureHeader, quotedCharge, receiptSettlesSpend, serviceAnswer, servicePayee, serviceTimeoutSeconds, transactionFromPaymentResponse } from "./x402-pay.ts";
+import { agentCanSign, arcExactAccept, chainExpirySeconds, paymentDeadline, paymentSignatureHeader, quotedCharge, receiptSettlesSpend, serviceAnswer, servicePayee, serviceTimeoutSeconds, settlementFailure, transactionFromPaymentResponse } from "./x402-pay.ts";
 
 const quoted = {
   x402Version: 2,
@@ -56,6 +56,8 @@ test("the payment header names the Arc accept and the EIP-3009 method", () => {
   assert.equal(quotedCharge(null), "");
   assert.equal(transactionFromPaymentResponse(btoa(JSON.stringify({ transaction: "0x" + "cd".repeat(32) }))), "0x" + "cd".repeat(32));
   assert.equal(transactionFromPaymentResponse(btoa(JSON.stringify({ success: true }))), "");
+  assert.equal(settlementFailure({ error: "invalid_exact_evm_signature", code: "verify_invalid" }), "The service did not settle the payment (invalid_exact_evm_signature). No Arc transaction was recorded.");
+  assert.equal(settlementFailure({}), "The service did not settle the payment. No Arc transaction was recorded.");
   const from = "0x56377522376b5273a97313992c7970B106cB3837";
   const to = "0x6Bf001BB5f5E75396d92163325ca01FdEBe2e9A9";
   const log = {
