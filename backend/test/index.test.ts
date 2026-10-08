@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { Address, Hex, PublicClient } from "viem";
 import { applyEvents, type IndexEvent, readCursor, resetIndex, writeEvents } from "../src/index/apply.js";
-import { readRegistrarRoots } from "../src/index/account.js";
+import { readRegistrarRoots, readRootState } from "../src/index/account.js";
 import { headFromSubscription, httpToWebSocket } from "../src/index/heads.js";
 import { indexCoversHead, noteIndexCursor, noteIndexHead, noteRateLimit } from "../src/index/lane.js";
 import { tabFromStored, readIndexedPortfolio } from "../src/index/portfolio.js";
@@ -256,6 +256,42 @@ describe("derived index", () => {
     assert.equal(portfolio.tabs[0]?.balanceKnown, false);
     assert.equal(portfolio.freshness, "live");
     assert.equal(portfolio.activity.length, 1);
+    await sql.close();
+  });
+
+  it("keeps the creation key until a rotation, then reads the chain key", async () => {
+    const sql = await openMemory();
+    const original = "0xdbb8245905fe933f16b4ed744b0e0c7050c616f7f2c83207aa72a7a97ed1ef50";
+    const next = "0x1111111111111111111111111111111111111111111111111111111111111111" as Hex;
+    const chain = "0x2222222222222222222222222222222222222222222222222222222222222222";
+    await applyEvents(sql, [{
+      block: 50n,
+      logIndex: 1,
+      tx,
+      timestamp: "1790000000",
+      root: rootA,
+      kind: "root",
+      registrar: registrarA,
+      verifyingKey: original,
+      amount: "200000",
+    }], 50n);
+    const silent = { readContract: () => Promise.reject(new Error("Arc should not be read")) } as unknown as PublicClient;
+    const before = await readRootState(sql, silent, rootA, rootA);
+    assert.equal(before.pqVk, original);
+    await applyEvents(sql, [{
+      block: 51n,
+      logIndex: 2,
+      tx,
+      timestamp: "1790000001",
+      root: rootA,
+      kind: "rotated",
+      verifyingKey: next,
+    }], 51n);
+    const stored = await sql.query<{ verifying_key: string }>("SELECT verifying_key FROM roots WHERE lower(address) = lower($1)", [rootA]);
+    assert.equal(stored[0]?.verifying_key, next);
+    const live = { readContract: () => Promise.resolve(chain) } as unknown as PublicClient;
+    const after = await readRootState(sql, live, rootA, rootA);
+    assert.equal(after.pqVk, chain);
     await sql.close();
   });
 });

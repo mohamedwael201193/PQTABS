@@ -84,7 +84,22 @@ export async function readRootState(sql: Sql, client: PublicClient, factory: Add
     sql.query<{ kind: string }>("SELECT kind FROM activity WHERE lower(root) = lower($1) AND kind = 'rotated' LIMIT 1", [root]),
   ]);
   const row = rows[0];
-  if (row) return viewFrom(root, row, rotated.length > 0);
+  if (row && rotated.length === 0) return viewFrom(root, row);
+  if (row) {
+    try {
+      const vk = await withRpcRetry(
+        () => client.readContract({ address: root, abi: rootAbi, functionName: "pqVk" }),
+        1,
+      );
+      return { ...viewFrom(root, row), pqVk: String(vk) };
+    } catch (error) {
+      if (isRateLimit(error)) {
+        noteRateLimit();
+        throw unavailable();
+      }
+      throw error;
+    }
+  }
   try {
     const live = await liveRoot(client, factory, root, false);
     rootCache.set(key, live);
@@ -99,11 +114,11 @@ export async function readRootState(sql: Sql, client: PublicClient, factory: Add
   }
 }
 
-function viewFrom(root: Address, row: RootRow, rotated: boolean): RootView {
+function viewFrom(root: Address, row: RootRow): RootView {
   const confirmed = row.usdc_balance != null && row.usdc_balance !== "";
   return {
     root,
-    pqVk: rotated ? "" : row.verifying_key,
+    pqVk: row.verifying_key,
     registrar: row.registrar,
     nextNonce: row.next_nonce ?? "",
     maxOpenExposure: row.max_exposure,

@@ -31,7 +31,8 @@ import { saveDecision } from "@/data/decision-store";
 import { describeReturn, decideServicePrice, loadSnapshot, prepareClose, productionProvider, requestServicePrice, SERVICE_URL, settleService, submitPrepared, type PreparedAction, type ServiceDecision } from "@/data/production";
 import { authorizationBlob, recallAgentKey } from "@/data/spend";
 import { paymentDeadline, serviceTimeoutSeconds } from "@/data/x402-pay";
-import { rootUnlocked, signRootDigest, unlockBackup } from "@/data/pq-vault";
+import { backupMatchesRoot, backupRefusal } from "@/data/pq-key-match";
+import { lockRoot, rootUnlocked, signRootDigest, unlockBackup, verifyingKey } from "@/data/pq-vault";
 import type { Tab } from "@/data/types";
 import { useActivity, useAgents, useDashboardUi, usePqtabsData, useRecipients, useTabs } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -219,7 +220,17 @@ function TabDrawerBody({
       return;
     }
     void unlockBackup(usePqtabsData.getState().registrar, bytes, secret)
-      .then(() => setCloseReady(true))
+      .then(() => {
+        const live = usePqtabsData.getState();
+        const verdict = backupMatchesRoot(verifyingKey(live.registrar), live.snapshot.account.pqVk);
+        if (verdict !== "match") {
+          lockRoot();
+          setCloseReady(false);
+          toast.error(backupRefusal(verdict));
+          return;
+        }
+        setCloseReady(true);
+      })
       .catch((reason: unknown) => {
         setCloseReady(false);
         toast.error(reason instanceof Error ? reason.message : "Could not unlock the security key.");
@@ -633,6 +644,13 @@ function TabDrawerBody({
                       const live = usePqtabsData.getState();
                       if (!live.snapshot.account.rootAddress || live.snapshot.account.rootAddress.toLowerCase() !== closePrep.root.toLowerCase()) {
                         toast.error("The wallet changed. Nothing was signed.");
+                        return;
+                      }
+                      const verdict = backupMatchesRoot(verifyingKey(live.registrar), live.snapshot.account.pqVk);
+                      if (verdict !== "match") {
+                        lockRoot();
+                        setCloseReady(false);
+                        toast.error(backupRefusal(verdict));
                         return;
                       }
                       setClosingSig(true);

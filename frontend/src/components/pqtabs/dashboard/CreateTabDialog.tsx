@@ -33,7 +33,8 @@ import {
   X,
 } from "lucide-react";
 import { isAddress, parseUsdcRaw } from "@/data/actions";
-import { rootUnlocked, signRootDigest, unlockBackup } from "@/data/pq-vault";
+import { backupMatchesRoot, backupRefusal } from "@/data/pq-key-match";
+import { lockRoot, rootUnlocked, signRootDigest, unlockBackup, verifyingKey } from "@/data/pq-vault";
 import { initials, relFuture, usd } from "@/data/formatters";
 import { loadSnapshot, prepareOpen, requestServicePrice, submitPrepared, type PreparedAction } from "@/data/production";
 import { servicePayee } from "@/data/x402-pay";
@@ -177,6 +178,14 @@ function CreateFlow() {
     }
     void unlockBackup(usePqtabsData.getState().registrar, bytes, secret)
       .then(() => {
+        const live = usePqtabsData.getState();
+        const verdict = backupMatchesRoot(verifyingKey(live.registrar), live.snapshot.account.pqVk);
+        if (verdict !== "match") {
+          lockRoot();
+          setKeyReady(false);
+          setUnlockError(backupRefusal(verdict));
+          return;
+        }
         setKeyReady(true);
         setUnlockError("");
       })
@@ -1209,6 +1218,14 @@ function CreateFlow() {
                   const live = usePqtabsData.getState();
                   if (!live.snapshot.account.rootAddress || live.snapshot.account.rootAddress.toLowerCase() !== prepared.root.toLowerCase()) {
                     setFailure("The wallet changed. Nothing was signed.");
+                    setPhase("error");
+                    return;
+                  }
+                  const verdict = backupMatchesRoot(verifyingKey(live.registrar), live.snapshot.account.pqVk);
+                  if (verdict !== "match") {
+                    lockRoot();
+                    setKeyReady(false);
+                    setFailure(backupRefusal(verdict));
                     setPhase("error");
                     return;
                   }

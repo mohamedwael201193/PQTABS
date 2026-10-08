@@ -49,6 +49,7 @@ export async function writeEvents(sql: Sql, events: readonly IndexEvent[], throu
     if (event.kind === "root") await insertRoot(sql, event);
     else if (event.kind === "opened") await insertOpened(sql, event);
     else if (event.kind === "closed") await insertClosed(sql, event);
+    else if (event.kind === "rotated") await insertRotated(sql, event);
     else await insertActivity(sql, event);
   }
   await sql.query(
@@ -89,6 +90,12 @@ async function insertClosed(sql: Sql, event: IndexEvent): Promise<void> {
     );
   }
   await insertActivity(sql, event);
+}
+
+async function insertRotated(sql: Sql, event: IndexEvent): Promise<void> {
+  await insertActivity(sql, event);
+  if (!event.verifyingKey) return;
+  await sql.query("UPDATE roots SET verifying_key = $2 WHERE lower(address) = lower($1)", [addr(event.root), event.verifyingKey]);
 }
 
 async function insertActivity(sql: Sql, event: IndexEvent): Promise<void> {
