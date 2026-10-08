@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { cn } from "@/lib/utils";
-import { pct, relFuture, relTime, usd } from "@/data/formatters";
+import { relFuture, relTime, usd } from "@/data/formatters";
 import type { ActivityKind } from "@/data/types";
 import {
   useActivity,
@@ -89,9 +89,6 @@ export default function SecurityView() {
     [activity]
   );
 
-  const held = totals.treasuryTotalUsd + totals.exposureUsd + totals.reclaimableUsd;
-  const allocatedPct = held > 0 ? (totals.exposureUsd / held) * 100 : 0;
-
   const nextRotationHours = Math.max(
     0,
     security.rotationIntervalDays * 24 - (security.lastRotationHoursAgo ?? 0)
@@ -115,8 +112,8 @@ export default function SecurityView() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <PostureTile
           label="Root protection"
-          status="Post-quantum"
-          detail="SLH-DSA · SPHINCS+-128s"
+          status="SLH-DSA"
+          detail="Verified on Arc"
           tone="success"
         />
         <PostureTile
@@ -127,8 +124,8 @@ export default function SecurityView() {
         />
         <PostureTile
           label="Open exposure"
-          status="Controlled"
-          detail={portfolioReady ? `${pct(allocatedPct)} of funds an agent can reach` : "list not loaded"}
+          status={portfolioReady ? usd(totals.allocatedUsd) : "—"}
+          detail="sum of capability caps"
           tone="gold"
         />
         <PostureTile
