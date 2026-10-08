@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { decisionRecord, decisionsForRegistrar, paymentReasonSentence, paymentStatusLines, settledDecision, type DecisionFacts } from "./decision-record.ts";
+import { decisionRecord, decisionsForRegistrar, expiryWhen, paymentReasonSentence, paymentStatusLines, settledDecision, settlementReasons, type DecisionFacts } from "./decision-record.ts";
 
 const facts = (): DecisionFacts => ({
   task: "Reply with one word: pong",
@@ -102,4 +102,14 @@ test("an unsettled allow says nothing was broadcast and does not say nothing was
   ]);
   assert.deepEqual(paymentStatusLines("REFUSE", ""), ["Payment blocked", "Nothing was signed.", "Nothing was broadcast."]);
   assert.deepEqual(paymentStatusLines("ALLOW", "0x" + "ab".repeat(32)), []);
+});
+
+test("a chain expiry is shown in UTC and a settle failure names the facilitator", () => {
+  assert.equal(expiryWhen("1791560403"), "2026-10-09 15:40:03 UTC");
+  assert.equal(expiryWhen(""), "—");
+  assert.deepEqual(settlementReasons(["capability_active"], "The service did not settle the payment (invalid_exact_evm_signature). No Arc transaction was recorded."), [
+    "capability_active",
+    "facilitator_rejected",
+  ]);
+  assert.deepEqual(settlementReasons(["capability_active"], "The wallet changed. The payment was not submitted."), ["capability_active"]);
 });

@@ -26,7 +26,7 @@ import {
 import { StatusChip } from "@/components/pqtabs/shared";
 import { relFuture, usd } from "@/data/formatters";
 import { isAddress } from "@/data/actions";
-import { decisionRecord, paymentReasonSentence, settledDecision, type DecisionFacts, type DecisionRecord, type QuotedDecision } from "@/data/decision-record";
+import { decisionRecord, paymentReasonSentence, settledDecision, settlementReasons, type DecisionFacts, type DecisionRecord, type QuotedDecision } from "@/data/decision-record";
 import { saveDecision } from "@/data/decision-store";
 import { arcClock, BACKEND_URL, confirmRootSignature, describeReturn, decideServicePrice, loadSnapshot, prepareClose, productionProvider, requestServicePrice, settleService, submitPrepared, type PreparedAction, type ServiceDecision } from "@/data/production";
 import { probeAmount, probePayment, probeRefusal, replayRefusal, spentAuthorization, UNAVAILABLE_SERVICE_URL, unavailableServiceRefusal, capabilityPayment, expiredRefusal, expiryStillOpen, type ProbeName } from "@/data/refusal-probe";
@@ -948,9 +948,7 @@ function TabDrawerBody({
                   const message = error instanceof Error ? error.message : "The payment was rejected.";
                   if (facts?.decision === "ALLOW") {
                     try {
-                      const reason = message.includes("invalid_exact_evm_signature")
-                        ? [...facts.reason, "facilitator_rejected"]
-                        : facts.reason;
+                      const reason = settlementReasons(facts.reason, message);
                       const saved = decisionRecord({ ...facts, reason }, new Date().toISOString());
                       await saveDecision(saved);
                       setShownDecision(saved);

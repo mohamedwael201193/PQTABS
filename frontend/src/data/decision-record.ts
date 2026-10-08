@@ -119,6 +119,22 @@ export function paymentReasonSentence(reason: string): string {
   return REASON_SENTENCE[reason] ?? reason;
 }
 
+/** A unix expiry from the chain, shown in UTC. Anything else stays as stored. */
+export function expiryWhen(value: string): string {
+  if (!/^[0-9]+$/.test(value)) return value || "—";
+  const seconds = Number(value);
+  if (!Number.isSafeInteger(seconds)) return value;
+  const date = new Date(seconds * 1000);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toISOString().replace(".000Z", " UTC").replace("T", " ");
+}
+
+/** A facilitator rejection is recorded from the service's settle failure, not from a guessed hash. */
+export function settlementReasons(reasons: readonly string[], message: string): string[] {
+  if (message.startsWith("The service did not settle the payment")) return [...reasons, "facilitator_rejected"];
+  return [...reasons];
+}
+
 /** A refusal was never signed. An allow with no receipt was signed and then not broadcast. */
 export function paymentStatusLines(decision: string, txHash: string): string[] {
   if (decision === "REFUSE" || decision === "NO_PAYMENT") {
