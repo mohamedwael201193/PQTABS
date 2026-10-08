@@ -136,7 +136,7 @@ export default function OverviewView() {
   const securityStrip = [
     { label: "Root protection", value: "SLH-DSA verified on Arc", dot: "bg-success" },
     { label: "Agent capabilities", value: "Bounded by policy", dot: "bg-success" },
-    { label: "Agent reachable", value: portfolioReady ? `${pct(exposurePct)} of funds` : "list not loaded", dot: "bg-gold" },
+    { label: "Reachable share", value: portfolioReady ? `${pct(exposurePct)} of funds held` : "list not loaded", dot: "bg-gold" },
     { label: "Enforcement", value: "Onchain policy", dot: "bg-success" },
   ];
 
