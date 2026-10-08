@@ -196,19 +196,21 @@ function AgentDrawerBody({ agent }: { agent: Agent }) {
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-lg border border-white/[.06] bg-white/[.02] p-3">
               <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                Total authorized
+                Open exposure
               </p>
               <p className="mt-1.5 font-display text-lg font-semibold tabular text-gold">
                 {usd(totalAuthorized)}
               </p>
+              <p className="mt-1 text-[11px] text-muted-foreground">Sum of capability caps</p>
             </div>
             <div className="rounded-lg border border-white/[.06] bg-white/[.02] p-3">
               <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                Current exposure
+                Agent reachable
               </p>
               <p className="mt-1.5 font-display text-lg font-semibold tabular text-foreground">
                 {usd(currentExposure)}
               </p>
+              <p className="mt-1 text-[11px] text-muted-foreground">Remaining spendable balance</p>
             </div>
           </div>
 
