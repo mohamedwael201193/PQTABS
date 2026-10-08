@@ -29,3 +29,37 @@ Two users do not share a key. Registrar A and registrar B are different addresse
 The database is derived. A row that says a capability is open does not authorize a spend. `decideSpend` reads the tab, the root, the USDC balance, and the latest block before `POST /v1/relay/spend` broadcasts, and only after the 213-byte blob matches the request and its ECDSA signer recovers. A mismatched blob returns `tampered_action`. An unrecoverable signature returns `invalid_signature`. Both of those happened on Render `dep-db3dna6q1p3s73f4dki0` and neither included a chain reason or a transaction hash. If Arc rate-limits the later reads, the response is a retry and no transaction is sent.
 
 The new wallet `0xBDfC…0034` has an open capability. Root `0x44502F6d18DAA9620c2BB3da21b8C3C8033A9787` was created in `0x26c918d4…872a`. The 0.01 USDC deposit is `0x6873f48d…1f92`. Capability `0x136F6F23946eF71a63913c9EA59701A2c3C9f094` opened in `0x66e51bd6…e759`. The live service payment is `0x699787ce…f5d6`: `transferWithAuthorization`, 12 raw USDC from that capability to `0x6Bf001BB5f5E75396d92163325ca01FdEBe2e9A9`, and the service returned `Tabletennis`. A later `POST /v1/x402/decide` refused a wrong payee, an amount above the cap, and an amount above the remaining balance. The capability balance stayed 9988. Switching the wallet to `0xf76e…71a3` showed treasury `0x846f…65Cf` at 0.139994 USDC and hid the new root. Switching back showed wallet 1.258159 USDC, root `0x4450…9787`, and the same 0.009988 USDC capability. Expiry and reclaim for that capability have not been run.
+
+## Answers
+
+1. PQTABS adds a post-quantum root in front of a Barkeep capability. Wallet `0xBDfC…0034` called `RootFactory.createRoot` in `0x26c918d4…872a` (value 0, selector `0x1683e6b0`). The relayer then called that root in `0x66e51bd6…e759` and Barkeep received a 10,000-raw USDC capability. Barkeep alone does not check an SLH-DSA root before that open.
+
+2. A stolen agent key can sign USDC authorizations for capability `0x136F…f094` to `0x6Bf001BB5f5E75396d92163325ca01FdEBe2e9A9`, up to the remaining balance and 10,000 raw per payment. The live signature moved 12 raw units in `0x699787ce…f5d6`.
+
+3. A stolen relayer key can submit a payload the root already signed. The open transaction's sender is relayer `0x5c7a54eeaf29310e758fc6f010ece827897d183e` and its target is the root. `createRoot` was sent by the wallet to `0x05545F026b75f03aE9Cf1eA8a8373473c94ed323`. The relayer is not that caller.
+
+4. The agent cannot raise its budget. `POST /v1/x402/decide` for 10,001 raw returned `max_per_call` and sent no transaction. The cap stayed 10,000.
+
+5. The agent cannot change the payee. The same endpoint refused `0x000…001` with `wrong_payee` and sent no transaction.
+
+6. The agent spends the capability. After the open, the root's USDC balance is 0 and the capability holds the funds. The settlement transfer's sender is the capability. The production page shows 0 USDC still in the root and 0.009988 USDC an agent can reach.
+
+7. The registrar's ECDSA key created the root and does not own the capability. The root is the capability owner. Spending the capability used the agent authorization. Moving the root requires the post-quantum `execute` path.
+
+8. The post-quantum signature authorized this capability: agent `0xDba403d3F15c83a0762db7243b989cF656752823`, cap 10,000, max per payment 10,000, one payee, expiry `1791560403`. The 12-raw service payment was the agent key, not the root key.
+
+9. The allow used the live service requirement: 12 raw USDC, that payee, `eip155:5042`. A different payee, a larger amount, and a non-Arc network were refused. After the receipt, the service returned `Tabletennis`.
+
+10. The settlement is real. Receipt `0x699787ce…f5d6` has status `0x1`, value 0, and selector `0xcf092995`. The ERC-20 log data is `0x0c` (12 raw). A second read of that receipt returned the same status. The capability balance is 9,988.
+
+11. Arc is the chain whose SLH-DSA precompile the root calls, and `eip155:5042` is the network the service required. A decision for `eip155:1` returned `no_arc_exact`.
+
+12. USDC is both Arc gas and the asset named in that exact requirement. Gas on `createRoot` was 0.0054298895 native USDC and produced no 6-decimal transfer. The service payment is the separate 6-decimal transfer of 12 raw units.
+
+13. The root authority is SLH-DSA on that precompile. The agent key and the registrar key are classical. The open receipt is the root accepting the post-quantum authorization before Barkeep holds the funds.
+
+14. At unix `1791560403`, `reclaim` can return the unspent balance to the root. That call has not been made. `expiry()` still returns `1791560403` and `balanceOf` is still 9,988.
+
+15. Recovery is the security-key file the user saved. The browser decrypts it locally and signs only when the derived verifying key matches the current chain key. Root `0x846f…65Cf` was rotated in `0x184edd6a…c55c`. The backend does not keep the file.
+
+16. The agent key's blast radius is this capability: 9,988 raw USDC left, one payee, 10,000 raw per payment, until `1791560403`. The wallet still shows 1.258159 USDC outside the treasury. The other registrar's treasury remained 0.139994 USDC on its own root when the wallet account changed.
