@@ -7,6 +7,14 @@ import { lockRoot, rootSession, rootUnlocked, subscribeRootSession, unlockBackup
 import { hasRootBackup, loadRootBackup, saveRootBackup } from "@/data/root-backup";
 import { usePqtabsData } from "@/lib/store";
 
+function unlockError(reason: unknown): string {
+  const raw = reason instanceof Error ? reason.message : String(reason ?? "");
+  if (raw === "not a pqtabs backup") return "This file is not a security-key backup. Nothing was signed.";
+  if (raw === "decrypt failed") return "That passphrase did not open this backup. Nothing was signed.";
+  if (raw && raw !== "[object Object]") return raw;
+  return "Could not unlock the security key. Nothing was signed.";
+}
+
 export function SecurityKeyUnlock({ onReady }: { onReady: (ready: boolean) => void }) {
   const registrar = usePqtabsData((state) => state.registrar);
   const [passphrase, setPassphrase] = useState("");
@@ -56,7 +64,7 @@ export function SecurityKeyUnlock({ onReady }: { onReady: (ready: boolean) => vo
       onReady(true);
     } catch (reason: unknown) {
       onReady(false);
-      setError(reason instanceof Error ? reason.message : "Could not unlock the security key.");
+      setError(unlockError(reason));
     } finally {
       setBusy(false);
     }
