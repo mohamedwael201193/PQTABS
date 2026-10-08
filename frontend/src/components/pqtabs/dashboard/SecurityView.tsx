@@ -213,8 +213,8 @@ export default function SecurityView() {
             </span>
           </div>
           <div className="mt-4 space-y-3.5 text-sm leading-relaxed text-muted-foreground">
-            <p>Your root authority cannot be recreated from your wallet alone. The backup file is the only copy.</p>
-            <p>If the backup and this device are both lost, the USDC in the root stays there. There is no operator recovery.</p>
+            <p>Your root authority cannot be recreated from your wallet alone. This device keeps the encrypted security-key backup. The downloaded file is for a new device. The passphrase and the private key are not stored.</p>
+            <p>If that encrypted copy and the downloaded file are both lost, the USDC in the root stays there. There is no operator recovery.</p>
           </div>
           <details className="mt-5 text-xs text-muted-foreground">
             <summary className="cursor-pointer text-foreground">Technical details</summary>

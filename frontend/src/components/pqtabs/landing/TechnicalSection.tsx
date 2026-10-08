@@ -43,7 +43,7 @@ const SPEC = [
   {
     key: "CUSTODY",
     title: "No operator recovery",
-    body: "The backup file is the only copy of the root key. If that file and the device are both lost, the USDC stays in the root. Agents cannot rotate the key.",
+    body: "This device keeps an encrypted backup. The downloaded file is for a new device. If both are lost, the USDC stays in the root. The private key is not stored. Agents cannot rotate the key.",
   },
 ];
 

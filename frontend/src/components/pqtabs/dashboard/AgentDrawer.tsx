@@ -299,8 +299,8 @@ function AgentDrawerBody({ agent }: { agent: Agent }) {
                 </AlertDialogTitle>
                 <AlertDialogDescription>
                   {activeTabs.length > 1
-                    ? `This agent has ${activeTabs.length} open capabilities. Each one closes on its own. The remaining balance returns to your treasury after you authorize the close.`
-                    : "The remaining balance returns to your treasury after you authorize the close with your security key."}
+                    ? `This agent has ${activeTabs.length} open capabilities. Each one closes on its own. The remaining balance returns to root cash after you authorize the close.`
+                    : "The remaining balance returns to root cash after you authorize the close with your security key."}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>

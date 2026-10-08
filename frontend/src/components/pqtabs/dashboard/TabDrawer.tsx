@@ -544,7 +544,7 @@ function TabDrawerBody({
     `Draw down to the ${usd(tab.capUsd)} cap`,
   ];
   const canNever = [
-    "Touch the root treasury",
+    "Touch root cash or the wallet",
     "Raise its own limits",
     "Add recipients or extend expiry",
     "Spend after expiry",
