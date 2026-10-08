@@ -2,7 +2,7 @@
 
 A capability is a Barkeep tab owned by one PQ root. Opening it is a root `execute` of kind open: agent, payees, `maxPerCall`, expiry, and cap. The cap is reserved in `openExposure` before the tab is opened. Close and reclaim release that cap. After expiry, reclaim does not need the root key.
 
-The UI asks for agent, budget, per-payment limit, recipients, and expiry, then the root backup signs. It does not ask for a private key or a pasted signature. The authorize step shows the treasury verifying key before the file is chosen. After the backup unlocks, its verifying key is compared with that key. A different key, or a missing treasury key, is refused and nothing is signed.
+The UI asks for agent, budget, per-payment limit, recipients, and expiry, then the root backup signs. It does not ask for a private key or a pasted signature. The authorize step shows the treasury verifying key before the file is chosen. After the backup unlocks, its verifying key is compared with that key. A different key, or a missing treasury key, is refused and nothing is signed. A successful receipt is shown only when the portfolio lists that same transaction. An older capability for the same agent is not treated as the new one, and Try again is not offered after Arc has already included the transaction.
 
 Chain terms are read from the tab and the root. The portfolio response shows stored rows and a freshness label. A stored balance is not presented as a live balance when `balanceKnown` is false.
 

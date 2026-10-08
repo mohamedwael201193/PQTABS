@@ -33,6 +33,7 @@ import {
   X,
 } from "lucide-react";
 import { isAddress, parseUsdcRaw } from "@/data/actions";
+import { tabForReceipt } from "@/data/opened-tab";
 import { backupMatchesRoot, backupRefusal } from "@/data/pq-key-match";
 import { lockRoot, rootUnlocked, signRootDigest, unlockBackup, verifyingKey } from "@/data/pq-vault";
 import { initials, relFuture, usd } from "@/data/formatters";
@@ -348,15 +349,20 @@ function CreateFlow() {
         if (usePqtabsData.getState().registrar.toLowerCase() !== registrar.toLowerCase()) {
           throw new Error("The wallet changed. The receipt belongs to the previous wallet.");
         }
-        const tab =
-          snapshot.tabs.find((item) => item.txHash?.toLowerCase() === hash.toLowerCase()) ??
-          snapshot.tabs.find(
-            (item) => item.agentId.toLowerCase() === selectedAgent.address.toLowerCase() && item.status === "active",
-          );
-        if (!tab) {
-          throw new Error(`Arc included ${hash}, but the portfolio does not list the new tab.`);
+        let current = snapshot;
+        let tab = tabForReceipt(current.tabs, hash);
+        for (let attempt = 0; attempt < 4 && !tab; attempt += 1) {
+          await new Promise((resolve) => setTimeout(resolve, 3000));
+          if (usePqtabsData.getState().registrar.toLowerCase() !== registrar.toLowerCase()) {
+            throw new Error("The wallet changed. The receipt belongs to the previous wallet.");
+          }
+          current = await loadSnapshot(registrar);
+          tab = tabForReceipt(current.tabs, hash);
         }
-        usePqtabsData.getState().acceptPortfolio(await loadSnapshot(registrar));
+        if (!tab) {
+          throw new Error(`Arc included ${hash}. The portfolio has not listed that capability yet. Refresh before opening another one.`);
+        }
+        usePqtabsData.getState().acceptPortfolio(current);
         setCreatedTab(tab);
         setStage(4);
       })
@@ -1169,9 +1175,11 @@ function CreateFlow() {
                 <Button variant="ghost" className={BTN_GHOST} onClick={finishClose}>
                   Cancel
                 </Button>
-                <Button className={BTN_GOLD} onClick={startCreation}>
-                  Try again
-                </Button>
+                {!failure.includes("Arc included") && (
+                  <Button className={BTN_GOLD} onClick={startCreation}>
+                    Try again
+                  </Button>
+                )}
               </div>
             </div>
           )}
