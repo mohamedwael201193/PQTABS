@@ -172,6 +172,7 @@ export default function ActivityView() {
   const portfolioError = usePqtabsData((state) => state.portfolioError);
   const indexNote = usePqtabsData((state) => state.indexNote);
   const registrar = usePqtabsData((state) => state.registrar);
+  const decisionEpoch = usePqtabsData((state) => state.decisionEpoch);
   const [decisions, setDecisions] = useState<DecisionRecord[]>([]);
 
   useEffect(() => {
@@ -186,7 +187,7 @@ export default function ActivityView() {
     return () => {
       cancelled = true;
     };
-  }, [registrar]);
+  }, [decisionEpoch, registrar]);
 
   const activeCount =
     (agentFilter !== "all" ? 1 : 0) +
@@ -437,7 +438,7 @@ export default function ActivityView() {
           These notes stay in this browser for this wallet. A transaction here is a payment only when that same hash is in the Arc list above.
         </p>
         {decisions.length === 0 ? (
-          <p className="mt-3 text-sm text-muted-foreground">No payment decision has been saved on this device.</p>
+          <p className="mt-3 text-sm text-muted-foreground">No payment decision has been saved for this wallet on this device.</p>
         ) : (
           <ul className="mt-3 space-y-3">
             {decisions.map((record) => (

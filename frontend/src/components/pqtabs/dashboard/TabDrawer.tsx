@@ -466,6 +466,7 @@ function TabDrawerBody({
                   facts = decisionFacts(asked, registrar, decision);
                   if (decision.decision !== "ALLOW") {
                     return saveDecision(decisionRecord(facts, new Date().toISOString())).then(() => {
+                      usePqtabsData.getState().noteDecision();
                       throw new Error(`The capability refused this price. Nothing was signed. ${decision.reason.join(", ")}`);
                     });
                   }
@@ -497,6 +498,7 @@ function TabDrawerBody({
                   if (facts) {
                     try {
                       await saveDecision(settledDecision(facts, { txHash: transaction, receipt, result }, new Date().toISOString()));
+                      usePqtabsData.getState().noteDecision();
                     } catch {
                       toast.message("The receipt was not saved on this device.");
                     }
@@ -515,6 +517,7 @@ function TabDrawerBody({
                   if (facts?.decision === "ALLOW") {
                     try {
                       await saveDecision(decisionRecord(facts, new Date().toISOString()));
+                      usePqtabsData.getState().noteDecision();
                     } catch {
                       toast.message("The decision was not saved on this device.");
                     }

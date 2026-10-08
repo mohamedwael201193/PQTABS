@@ -59,6 +59,8 @@ interface PqtabsDataState {
   accountReady: boolean;
   agentVaultEpoch: number;
   noteAgentVault: () => void;
+  decisionEpoch: number;
+  noteDecision: () => void;
   setRegistrar: (address: string) => void;
   setChainId: (chainId: number | null) => void;
   setPortfolioReady: (ready: boolean) => void;
@@ -89,6 +91,8 @@ export const usePqtabsData = create<PqtabsDataState>((set) => ({
   accountReady: false,
   agentVaultEpoch: 0,
   noteAgentVault: () => set((state) => ({ agentVaultEpoch: state.agentVaultEpoch + 1 })),
+  decisionEpoch: 0,
+  noteDecision: () => set((state) => ({ decisionEpoch: state.decisionEpoch + 1 })),
   setRegistrar: (address) =>
     set((state) => {
       const same = address.toLowerCase() === state.registrar.toLowerCase();
