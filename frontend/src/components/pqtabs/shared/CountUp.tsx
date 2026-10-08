@@ -21,11 +21,14 @@ export function CountUp({
 }) {
   const ref = useRef<HTMLSpanElement>(null);
   const inView = useInView(ref, { once: true, margin: "-40px" });
-  const [display, setDisplay] = useState(0);
+  const [display, setDisplay] = useState(value);
   const fmt = format ?? ((n: number) => String(n));
 
   useEffect(() => {
-    if (!inView) return;
+    if (!inView) {
+      setDisplay(value);
+      return;
+    }
     let raf = 0;
     const start = performance.now();
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;

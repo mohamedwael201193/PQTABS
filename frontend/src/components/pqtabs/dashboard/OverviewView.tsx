@@ -160,7 +160,7 @@ export default function OverviewView() {
         </Button>
       </header>
 
-      {treasuryKnown && totals.treasuryTotalUsd === 0 && <FundNotice />}
+      {treasuryKnown && totals.treasuryTotalUsd === 0 && totals.activeTabCount === 0 && <FundNotice />}
 
       {/* Key figures */}
       <section aria-label="Treasury figures" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
