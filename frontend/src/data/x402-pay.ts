@@ -31,6 +31,18 @@ export function arcExactAccept(paymentRequired: unknown): Record<string, unknown
   return null;
 }
 
+/** The Arc exact recipient. A Base row in the same 402 is ignored. */
+export function servicePayee(paymentRequired: unknown): string | null {
+  const accepted = arcExactAccept(paymentRequired);
+  const payTo = accepted && typeof accepted.payTo === "string" ? accepted.payTo : "";
+  if (!payTo) return null;
+  try {
+    return getAddress(payTo);
+  } catch {
+    return null;
+  }
+}
+
 export function paymentSignatureHeader(
   paymentRequired: unknown,
   authorization: SpendAuthorization,

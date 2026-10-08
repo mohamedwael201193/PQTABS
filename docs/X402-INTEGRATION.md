@@ -17,7 +17,7 @@ Arc requirement, scheme `exact`:
 - network `eip155:5042`
 - asset `0x3600000000000000000000000000000000000000`
 - amount `12` raw USDC
-- payee `0x6Bf001BB5f5E75396d92163325ca01FdEBe2e9A9`
+- payee `0x6Bf001BB5f5E75396d92163325ca01FdEBe2e9A9`. The new-capability screen reads this from a live HTTP 402 and adds it only when that response names an Arc recipient. It does not sign.
 - resource `https://arcrouter.co/v1/chat/completions`
 
 The same document also offers Base (`eip155:8453`) for the same amount. `arcQuote` ignores that entry.

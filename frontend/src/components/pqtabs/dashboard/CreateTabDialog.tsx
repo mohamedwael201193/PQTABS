@@ -35,7 +35,8 @@ import {
 import { isAddress, parseUsdcRaw } from "@/data/actions";
 import { rootUnlocked, signRootDigest, unlockBackup } from "@/data/pq-vault";
 import { initials, relFuture, usd } from "@/data/formatters";
-import { loadSnapshot, prepareOpen, submitPrepared, type PreparedAction } from "@/data/production";
+import { loadSnapshot, prepareOpen, requestServicePrice, submitPrepared, type PreparedAction } from "@/data/production";
+import { servicePayee } from "@/data/x402-pay";
 import { createAgentKey, recallAgentKey } from "@/data/spend";
 import type { Recipient, Tab } from "@/data/types";
 import { useAgents, useDashboardUi, usePqtabsData, useRecipients, useTotals } from "@/lib/store";
@@ -150,6 +151,7 @@ function CreateFlow() {
   const [agentNote, setAgentNote] = useState<string | null>(null);
   const [payeeDraft, setPayeeDraft] = useState("");
   const [payeeNote, setPayeeNote] = useState<string | null>(null);
+  const [readingService, setReadingService] = useState(false);
   const [extraRecipients, setExtraRecipients] = useState<Recipient[]>([]);
   const [prepared, setPrepared] = useState<PreparedAction | null>(null);
   const [passphrase, setPassphrase] = useState("");
@@ -764,6 +766,37 @@ function CreateFlow() {
                   }}
                 >
                   Add
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className={BTN_GHOST}
+                  disabled={readingService}
+                  onClick={() => {
+                    setReadingService(true);
+                    setPayeeNote(null);
+                    void requestServicePrice("Reply with one word: pong")
+                      .then((payload) => {
+                        const address = servicePayee(payload);
+                        if (!address) throw new Error("The service did not name an Arc recipient. Nothing was added.");
+                        const recipient: Recipient = {
+                          id: address,
+                          name: "Paid service",
+                          address,
+                          category: "Infrastructure",
+                        };
+                        setExtraRecipients((current) =>
+                          current.some((item) => item.id.toLowerCase() === address.toLowerCase()) ? current : [...current, recipient],
+                        );
+                        setRecipientIds((current) => new Set(current).add(address));
+                      })
+                      .catch((error: unknown) => {
+                        setPayeeNote(error instanceof Error ? error.message : "The service recipient was not read.");
+                      })
+                      .finally(() => setReadingService(false));
+                  }}
+                >
+                  {readingService ? <Loader2 className="size-4 animate-spin" /> : "Use the service recipient"}
                 </Button>
               </div>
               {payeeNote && <p className="mt-2 text-xs text-danger">{payeeNote}</p>}
