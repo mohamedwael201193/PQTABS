@@ -42,6 +42,8 @@ The current Coinbase exact verifier hashes `TransferWithAuthorization` over name
 
 An `eth_call` of both `transferWithAuthorization` overloads on `https://rpc.mainnet.arc.io`, using a throwaway unfunded signer and that same domain, reverted with `ERC20: transfer amount exceeds balance`. The token checked the signature before the balance. One later `POST /verify` of a new signature in that same encoding still returned `isValid: false`, `invalid_exact_evm_signature`, and no transaction. The current TypeScript verifier returns that reason when the typed-data hash throws or `eth_getCode` throws, and it does so before the balance simulation. An unfunded signature that reached simulation would be `invalid_exact_evm_insufficient_balance`. The live response was not that reason. `/settle` was not called.
 
-A signature over domain name `USD Coin`, with `extra.name` set to `USDC`, also returned `invalid_exact_evm_signature` and no transaction. The facilitator does not accept that signature in place of the token domain. No further verify was sent.
+A signature over domain name `USD Coin`, with `extra.name` set to `USDC`, also returned `invalid_exact_evm_signature` and no transaction. The facilitator does not accept that signature in place of the token domain.
+
+The same USDC signature, with `extra.assetTransferMethod` set to `eip3009`, returned `invalid_exact_evm_insufficient_balance` and no transaction. The signature check passed. The unfunded account failed the balance check. `readVerify` treats that body as `NO_PAYMENT`. `arcPaymentAccept` adds the method field to the Arc accept from the captured 402. `/settle` was not called.
 
 `POST /v1/x402/decide` reads the tab from Arc and runs that same decision. It does not relay. `POST /v1/relay/spend` refuses with `quote_mismatch` unless the signed amount and recipient are the Arc requirement in `paymentRequired`. The capability screen asks the service for a price and signs only when the decision is `ALLOW`.

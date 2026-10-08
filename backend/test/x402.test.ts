@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { decideHttpPayment, readSettlement, readVerify } from "../src/index/x402.js";
+import { arcPaymentAccept, decideHttpPayment, readSettlement, readVerify } from "../src/index/x402.js";
 import type { SpendFacts } from "../src/index/decide.js";
 
 /** Captured 2026-10-08 from HTTP 402 on https://arcrouter.co/v1/chat/completions. Header matched this body. */
@@ -91,4 +91,17 @@ test("a facilitator verify is not a settlement", () => {
   assert.deepEqual(readVerify({ isValid: true, payer: "0x56377522376b5273a97313992c7970B106cB3837" }).reason, ["verify_is_not_settlement"]);
   assert.equal(readSettlement({ success: false, errorReason: "invalid_exact_evm_signature", transaction: "" }).decision, "NO_PAYMENT");
   assert.equal(readSettlement({ success: true, transaction: "0x" + "ab".repeat(32) }).decision, "ALLOW");
+  assert.equal(readVerify({ isValid: false, invalidReason: "invalid_exact_evm_insufficient_balance" }).decision, "NO_PAYMENT");
+});
+
+test("the Arc accept carries the EIP-3009 method the facilitator requires", () => {
+  const accept = arcPaymentAccept(quoted);
+  assert.ok(accept);
+  const extra = accept.extra as { name: string; version: string; assetTransferMethod: string };
+  assert.equal(extra.name, "USDC");
+  assert.equal(extra.version, "2");
+  assert.equal(extra.assetTransferMethod, "eip3009");
+  assert.equal(accept.amount, "12");
+  assert.equal(accept.network, "eip155:5042");
+  assert.equal(arcPaymentAccept({ ...quoted, accepts: [quoted.accepts[1]] }), null);
 });

@@ -82,3 +82,25 @@ export function readSettlement(payload: unknown): Decision & { tx: string } {
   }
   return { decision: "ALLOW", reason: ["facilitator_reported_tx"], tx };
 }
+
+/**
+ * The ArcRouter facilitator checks the EIP-3009 signature only when `extra.assetTransferMethod` is `eip3009`.
+ * Without that field it reports `invalid_exact_evm_signature` for a signature the token accepts.
+ */
+export function withEip3009Method(accept: Record<string, unknown>): Record<string, unknown> {
+  const extra = asRecord(accept.extra) ?? {};
+  return { ...accept, extra: { ...extra, assetTransferMethod: "eip3009" } };
+}
+
+/** The Arc exact accept from a 402, with the method field the facilitator requires. */
+export function arcPaymentAccept(payload: unknown): Record<string, unknown> | null {
+  const body = asRecord(payload);
+  if (!body || !Array.isArray(body.accepts) || !arcQuote(payload)) return null;
+  for (const item of body.accepts) {
+    const row = asRecord(item);
+    if (!row || row.scheme !== "exact" || row.network !== ARC_NETWORK) continue;
+    if (typeof row.asset !== "string" || row.asset.toLowerCase() !== USDC.toLowerCase()) continue;
+    return withEip3009Method(row);
+  }
+  return null;
+}

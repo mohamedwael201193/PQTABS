@@ -30,4 +30,4 @@ Arc mainnet is chain id 5042. The SLH-DSA-SHA2-128s precompile is `0x18000000000
 - An agent payment after a browser refresh on the production origin.
 - A new wallet creating a root, funding it, opening a capability, paying, and closing, in this audit.
 - A second account inside the current Chrome wallet. The selected account `0xBDfC…0034` has no root. The page still says "Protect your treasury". The wallet could not be switched from this session.
-- An x402 payment and the paid resource. Arc USDC accepts the EIP-3009 signature. The ArcRouter facilitator refuses it before the balance check. No `PAYMENT-SIGNATURE` was sent. No open capability exists for that payee.
+- An x402 payment and the paid resource. The facilitator accepts a USDC EIP-3009 signature when `extra.assetTransferMethod` is `eip3009`, then returns `invalid_exact_evm_insufficient_balance` for an unfunded signer. No funded payment was settled. No `PAYMENT-SIGNATURE` was sent. The selected wallet has no open capability.
