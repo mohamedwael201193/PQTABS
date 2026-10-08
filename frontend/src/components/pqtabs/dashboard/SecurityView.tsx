@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { compareChainActivity } from "@/data/activity-order";
+import { hasRootBackup } from "@/data/root-backup";
 import { relFuture, relTime, usd } from "@/data/formatters";
 import type { ActivityKind } from "@/data/types";
 import {
@@ -77,7 +78,23 @@ export default function SecurityView() {
   const agents = useAgents();
   const activity = useActivity();
   const account = usePqtabsData((state) => state.snapshot.account);
+  const registrar = usePqtabsData((state) => state.registrar);
   const setView = useDashboardUi((s) => s.setView);
+  const [backupOnDevice, setBackupOnDevice] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void hasRootBackup(registrar)
+      .then((present) => {
+        if (!cancelled) setBackupOnDevice(present);
+      })
+      .catch(() => {
+        if (!cancelled) setBackupOnDevice(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [registrar]);
 
   const activeTabs = useMemo(() => tabs.filter((t) => t.status === "active"), [tabs]);
   const agentsById = useMemo(() => new Map(agents.map((a) => [a.id.toLowerCase(), a])), [agents]);
@@ -211,7 +228,15 @@ export default function SecurityView() {
             </span>
           </div>
           <div className="mt-4 space-y-3.5 text-sm leading-relaxed text-muted-foreground">
-            <p>Your root authority cannot be recreated from your wallet alone. This device keeps the encrypted security-key backup. The downloaded file is for a new device. The passphrase and the private key are not stored.</p>
+            <p>
+              Your root authority cannot be recreated from your wallet alone.{" "}
+              {backupOnDevice == null
+                ? "Checking this device for the encrypted security-key backup."
+                : backupOnDevice
+                  ? "This device keeps the encrypted security-key backup. The downloaded file is for a new device."
+                  : "This device does not have the encrypted security-key backup. The next authorization asks for the downloaded file, pqtabs-security-key.pqtabs. After it matches this root, this device keeps that encrypted copy."}{" "}
+              The passphrase and the private key are not stored.
+            </p>
             <p>If that encrypted copy and the downloaded file are both lost, the USDC in the root stays there. There is no operator recovery.</p>
           </div>
           <details className="mt-5 text-xs text-muted-foreground">

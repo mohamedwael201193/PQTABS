@@ -433,7 +433,7 @@ function CreateFlow() {
   const description = succeeded
     ? "Arc accepted the signature and the capability is in this root's portfolio."
     : phase === "authorize"
-      ? "Use the security-key backup you downloaded when you created this treasury."
+      ? "Unlock the security key for this session. It signs the capability. The wallet does not."
       : phase === "confirming"
         ? "Waiting for the transaction receipt."
         : phase === "error"
@@ -1008,7 +1008,7 @@ function CreateFlow() {
                 <ul className="mt-3 space-y-2 text-sm leading-relaxed text-muted-foreground">
                   <li>Your agent cannot access the rest of your wallet or root cash.</li>
                   <li>Every spend remains inside this capability&apos;s rules.</li>
-                  <li>Root authority remains protected by PQ authorization.</li>
+                  <li>Root authority uses SLH-DSA verified on Arc.</li>
                 </ul>
               </div>
 
