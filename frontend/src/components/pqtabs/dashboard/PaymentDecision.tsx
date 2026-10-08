@@ -1,7 +1,7 @@
 "use client";
 
 import type { DecisionRecord } from "@/data/decision-record";
-import { paymentReasonSentence } from "@/data/decision-record";
+import { paymentReasonSentence, paymentStatusLines } from "@/data/decision-record";
 
 function rawUsdc(value: string): string {
   if (!/^[0-9]+$/.test(value)) return "—";
@@ -17,6 +17,7 @@ function short(value: string): string {
 }
 
 export function PaymentDecision({ record }: { record: DecisionRecord }) {
+  const status = paymentStatusLines(record.decision, record.txHash);
   const refused = record.decision === "REFUSE" || record.decision === "NO_PAYMENT";
   const rows: Array<[string, string]> = [
     ["Task", record.task || "—"],
@@ -39,14 +40,16 @@ export function PaymentDecision({ record }: { record: DecisionRecord }) {
   return (
     <article className="rounded-lg border border-white/[.06] px-3 py-3">
       <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Payment decision</p>
-      {refused ? (
+      {status.length > 0 ? (
         <div className="mt-2 space-y-1 text-sm text-foreground">
-          <p>Payment blocked</p>
-          {record.reason.map((reason) => (
-            <p key={reason}>{paymentReasonSentence(reason)}</p>
+          {status.map((line) => (
+            <p key={line}>{line}</p>
           ))}
-          <p>Nothing was signed.</p>
-          <p>Nothing was broadcast.</p>
+          {refused
+            ? record.reason.map((reason) => (
+                <p key={reason}>{paymentReasonSentence(reason)}</p>
+              ))
+            : null}
         </div>
       ) : null}
       <dl className="mt-3 grid gap-2 sm:grid-cols-2">

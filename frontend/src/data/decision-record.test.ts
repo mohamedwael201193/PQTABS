@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { decisionRecord, decisionsForRegistrar, paymentReasonSentence, settledDecision, type DecisionFacts } from "./decision-record.ts";
+import { decisionRecord, decisionsForRegistrar, paymentReasonSentence, paymentStatusLines, settledDecision, type DecisionFacts } from "./decision-record.ts";
 
 const facts = (): DecisionFacts => ({
   task: "Reply with one word: pong",
@@ -90,4 +90,16 @@ test("one registrar's decision is not listed for another", () => {
 
 test("a per-payment refusal has a plain sentence", () => {
   assert.equal(paymentReasonSentence("max_per_call"), "Service price exceeds the capability's per-payment limit.");
+  assert.equal(paymentReasonSentence("facilitator_rejected"), "The facilitator rejected the signature. No Arc transaction was recorded.");
+});
+
+test("an unsettled allow says nothing was broadcast and does not say nothing was signed", () => {
+  const record = decisionRecord({ ...facts(), decision: "ALLOW", reason: ["capability_active"] }, "2026-10-08T02:00:00.000Z");
+  assert.deepEqual(paymentStatusLines(record.decision, record.txHash), [
+    "Payment blocked",
+    "No Arc receipt was recorded.",
+    "Nothing was broadcast.",
+  ]);
+  assert.deepEqual(paymentStatusLines("REFUSE", ""), ["Payment blocked", "Nothing was signed.", "Nothing was broadcast."]);
+  assert.deepEqual(paymentStatusLines("ALLOW", "0x" + "ab".repeat(32)), []);
 });

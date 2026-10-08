@@ -99,6 +99,7 @@ const REASON_SENTENCE: Record<string, string> = {
   exposure: "The root exposure ceiling is already full.",
   service_unavailable: "The service was unavailable.",
   receipt_missing: "No Arc receipt was recorded.",
+  facilitator_rejected: "The facilitator rejected the signature. No Arc transaction was recorded.",
   result_unusable: "The service result was not usable.",
   charge_above_payment: "The service charge was above the signed payment.",
   capability_active: "The capability is active.",
@@ -114,4 +115,15 @@ const REASON_SENTENCE: Record<string, string> = {
 
 export function paymentReasonSentence(reason: string): string {
   return REASON_SENTENCE[reason] ?? reason;
+}
+
+/** A refusal was never signed. An allow with no receipt was signed and then not broadcast. */
+export function paymentStatusLines(decision: string, txHash: string): string[] {
+  if (decision === "REFUSE" || decision === "NO_PAYMENT") {
+    return ["Payment blocked", "Nothing was signed.", "Nothing was broadcast."];
+  }
+  if (decision === "NOT_SETTLED" || !/^0x[0-9a-fA-F]{64}$/.test(txHash)) {
+    return ["Payment blocked", "No Arc receipt was recorded.", "Nothing was broadcast."];
+  }
+  return [];
 }

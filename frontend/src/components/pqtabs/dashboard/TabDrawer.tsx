@@ -640,9 +640,13 @@ function TabDrawerBody({
                   toast.success(result);
                 })
                 .catch(async (error: unknown) => {
+                  const message = error instanceof Error ? error.message : "The payment was rejected.";
                   if (facts?.decision === "ALLOW") {
                     try {
-                      const saved = decisionRecord(facts, new Date().toISOString());
+                      const reason = message.includes("invalid_exact_evm_signature")
+                        ? [...facts.reason, "facilitator_rejected"]
+                        : facts.reason;
+                      const saved = decisionRecord({ ...facts, reason }, new Date().toISOString());
                       await saveDecision(saved);
                       setShownDecision(saved);
                       usePqtabsData.getState().noteDecision();
@@ -650,7 +654,6 @@ function TabDrawerBody({
                       toast.message("The decision was not saved on this device.");
                     }
                   }
-                  const message = error instanceof Error ? error.message : "The payment was rejected.";
                   if (!message.startsWith("Payment blocked")) {
                     setPayLog((lines) => [...lines, `Payment blocked. ${message}`]);
                   }
