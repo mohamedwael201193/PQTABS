@@ -448,7 +448,7 @@ function CreateFlow() {
   const title = succeeded
     ? "Capability active"
     : phase === "authorize"
-      ? "Authorize with the root key"
+      ? "Authorize capability"
       : phase === "confirming"
         ? "Submitting to Arc"
         : phase === "error"
@@ -459,7 +459,7 @@ function CreateFlow() {
   const description = succeeded
     ? "Arc accepted the signature and the capability is in this root's portfolio."
     : phase === "authorize"
-      ? "Authorize with your security key. The signature is created on this device and checked by Arc."
+      ? "Use the security-key backup you downloaded when you created this treasury."
       : phase === "confirming"
         ? "Waiting for the transaction receipt."
         : phase === "error"
@@ -1051,29 +1051,17 @@ function CreateFlow() {
               {prepared ? (
                 <>
                   <p className="text-sm leading-relaxed text-muted-foreground">
-                    Authorize this capability with your security key. The signature stays on this device.
-                  </p>
-                  <p className="text-sm leading-relaxed text-muted-foreground">
-                    {treasuryKey
-                      ? <>The backup must match verifying key <span className="break-all font-mono text-[10px] text-foreground">{treasuryKey}</span>. An older backup is not signed.</>
-                      : "The treasury verifying key is not loaded. Nothing will be signed."}
+                    Use the security-key backup you downloaded when you created this treasury.
                   </p>
                   {!rootUnlocked(usePqtabsData.getState().registrar) && (
                     <div className="space-y-2">
+                      <label className="block text-xs text-muted-foreground" htmlFor="security-key-backup">
+                        Security-key backup
+                      </label>
                       <input
-                        type="password"
-                        value={passphrase}
-                        aria-label="Security key passphrase"
-                        placeholder="Passphrase for your backup"
-                        className="h-9 w-full rounded-lg border border-white/10 bg-transparent px-3 text-sm outline-none"
-                        onChange={(event) => setPassphrase(event.target.value)}
-                        onBlur={() => {
-                          if (backupBytes) unlockChosen(backupBytes, passphrase);
-                        }}
-                      />
-                      <input
+                        id="security-key-backup"
                         type="file"
-                        aria-label="Security key backup"
+                        aria-label="Choose backup file"
                         className="block w-full text-xs text-muted-foreground"
                         onChange={(event) => {
                           const file = event.target.files?.[0];
@@ -1084,6 +1072,30 @@ function CreateFlow() {
                           });
                         }}
                       />
+                      <p className="text-[11px] leading-relaxed text-muted-foreground">
+                        Usually found in Downloads as pqtabs-security-key.pqtabs.
+                      </p>
+                      <details className="text-[11px] text-muted-foreground">
+                        <summary className="cursor-pointer">Can&apos;t find it?</summary>
+                        <p className="mt-2 leading-relaxed">
+                          Check your Downloads folder or the secure location where you saved it. PQTABS never stores another copy of this private security key.
+                        </p>
+                      </details>
+                      <label className="block text-xs text-muted-foreground" htmlFor="security-key-passphrase">
+                        Backup passphrase
+                      </label>
+                      <input
+                        id="security-key-passphrase"
+                        type="password"
+                        value={passphrase}
+                        aria-label="Enter your backup passphrase"
+                        placeholder="Enter your backup passphrase"
+                        className="h-9 w-full rounded-lg border border-white/10 bg-transparent px-3 text-sm outline-none"
+                        onChange={(event) => setPassphrase(event.target.value)}
+                        onBlur={() => {
+                          if (backupBytes) unlockChosen(backupBytes, passphrase);
+                        }}
+                      />
                       {unlockError && (
                         <p className="text-xs leading-relaxed text-danger" role="alert">{unlockError}</p>
                       )}
@@ -1092,6 +1104,7 @@ function CreateFlow() {
                   <details className="text-xs text-muted-foreground">
                     <summary className="cursor-pointer">Technical details</summary>
                     <p className="mt-2 break-all font-mono text-[10px]">{prepared.digest}</p>
+                    {treasuryKey && <p className="mt-2 break-all font-mono text-[10px]">{treasuryKey}</p>}
                   </details>
                 </>
               ) : (
@@ -1210,7 +1223,7 @@ function CreateFlow() {
                   </Button>
                 ) : (
                   <Button className={BTN_GOLD} disabled={!ack} onClick={startCreation}>
-                    Authorize capability
+                    Continue
                   </Button>
                 )}
               </div>
@@ -1253,7 +1266,7 @@ function CreateFlow() {
                     .finally(() => setAuthorizing(false));
                 }}
               >
-                {authorizing ? "Authorizing" : "Authorize"}
+                {authorizing ? "Authorizing" : "Authorize capability"}
               </Button>
             </div>
           </div>

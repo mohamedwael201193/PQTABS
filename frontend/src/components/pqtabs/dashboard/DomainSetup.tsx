@@ -117,7 +117,15 @@ export function DomainSetup({ onExit, onReady }: { onExit: () => void; onReady: 
           title="Protect your treasury"
           body="This wallet has no security domain yet. Your wallet identifies you. A separate security key authorizes what agents can spend. It is not saved in the browser. After this, you create an agent and give it a capability. The agent never holds this key."
           action={
-            <div className="flex w-full flex-col gap-3 text-left">
+            <form
+              autoComplete="off"
+              className="flex w-full flex-col gap-3 text-left"
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (saved) void protect();
+                else void downloadKey();
+              }}
+            >
               <p className="text-center font-mono text-[11px] text-foreground">
                 Wallet {registrar.slice(0, 6)}…{registrar.slice(-4)}
               </p>
@@ -130,6 +138,9 @@ export function DomainSetup({ onExit, onReady }: { onExit: () => void; onReady: 
                   value={ceiling}
                   onChange={(event) => setCeiling(event.target.value)}
                   aria-label="Exposure ceiling in USDC"
+                  name="pqtabs-exposure-ceiling"
+                  autoComplete="off"
+                  inputMode="decimal"
                   className="mt-1 h-9 w-full rounded-lg border border-white/10 bg-transparent px-3 text-sm text-foreground outline-none"
                 />
               </label>
@@ -140,37 +151,51 @@ export function DomainSetup({ onExit, onReady }: { onExit: () => void; onReady: 
                     type="password"
                     value={passphrase}
                     onChange={(event) => setPassphrase(event.target.value)}
-                    aria-label="Security key passphrase"
+                    aria-label="Passphrase for the backup file"
+                    name="pqtabs-backup-passphrase"
+                    autoComplete="new-password"
                     className="mt-1 h-9 w-full rounded-lg border border-white/10 bg-transparent px-3 text-sm text-foreground outline-none"
                   />
                 </label>
               )}
+              {saved ? (
+                <div className="rounded-lg border border-white/10 px-3 py-3">
+                  <p className="text-sm text-foreground">Security-key backup created</p>
+                  <p className="mt-2 text-xs text-muted-foreground">Filename</p>
+                  <p className="font-mono text-xs text-foreground">pqtabs-security-key.pqtabs</p>
+                  <p className="mt-2 text-xs text-muted-foreground">Saved by you</p>
+                  <p className="text-xs text-foreground">Downloads / your chosen secure location</p>
+                  <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+                    Stay on this page until the wallet confirms. This session matches the file you just downloaded. PQTABS does not keep another copy.
+                  </p>
+                </div>
+              ) : null}
               {saved ? (
                 <label className="flex items-start gap-2 text-xs text-muted-foreground">
                   <input
                     type="checkbox"
                     checked={kept}
                     onChange={(event) => setKept(event.target.checked)}
-                    aria-label="I saved the backup file"
+                    aria-label="I saved my backup"
                     className="mt-0.5"
                   />
-                  I saved the backup file. The wallet confirmation comes after this.
+                  I saved my backup
                 </label>
               ) : null}
               <Button
-                onClick={saved ? protect : downloadKey}
+                type="submit"
                 disabled={busy !== null || (saved && !kept)}
                 className="bg-gold text-[#171204] hover:bg-[#eec95e]"
               >
-                {busy ?? (saved ? (sent ? "Check Arc again" : "Create security domain") : "Download backup")}
+                {busy ?? (saved ? (sent ? "Check Arc again" : "Confirm in your wallet") : "Download backup")}
               </Button>
               <p className="text-center text-[11px] leading-relaxed text-muted-foreground">
-                The backup file is the only copy of this key. Your wallet cannot recreate it. There is no operator recovery. Save the file before the wallet confirmation.
+                Download backup only saves the file. Confirm in your wallet is the separate Arc transaction that creates the treasury.
               </p>
               <button type="button" onClick={onExit} className="text-center text-xs text-muted-foreground hover:text-foreground">
                 Back to site
               </button>
-            </div>
+            </form>
           }
           className="w-full"
         />

@@ -24,7 +24,7 @@ function FundNotice() {
   const root = usePqtabsData((s) => s.snapshot.account.rootAddress);
   const registrar = usePqtabsData((s) => s.registrar);
   const acceptPortfolio = usePqtabsData((s) => s.acceptPortfolio);
-  const [amount, setAmount] = useState("0.5");
+  const [amount, setAmount] = useState("0.01");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -63,8 +63,10 @@ function FundNotice() {
 
   return (
     <section className="rounded-xl border border-white/[.08] bg-[#0e1013] p-5">
-      <h2 className="font-display text-lg font-semibold">Your treasury is empty.</h2>
-      <p className="mt-1 text-sm text-muted-foreground">Deposit USDC to start creating capabilities.</p>
+      <h2 className="font-display text-lg font-semibold">Your treasury is ready</h2>
+      <p className="mt-1 text-sm text-foreground">Balance: 0 USDC</p>
+      <p className="mt-1 text-sm text-muted-foreground">Fund your treasury to give agents a spending budget.</p>
+      <p className="mt-3 break-all font-mono text-[11px] text-muted-foreground">Deposit address {root}</p>
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <input
           value={amount}

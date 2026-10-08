@@ -113,7 +113,7 @@ function ConnectGate({ onExit }: { onExit: () => void }) {
         <EmptyState
           icon={<Wallet className="h-5 w-5" strokeWidth={1.75} />}
           title="Connect wallet"
-          body="Your wallet identifies you. It does not hold the security key that protects the treasury."
+          body="Your wallet identifies you. Connecting does not move USDC. The backup download comes next, and the treasury transaction comes only after you save that file."
           action={
             <div className="flex flex-col items-center gap-3">
               <Button onClick={connect} disabled={busy} className="bg-gold text-[#171204] hover:bg-[#eec95e]">

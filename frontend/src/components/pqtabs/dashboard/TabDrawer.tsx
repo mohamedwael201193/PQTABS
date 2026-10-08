@@ -211,6 +211,7 @@ function TabDrawerBody({
   const [closeBackup, setCloseBackup] = useState<ArrayBuffer | null>(null);
   const [closeReady, setCloseReady] = useState(() => rootUnlocked(usePqtabsData.getState().registrar));
   const [paying, setPaying] = useState(false);
+  const [payLog, setPayLog] = useState<string[]>([]);
   const payLock = useRef(false);
 
   function unlockClose(bytes: ArrayBuffer, secret: string) {
@@ -484,30 +485,40 @@ function TabDrawerBody({
               }
               payLock.current = true;
               setPaying(true);
+              setPayLog(["Agent requested a paid service"]);
               const asked = task.trim();
               let facts: DecisionFacts | null = null;
+              const block = (reason: string) => {
+                setPayLog((lines) => [...lines, `Payment blocked. ${reason}`]);
+                throw new Error(`Payment blocked. ${reason}`);
+              };
               void requestServicePrice(asked)
-                .then((paymentRequired) => decideServicePrice(tab.id, paymentRequired).then((decision) => ({ paymentRequired, decision })))
+                .then((paymentRequired) => {
+                  setPayLog((lines) => [...lines, "Price verified"]);
+                  return decideServicePrice(tab.id, paymentRequired).then((decision) => ({ paymentRequired, decision }));
+                })
                 .then(async ({ paymentRequired, decision }) => {
                   facts = decisionFacts(asked, registrar, decision);
                   if (decision.decision !== "ALLOW") {
                     return saveDecision(decisionRecord(facts, new Date().toISOString())).then(() => {
                       usePqtabsData.getState().noteDecision();
-                      throw new Error(`The capability refused this price. Nothing was signed. ${decision.reason.join(", ")}`);
+                      block(decision.reason[0] ?? "The capability refused this price. Nothing was signed.");
                     });
                   }
                   if (!isAddress(decision.payee)) {
-                    throw new Error("The service price had no recipient. Nothing was signed.");
+                    block("The service price had no recipient. Nothing was signed.");
                   }
+                  setPayLog((lines) => [...lines, "Payee verified"]);
                   if (!agentCanSign(agentAddress(key), decision.agent)) {
                     facts = { ...facts, decision: "REFUSE", reason: ["wrong_agent"] };
                     return saveDecision(decisionRecord(facts, new Date().toISOString())).then(() => {
                       usePqtabsData.getState().noteDecision();
-                      throw new Error("This device key is not the agent on this capability. Nothing was signed.");
+                      block("This device key is not the agent on this capability. Nothing was signed.");
                     });
                   }
                   const now = await arcClock();
                   const deadline = paymentDeadline(now, chainExpirySeconds(decision.expiry), serviceTimeoutSeconds(paymentRequired));
+                  setPayLog((lines) => [...lines, "Policy approved"]);
                   return authorizationBlob(key, tab.id, decision.payee, BigInt(decision.price), BigInt(deadline)).then((signed) => ({
                     paymentRequired,
                     decision,
@@ -541,10 +552,13 @@ function TabDrawerBody({
                     toast.message("The wallet changed. The receipt belongs to the previous wallet.");
                     return;
                   }
+                  setPayLog((lines) => [...lines, "Arc payment confirmed"]);
                   if (!result) {
+                    setPayLog((lines) => [...lines, "Payment blocked. The service result was not usable. No further payment was sent."]);
                     toast.error(`Arc included ${transaction.slice(0, 10)}… The service result was not usable. No further payment was sent.`);
                     return;
                   }
+                  setPayLog((lines) => [...lines, "Service response received"]);
                   toast.success(result);
                 })
                 .catch(async (error: unknown) => {
@@ -556,7 +570,11 @@ function TabDrawerBody({
                       toast.message("The decision was not saved on this device.");
                     }
                   }
-                  toast.error(error instanceof Error ? error.message : "The payment was rejected.");
+                  const message = error instanceof Error ? error.message : "The payment was rejected.";
+                  if (!message.startsWith("Payment blocked")) {
+                    setPayLog((lines) => [...lines, `Payment blocked. ${message}`]);
+                  }
+                  toast.error(message);
                 })
                 .finally(() => {
                   payLock.current = false;
@@ -567,6 +585,13 @@ function TabDrawerBody({
           >
             {paying ? <Loader2 className="size-4 animate-spin" /> : "Pay the service price"}
           </Button>
+          {payLog.length > 0 && (
+            <ul className="mt-3 space-y-1" aria-live="polite">
+              {payLog.map((line) => (
+                <li key={line} className="text-xs text-muted-foreground">{line}</li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
 

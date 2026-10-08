@@ -11,7 +11,7 @@ test("the same verifying key matches regardless of case", () => {
 test("a different verifying key does not match", () => {
   const other = "0x" + "ab".repeat(32);
   assert.equal(backupMatchesRoot(other, chain), "mismatch");
-  assert.match(backupRefusal("mismatch"), /Nothing was signed/);
+  assert.equal(backupRefusal("mismatch"), "This backup belongs to an older security key.");
 });
 
 test("a missing chain key is not treated as a match", () => {
