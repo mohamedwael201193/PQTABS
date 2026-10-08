@@ -1,8 +1,20 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { probeAmount, probePayment, probeRefusal, replayRefusal, spentAuthorization, unavailableServiceRefusal } from "./refusal-probe.ts";
+import { capabilityPayment, expiredRefusal, expiryStillOpen, probeAmount, probePayment, probeRefusal, replayRefusal, spentAuthorization, unavailableServiceRefusal } from "./refusal-probe.ts";
 
 const PAYEE = "0x6Bf001BB5f5E75396d92163325ca01FdEBe2e9A9";
+
+test("an open capability is not reported as expired", () => {
+  assert.equal(expiryStillOpen(1_700_000_000, 1_791_560_403), true);
+  assert.equal(expiryStillOpen(1_791_560_403, 1_791_560_403), false);
+  assert.equal(capabilityPayment(PAYEE, "1").accepts[0].payTo, PAYEE);
+  assert.equal(capabilityPayment(PAYEE, "1").accepts[0].amount, "1");
+  assert.equal(expiredRefusal(200, { decision: "ALLOW", reason: ["not_expired"] }), null);
+  assert.deepEqual(expiredRefusal(200, { decision: "REFUSE", reason: ["expired"] }), {
+    decision: "REFUSE",
+    reason: ["expired"],
+  });
+});
 
 test("the per-payment check is one unit above the live limit", () => {
   assert.equal(probeAmount("above_per_payment", "10000", "9988"), "10001");

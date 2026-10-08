@@ -84,6 +84,28 @@ export function probeRefusal(
   return null;
 }
 
+/** True while Arc's clock is still before the capability expiry. A bad clock or expiry is not a payment. */
+export function expiryStillOpen(now: number, expiry: number): boolean {
+  if (!Number.isSafeInteger(now) || now <= 0) throw new Error("Could not read Arc's clock. Nothing was signed.");
+  if (!Number.isSafeInteger(expiry) || expiry <= 0) throw new Error("The capability expiry could not be read. Nothing was signed.");
+  return now < expiry;
+}
+
+/** A real policy refusal whose reason is expiry, with no transaction. */
+export function expiredRefusal(
+  status: number,
+  body: ProbeBody | null,
+): { decision: "REFUSE"; reason: string[] } | null {
+  const outcome = probeRefusal(status, body);
+  if (!outcome || outcome.decision !== "REFUSE" || !outcome.reason.includes("expired")) return null;
+  return { decision: "REFUSE", reason: outcome.reason };
+}
+
+/** An Arc exact requirement for the capability's own recipient. It is not a signature. */
+export function capabilityPayment(payee: string, amount: string) {
+  return probePayment("above_balance", payee, amount);
+}
+
 /** A service that never returned HTTP 402. A priced 402 is not this check. */
 export function unavailableServiceRefusal(status: number | null): { decision: "NO_PAYMENT"; reason: ["service_unavailable"] } | null {
   if (status === 402) return null;

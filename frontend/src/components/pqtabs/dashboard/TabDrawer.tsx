@@ -29,7 +29,7 @@ import { isAddress } from "@/data/actions";
 import { decisionRecord, paymentReasonSentence, settledDecision, type DecisionFacts, type DecisionRecord, type QuotedDecision } from "@/data/decision-record";
 import { saveDecision } from "@/data/decision-store";
 import { arcClock, BACKEND_URL, confirmRootSignature, describeReturn, decideServicePrice, loadSnapshot, prepareClose, productionProvider, requestServicePrice, settleService, submitPrepared, type PreparedAction, type ServiceDecision } from "@/data/production";
-import { probeAmount, probePayment, probeRefusal, replayRefusal, spentAuthorization, UNAVAILABLE_SERVICE_URL, unavailableServiceRefusal, type ProbeName } from "@/data/refusal-probe";
+import { probeAmount, probePayment, probeRefusal, replayRefusal, spentAuthorization, UNAVAILABLE_SERVICE_URL, unavailableServiceRefusal, capabilityPayment, expiredRefusal, expiryStillOpen, type ProbeName } from "@/data/refusal-probe";
 import { agentAddress, authorizationBlob, recallAgentKey, USDC } from "@/data/spend";
 import { arcClient } from "@/data/wallet";
 import { generatePrivateKey } from "viem/accounts";
@@ -302,6 +302,97 @@ function TabDrawerBody({
       setPayLog([labels[name], `Payment blocked. ${sentence} Nothing was signed. Nothing was broadcast.`]);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "This check was not a refusal. Nothing was signed. Nothing was broadcast.";
+      setPayLog((lines) => [...lines, message]);
+      toast.error(message);
+    } finally {
+      payLock.current = false;
+      setPaying(false);
+    }
+  }
+
+  async function runExpiryCheck() {
+    if (!tab || payLock.current) return;
+    const registrar = usePqtabsData.getState().registrar;
+    const payee = tab.policy.allowedRecipients.find((item) => isAddress(item));
+    if (!registrar || !payee || !tab.expiryUnix) {
+      toast.error("The capability expiry could not be read. Nothing was signed.");
+      return;
+    }
+    payLock.current = true;
+    setPaying(true);
+    setPayLog(["Check: expired capability"]);
+    try {
+      const now = await arcClock();
+      if (expiryStillOpen(now, tab.expiryUnix)) {
+        const facts: DecisionFacts = {
+          task: "Check: expired capability",
+          service: "Policy check",
+          resource: "",
+          price: "",
+          asset: "",
+          network: "eip155:5042",
+          payee,
+          agent: tab.agentId,
+          capability: tab.id,
+          remaining_capability_balance: tab.balanceRaw ?? "",
+          maxPerCall: tab.maxPerCallRaw ?? "",
+          root_exposure: "",
+          maxOpenExposure: "",
+          expiry: String(tab.expiryUnix),
+          decision: "NO_PAYMENT",
+          reason: ["not_yet_expired"],
+          registrar,
+        };
+        const saved = decisionRecord(facts, new Date().toISOString());
+        await saveDecision(saved);
+        usePqtabsData.getState().noteDecision();
+        setShownDecision(saved);
+        setPayLog(["Check: expired capability", "Payment blocked. This capability has not expired. Nothing was signed. Nothing was broadcast."]);
+        return;
+      }
+      const response = await fetch(`${BACKEND_URL}/v1/x402/decide`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ tab: tab.id, paymentRequired: capabilityPayment(payee, "1") }),
+      });
+      const payload = (await response.json().catch(() => null)) as (ServiceDecision & { hash?: string; error?: string }) | null;
+      if (response.status === 429 || payload?.error === "rate_limited") {
+        throw new Error("Network reads are busy. Nothing was signed. Nothing was broadcast.");
+      }
+      const outcome = expiredRefusal(response.status, payload);
+      if (!outcome || !payload) {
+        throw new Error("This check was not an expiry refusal. Nothing was signed. Nothing was broadcast.");
+      }
+      const text = (value: unknown, fallback: string) => (typeof value === "string" && value ? value : fallback);
+      const facts: DecisionFacts = {
+        task: "Check: expired capability",
+        service: "Policy check",
+        resource: text(payload.resource, ""),
+        price: text(payload.price, "1"),
+        asset: text(payload.asset, USDC),
+        network: text(payload.network, "eip155:5042"),
+        payee: text(payload.payee, payee),
+        agent: text(payload.agent, tab.agentId),
+        capability: text(payload.capability, tab.id),
+        remaining_capability_balance: text(payload.remaining_capability_balance, tab.balanceRaw ?? ""),
+        maxPerCall: text(payload.maxPerCall, tab.maxPerCallRaw ?? ""),
+        root_exposure: text(payload.root_exposure, ""),
+        maxOpenExposure: text(payload.maxOpenExposure, ""),
+        expiry: text(payload.expiry, String(tab.expiryUnix)),
+        decision: "REFUSE",
+        reason: outcome.reason,
+        registrar,
+      };
+      const saved = decisionRecord(facts, new Date().toISOString());
+      if (saved.txHash || saved.decision === "ALLOW" || saved.decision === "NOT_SETTLED") {
+        throw new Error("This check was not an expiry refusal. Nothing was signed. Nothing was broadcast.");
+      }
+      await saveDecision(saved);
+      usePqtabsData.getState().noteDecision();
+      setShownDecision(saved);
+      setPayLog(["Check: expired capability", "Payment blocked. The capability has expired. Nothing was signed. Nothing was broadcast."]);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "This check was not an expiry refusal. Nothing was signed. Nothing was broadcast.";
       setPayLog((lines) => [...lines, message]);
       toast.error(message);
     } finally {
@@ -925,6 +1016,14 @@ function TabDrawerBody({
               className="h-8 border border-white/10 bg-transparent px-2 text-xs text-foreground shadow-none hover:bg-white/[.04]"
             >
               Replay
+            </Button>
+            <Button
+              type="button"
+              disabled={paying}
+              onClick={() => void runExpiryCheck()}
+              className="h-8 border border-white/10 bg-transparent px-2 text-xs text-foreground shadow-none hover:bg-white/[.04]"
+            >
+              Expired capability
             </Button>
           </div>
           {shownDecision ? <div className="mt-3"><PaymentDecision record={shownDecision} /></div> : null}
