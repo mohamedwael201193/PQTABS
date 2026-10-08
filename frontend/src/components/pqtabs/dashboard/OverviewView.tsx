@@ -31,6 +31,14 @@ function FundNotice() {
   const [message, setMessage] = useState<string | null>(null);
 
   if (!root) return null;
+  let sendable = false;
+  try {
+    const parsed = parseUsdcRaw(amount);
+    const walletRaw = walletUsdc == null ? null : BigInt(Math.round(walletUsdc * 1_000_000));
+    sendable = parsed > BigInt(0) && (walletRaw == null || parsed <= walletRaw);
+  } catch {
+    sendable = false;
+  }
 
   async function deposit() {
     setBusy(true);
@@ -70,6 +78,24 @@ function FundNotice() {
       <p className="mt-1 text-sm text-foreground">Your wallet: {walletUsdc == null ? "—" : usd(walletUsdc, { decimals: 6 })}</p>
       <p className="mt-1 text-sm text-muted-foreground">Fund your treasury to give agents a spending budget.</p>
       <p className="mt-3 break-all font-mono text-[11px] text-muted-foreground">Deposit address {root}</p>
+      <div className="mt-4 rounded-lg border border-white/10 px-3 py-3 text-xs">
+        <p className="text-sm text-foreground">Fund the treasury</p>
+        <p className="mt-2 text-muted-foreground">Network</p>
+        <p className="text-foreground">Arc Mainnet</p>
+        <p className="mt-2 text-muted-foreground">You send</p>
+        <p className="text-foreground">{amount.trim() || "0"} USDC from your wallet</p>
+        <p className="mt-2 text-muted-foreground">To</p>
+        <p className="break-all font-mono text-foreground">{root}</p>
+        <p className="mt-3 leading-relaxed text-muted-foreground">
+          This is a USDC transfer to your treasury. It does not grant an allowance, and no agent can spend it until you authorize a capability.
+        </p>
+        <details className="mt-3">
+          <summary className="cursor-pointer text-muted-foreground">Technical details</summary>
+          <p className="mt-2 font-mono text-[11px] leading-relaxed text-muted-foreground">
+            USDC.transfer · native value 0 · chainId 5042 · network fee is separate Arc gas
+          </p>
+        </details>
+      </div>
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <input
           value={amount}
@@ -77,7 +103,7 @@ function FundNotice() {
           aria-label="Deposit amount in USDC"
           className="h-9 w-32 rounded-lg border border-white/10 bg-transparent px-3 text-sm outline-none"
         />
-        <Button onClick={deposit} disabled={busy} className="bg-gold text-[#171204] hover:bg-[#eec95e]">
+        <Button onClick={deposit} disabled={busy || !sendable} className="bg-gold text-[#171204] hover:bg-[#eec95e]">
           {busy ? "Waiting for Arc" : "Deposit"}
         </Button>
       </div>
