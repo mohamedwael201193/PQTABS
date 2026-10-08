@@ -26,7 +26,7 @@ import {
 import { StatusChip } from "@/components/pqtabs/shared";
 import { relFuture, usd } from "@/data/formatters";
 import { isAddress } from "@/data/actions";
-import { decisionRecord, orderedReasons, paymentReasonSentence, settledDecision, settlementReasons, type DecisionFacts, type DecisionRecord, type QuotedDecision } from "@/data/decision-record";
+import { decisionRecord, expiryWhen, orderedReasons, paymentReasonSentence, settledDecision, settlementReasons, type DecisionFacts, type DecisionRecord, type QuotedDecision } from "@/data/decision-record";
 import { saveDecision } from "@/data/decision-store";
 import { arcClock, BACKEND_URL, confirmRootSignature, describeReturn, decideServicePrice, loadSnapshot, prepareClose, productionProvider, requestServicePrice, settleService, submitPrepared, type PreparedAction, type ServiceDecision } from "@/data/production";
 import { probeAmount, probePayment, probeRefusal, replayRefusal, spentAuthorization, UNAVAILABLE_SERVICE_URL, unavailableServiceRefusal, capabilityPayment, expiredRefusal, expiryStillOpen, type ProbeName } from "@/data/refusal-probe";
@@ -734,7 +734,7 @@ function TabDrawerBody({
           {/* Balance against cap */}
           <div>
             <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-              Available
+              Agent reachable
             </p>
             <div className="mt-1 flex flex-wrap items-baseline gap-2">
               <span className="font-display text-3xl font-semibold leading-none tabular text-gold">
@@ -764,7 +764,7 @@ function TabDrawerBody({
             <PolicyCell label="Max per payment" value={usd(tab.policy.maxPerCallUsd)} />
             <PolicyCell
               label="Expires"
-              value={relFuture(tab.policy.expiresInHours)}
+              value={tab.expiryUnix ? `${relFuture(tab.policy.expiresInHours)} · ${expiryWhen(String(tab.expiryUnix))}` : relFuture(tab.policy.expiresInHours)}
               warn={expiringSoon}
             />
             <PolicyCell label="Recipients" value={`${allowed.length} approved`} />
