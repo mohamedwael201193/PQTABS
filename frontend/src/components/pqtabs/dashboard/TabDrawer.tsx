@@ -28,13 +28,12 @@ import { relFuture, usd } from "@/data/formatters";
 import { isAddress } from "@/data/actions";
 import { decisionRecord, paymentReasonSentence, settledDecision, type DecisionFacts, type DecisionRecord, type QuotedDecision } from "@/data/decision-record";
 import { saveDecision } from "@/data/decision-store";
-import { arcClock, BACKEND_URL, describeReturn, decideServicePrice, loadSnapshot, prepareClose, productionProvider, requestServicePrice, settleService, submitPrepared, type PreparedAction, type ServiceDecision } from "@/data/production";
+import { arcClock, BACKEND_URL, confirmRootSignature, describeReturn, decideServicePrice, loadSnapshot, prepareClose, productionProvider, requestServicePrice, settleService, submitPrepared, type PreparedAction, type ServiceDecision } from "@/data/production";
 import { probeAmount, probePayment, probeRefusal, replayRefusal, spentAuthorization, UNAVAILABLE_SERVICE_URL, unavailableServiceRefusal, type ProbeName } from "@/data/refusal-probe";
 import { agentAddress, authorizationBlob, recallAgentKey, USDC } from "@/data/spend";
 import { arcClient } from "@/data/wallet";
 import { generatePrivateKey } from "viem/accounts";
 import { agentCanSign, chainExpirySeconds, paymentDeadline, serviceTimeoutSeconds } from "@/data/x402-pay";
-import { backupMatchesRoot, backupRefusal } from "@/data/pq-key-match";
 import { lockRoot, rootUnlocked, signRootDigest, verifyingKey } from "@/data/pq-vault";
 import { SecurityKeyUnlock } from "@/components/pqtabs/dashboard/SecurityKeyUnlock";
 import { PaymentDecision } from "@/components/pqtabs/dashboard/PaymentDecision";
@@ -1000,18 +999,17 @@ function TabDrawerBody({
                         toast.error("The wallet changed. Nothing was signed.");
                         return;
                       }
-                      const verdict = backupMatchesRoot(verifyingKey(live.registrar), live.snapshot.account.pqVk);
-                      if (verdict !== "match") {
-                        lockRoot();
-                        setCloseReady(false);
-                        toast.error(backupRefusal(verdict));
-                        return;
-                      }
                       setClosingSig(true);
-                      void signRootDigest(live.registrar, closePrep.digest)
+                      void confirmRootSignature(closePrep, verifyingKey(live.registrar))
+                        .then(() => signRootDigest(live.registrar, closePrep.digest))
                         .then((signed) => onClose(closePrep, signed))
                         .catch((reason: unknown) => {
-                          toast.error(reason instanceof Error ? reason.message : "Unlock your security key first.");
+                          const message = reason instanceof Error ? reason.message : "Unlock your security key first.";
+                          if (message.includes("older security key")) {
+                            lockRoot();
+                            setCloseReady(false);
+                          }
+                          toast.error(message);
                         })
                         .finally(() => setClosingSig(false));
                     }}

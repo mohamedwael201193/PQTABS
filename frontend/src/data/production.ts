@@ -1,4 +1,5 @@
 import { digestFor, encodeClose, encodeOpen, signatureBytes } from "./actions";
+import { rootSignatureBlock } from "./root-sign-check";
 import { usd } from "./formatters";
 import { paymentSignatureHeader, quotedCharge, receiptSettlesSpend, serviceAnswer, settlementFailure, transactionFromPaymentResponse, type SpendAuthorization } from "./x402-pay";
 import { arcClient } from "./wallet";
@@ -509,6 +510,20 @@ export async function prepareOpen(input: {
     digest: digestFor(input.root, nonce, deadline, action),
     expiry: expiry.toString(),
   };
+}
+
+/** Read the root again. A stale nonce, key, clock, or expiry is not signed. */
+export async function confirmRootSignature(prepared: PreparedAction, unlockedVk: string | null): Promise<void> {
+  const [state, now] = await Promise.all([getJson<RootJson>(`/v1/roots/${prepared.root}`), chainNow()]);
+  const blocked = rootSignatureBlock({
+    unlockedVk,
+    chainVk: state.pqVk,
+    chainNonce: state.nextNonce,
+    preparedNonce: prepared.nonce,
+    now,
+    expiry: prepared.expiry,
+  });
+  if (blocked) throw new Error(blocked);
 }
 
 export async function prepareClose(root: string, tab: string): Promise<PreparedAction> {

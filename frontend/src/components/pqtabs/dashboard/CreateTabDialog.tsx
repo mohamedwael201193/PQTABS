@@ -34,11 +34,10 @@ import {
 } from "lucide-react";
 import { isAddress, parseUsdcRaw } from "@/data/actions";
 import { tabForReceipt } from "@/data/opened-tab";
-import { backupMatchesRoot, backupRefusal } from "@/data/pq-key-match";
 import { lockRoot, rootUnlocked, signRootDigest, verifyingKey } from "@/data/pq-vault";
 import { SecurityKeyUnlock } from "@/components/pqtabs/dashboard/SecurityKeyUnlock";
 import { initials, relFuture, usd } from "@/data/formatters";
-import { loadSnapshot, prepareOpen, requestServicePrice, submitPrepared, type PreparedAction } from "@/data/production";
+import { confirmRootSignature, loadSnapshot, prepareOpen, requestServicePrice, submitPrepared, type PreparedAction } from "@/data/production";
 import { servicePayee } from "@/data/x402-pay";
 import { browserHoldsAgentKey, createAgentKey } from "@/data/spend";
 import type { Recipient, Tab } from "@/data/types";
@@ -1180,19 +1179,17 @@ function CreateFlow() {
                     setPhase("error");
                     return;
                   }
-                  const verdict = backupMatchesRoot(verifyingKey(live.registrar), live.snapshot.account.pqVk);
-                  if (verdict !== "match") {
-                    lockRoot();
-                    setKeyReady(false);
-                    setFailure(backupRefusal(verdict));
-                    setPhase("error");
-                    return;
-                  }
                   setAuthorizing(true);
-                  void signRootDigest(live.registrar, prepared.digest)
+                  void confirmRootSignature(prepared, verifyingKey(live.registrar))
+                    .then(() => signRootDigest(live.registrar, prepared.digest))
                     .then((signed) => submitCreation(signed))
                     .catch((reason: unknown) => {
-                      setFailure(reason instanceof Error ? reason.message : "The security key could not authorize this.");
+                      const message = reason instanceof Error ? reason.message : "The security key could not authorize this.";
+                      if (message.includes("older security key")) {
+                        lockRoot();
+                        setKeyReady(false);
+                      }
+                      setFailure(message);
                       setPhase("error");
                     })
                     .finally(() => setAuthorizing(false));
