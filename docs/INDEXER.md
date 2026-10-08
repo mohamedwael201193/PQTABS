@@ -10,6 +10,8 @@ The background loop pages `eth_getLogs` at 2,000 blocks, under the public 9,999-
 
 A portfolio read does not call Arc. It returns the stored capabilities. A swept close is a zero balance. A background reconciliation, at most every 30 seconds and only when the cursor is within 2,000 blocks of the head, writes the latest USDC balances, exposure, nonce, per-payment limits, and recipients. `GET /v1/index` reports `indexedBlock`, `chainHead`, `lag`, `lastSuccessfulIndex`, `lastError`, and `queueDepth`. It does not report secrets. `freshness` is `live` within 2 blocks of the head the indexer last observed, `recent` within 120, `indexing` when the cursor is further behind, and `degraded` when that head is not known yet.
 
+On 2026-10-08 the Render service was restarted once. Render recorded `server_restarted` at `2026-10-08T01:42:44Z`. Before the restart, `indexedBlock` was 24,824,332, `chainHead` was 24,824,336, and lag was 4. The first read after the restart was block 24,824,336 with lag 23 and a rate-limit last error. A later read was block 24,824,409, head 24,824,414, lag 5, and no last error. The cursor did not return to factory block 24,623,258. The deploy stayed `dep-db3evfeq1p3s73f5nmag` of `0e1efca`.
+
 Without `DATABASE_URL`, a local process uses an embedded Postgres file at `INDEX_PATH` or `.pqtabs-index`. On Render the embedded database is not started. The process that did start it restarted about every 30 seconds, and the portfolio route returned 502.
 
 Wipe and replay:
