@@ -832,7 +832,7 @@ function TabDrawerBody({
         <div className="border-t border-white/[.06] px-5 py-4 md:px-6">
           <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Research agent</p>
           <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-            Pays for external inference when the requested service fits this capability. Enter a question. Run task reads the x402 price and recipient from the service and pays only if this capability allows them. If that price or recipient no longer fits, nothing is signed and nothing is sent.
+            Pays for external inference when the requested service fits this capability. Enter a question. Run task reads the x402 price and recipient from the service. It pays only when this capability allows the request and the service settles it on Arc. If the price or recipient does not fit, nothing is signed and nothing is sent. If the service rejects the signature, nothing is broadcast.
           </p>
           <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
             A stolen agent key can spend only this capability&apos;s remaining balance, up to the per-payment limit, to the approved recipient, until expiry. It cannot reach root cash or the wallet.
