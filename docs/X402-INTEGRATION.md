@@ -32,7 +32,7 @@ ArcRouter describes amount `12` as a ceiling for the full input plus `max_tokens
 
 ## What the code does
 
-A payment signature uses Arc's clock from `GET /v1/time`. The laptop clock is not the deadline. If that clock cannot be read, nothing is signed.
+A payment signature uses Arc's clock from `GET /v1/time`. The laptop clock is not the deadline. If that clock cannot be read, nothing is signed. The deadline is also capped by the capability expiry returned with that decision. That expiry is the chain read, not the cached portfolio value. If it is missing, nothing is signed.
 
 `decideHttpPayment` in `backend/src/index/x402.ts` returns `NO_PAYMENT` / `service_unavailable` for any status other than 402. On a 402 it keeps only the Arc exact USDC requirement and passes that amount and payee to `decideSpend`. `backend/test/x402.test.ts` uses the captured amount-12 document. With `maxPerCall` 10 the decision is `REFUSE` / `max_per_call`. The same capability allows amount 4. A payee of `0xC485…3044` is `wrong_payee`. A Base-only document is `no_arc_exact`.
 

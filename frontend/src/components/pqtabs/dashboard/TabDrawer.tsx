@@ -30,7 +30,7 @@ import { decisionRecord, settledDecision, type DecisionFacts, type QuotedDecisio
 import { saveDecision } from "@/data/decision-store";
 import { arcClock, describeReturn, decideServicePrice, loadSnapshot, prepareClose, productionProvider, requestServicePrice, SERVICE_URL, settleService, submitPrepared, type PreparedAction, type ServiceDecision } from "@/data/production";
 import { authorizationBlob, recallAgentKey } from "@/data/spend";
-import { paymentDeadline, serviceTimeoutSeconds } from "@/data/x402-pay";
+import { chainExpirySeconds, paymentDeadline, serviceTimeoutSeconds } from "@/data/x402-pay";
 import { backupMatchesRoot, backupRefusal } from "@/data/pq-key-match";
 import { lockRoot, rootUnlocked, signRootDigest, unlockBackup, verifyingKey } from "@/data/pq-vault";
 import type { Tab } from "@/data/types";
@@ -500,7 +500,7 @@ function TabDrawerBody({
                     throw new Error("The service price had no recipient. Nothing was signed.");
                   }
                   const now = await arcClock();
-                  const deadline = paymentDeadline(now, tab.expiryUnix!, serviceTimeoutSeconds(paymentRequired));
+                  const deadline = paymentDeadline(now, chainExpirySeconds(decision.expiry), serviceTimeoutSeconds(paymentRequired));
                   return authorizationBlob(key, tab.id, decision.payee, BigInt(decision.price), BigInt(deadline)).then((signed) => ({
                     paymentRequired,
                     decision,

@@ -73,6 +73,18 @@ export function paymentSignatureHeader(
   return btoa(binary);
 }
 
+/** The expiry from the chain read on the decision. A missing or unsafe value is not signed. */
+export function chainExpirySeconds(value: string): number {
+  if (!/^[0-9]+$/.test(value)) {
+    throw new Error("The capability expiry could not be read. Nothing was signed.");
+  }
+  const expiry = Number(value);
+  if (!Number.isSafeInteger(expiry)) {
+    throw new Error("The capability expiry could not be read. Nothing was signed.");
+  }
+  return expiry;
+}
+
 /** The service's own timeout. A missing or short window is not a reason to use the capability expiry. */
 export function serviceTimeoutSeconds(paymentRequired: unknown): number {
   const accepted = arcExactAccept(paymentRequired);
