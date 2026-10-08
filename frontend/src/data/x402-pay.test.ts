@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { arcExactAccept, paymentSignatureHeader, transactionFromPaymentResponse } from "./x402-pay.ts";
+import { arcExactAccept, paymentSignatureHeader, receiptSettlesSpend, transactionFromPaymentResponse } from "./x402-pay.ts";
 
 const quoted = {
   x402Version: 2,
@@ -50,4 +50,20 @@ test("the payment header names the Arc accept and the EIP-3009 method", () => {
   assert.equal(arcExactAccept({ accepts: [quoted.accepts[1]] }), null);
   assert.equal(transactionFromPaymentResponse(btoa(JSON.stringify({ transaction: "0x" + "cd".repeat(32) }))), "0x" + "cd".repeat(32));
   assert.equal(transactionFromPaymentResponse(btoa(JSON.stringify({ success: true }))), "");
+  const from = "0x56377522376b5273a97313992c7970B106cB3837";
+  const to = "0x6Bf001BB5f5E75396d92163325ca01FdEBe2e9A9";
+  const log = {
+    address: "0x3600000000000000000000000000000000000000",
+    topics: [
+      "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+      "0x" + from.slice(2).toLowerCase().padStart(64, "0"),
+      "0x" + to.slice(2).toLowerCase().padStart(64, "0"),
+    ],
+    data: "0x" + (12).toString(16).padStart(64, "0"),
+  };
+  const native = { ...log, address: "0xffffFFFfFFffffffffffffffFfFFFfffFFFfFFfE", data: "0x" + (12n * 10n ** 12n).toString(16).padStart(64, "0") };
+  assert.equal(receiptSettlesSpend({ status: "success", logs: [log, native] }, { from, to, value: "12" }), true);
+  assert.equal(receiptSettlesSpend({ status: "success", logs: [native] }, { from, to, value: "12" }), false);
+  assert.equal(receiptSettlesSpend({ status: "reverted", logs: [log] }, { from, to, value: "12" }), false);
+  assert.equal(receiptSettlesSpend({ status: "success", logs: [{ ...log, data: "0x" + (24).toString(16).padStart(64, "0") }] }, { from, to, value: "12" }), false);
 });

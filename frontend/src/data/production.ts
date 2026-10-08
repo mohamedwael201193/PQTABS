@@ -1,6 +1,6 @@
 import { digestFor, encodeClose, encodeOpen, signatureBytes } from "./actions";
 import { usd } from "./formatters";
-import { paymentSignatureHeader, transactionFromPaymentResponse, type SpendAuthorization } from "./x402-pay";
+import { paymentSignatureHeader, receiptSettlesSpend, transactionFromPaymentResponse, type SpendAuthorization } from "./x402-pay";
 import { arcClient } from "./wallet";
 import type { Hex } from "viem";
 import type {
@@ -599,6 +599,10 @@ export async function settleService(task: string, paymentRequired: unknown, auth
   const transaction = transactionFromPaymentResponse(response.headers.get("PAYMENT-RESPONSE"));
   if (response.status !== 200 || !transaction) {
     throw new Error("The service did not settle the payment. No Arc transaction was recorded.");
+  }
+  const receipt = await arcClient().waitForTransactionReceipt({ hash: transaction as Hex, timeout: 90_000 });
+  if (!receiptSettlesSpend(receipt, { from: authorization.from, to: authorization.to, value: authorization.value })) {
+    throw new Error("Arc did not include this payment. No receipt was recorded.");
   }
   return { transaction };
 }

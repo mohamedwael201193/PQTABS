@@ -15,6 +15,8 @@ export type SpendFacts = {
   balance: bigint;
   expiry: bigint;
   open: boolean;
+  openExposure: bigint;
+  maxOpenExposure: bigint;
   serviceAvailable: boolean;
 };
 
@@ -39,8 +41,9 @@ export function decideSpend(facts: SpendFacts): Decision {
   if (facts.amount <= 0n) reason.push("bad_amount");
   if (facts.amount > facts.maxPerCall) reason.push("max_per_call");
   if (facts.amount > facts.balance) reason.push("balance");
+  if (facts.openExposure > facts.maxOpenExposure) reason.push("exposure");
   if (reason.length > 0) return { decision: "REFUSE", reason };
-  const allow = ["capability_active", "payee_allowlisted", "within_max_per_call", "within_balance", "not_expired"];
+  const allow = ["capability_active", "payee_allowlisted", "within_max_per_call", "within_balance", "within_root_exposure", "not_expired"];
   if (facts.signer != null) allow.push("agent_matches");
   return { decision: "ALLOW", reason: allow };
 }

@@ -71,3 +71,26 @@ export function transactionFromPaymentResponse(header: string | null): string {
     return "";
   }
 }
+
+const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+
+export type SpendReceipt = {
+  status?: string | number | null;
+  logs?: ReadonlyArray<{ address?: string; topics?: readonly string[]; data?: string }>;
+};
+
+/** True only when the receipt succeeded and the 6-decimal USDC log matches this spend once. */
+export function receiptSettlesSpend(receipt: SpendReceipt | null, expected: { from: string; to: string; value: string }): boolean {
+  if (!receipt || (receipt.status !== "success" && receipt.status !== 1 && receipt.status !== "0x1")) return false;
+  const fromTopic = "0x" + expected.from.toLowerCase().replace(/^0x/, "").padStart(64, "0");
+  const toTopic = "0x" + expected.to.toLowerCase().replace(/^0x/, "").padStart(64, "0");
+  const data = "0x" + BigInt(expected.value).toString(16).padStart(64, "0");
+  return (receipt.logs ?? []).some((log) => {
+    const topics = log.topics ?? [];
+    return log.address?.toLowerCase() === USDC
+      && topics[0]?.toLowerCase() === TRANSFER_TOPIC
+      && topics[1]?.toLowerCase() === fromTopic
+      && topics[2]?.toLowerCase() === toTopic
+      && log.data?.toLowerCase() === data;
+  });
+}

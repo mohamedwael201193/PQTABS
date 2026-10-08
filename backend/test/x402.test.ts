@@ -49,6 +49,8 @@ const facts = (): Omit<SpendFacts, "amount" | "payee" | "serviceAvailable"> => (
   balance: 100n,
   expiry: 200n,
   open: true,
+  openExposure: 0n,
+  maxOpenExposure: 100n,
 });
 
 test("the live Arc quote is the only price, and that price can refuse the payment", () => {
@@ -63,6 +65,10 @@ test("the live Arc quote is the only price, and that price can refuse the paymen
   const smaller = decideHttpPayment(402, floor, facts());
   assert.equal(smaller.decision, "ALLOW");
   assert.equal(smaller.price, "4");
+  assert.equal(smaller.remaining_capability_balance, "100");
+  assert.equal(smaller.root_exposure, "0");
+  assert.equal(smaller.maxOpenExposure, "100");
+  assert.equal(smaller.reason.includes("within_root_exposure"), true);
 });
 
 test("a merchant outside the capability is refused, and a non-402 is not a price", () => {

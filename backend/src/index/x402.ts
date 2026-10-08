@@ -17,6 +17,12 @@ export type QuotedDecision = Decision & {
   asset: string;
   network: string;
   payee: string;
+  agent: string;
+  remaining_capability_balance: string;
+  maxPerCall: string;
+  root_exposure: string;
+  maxOpenExposure: string;
+  expiry: string;
 };
 
 type SpendContext = Omit<SpendFacts, "amount" | "payee" | "serviceAvailable">;
@@ -48,8 +54,19 @@ export function arcQuote(payload: unknown): ArcQuote | null {
  * A non-402 response is not a price. A 402 is a price only when it contains an Arc exact USDC requirement.
  * This does not sign or settle.
  */
+function factRecord(facts: SpendContext) {
+  return {
+    agent: facts.tabAgent,
+    remaining_capability_balance: facts.balance.toString(),
+    maxPerCall: facts.maxPerCall.toString(),
+    root_exposure: facts.openExposure.toString(),
+    maxOpenExposure: facts.maxOpenExposure.toString(),
+    expiry: facts.expiry.toString(),
+  };
+}
+
 export function decideHttpPayment(status: number, payload: unknown, facts: SpendContext): QuotedDecision {
-  const empty = { resource: "", price: "", asset: "", network: "", payee: "" };
+  const empty = { resource: "", price: "", asset: "", network: "", payee: "", ...factRecord(facts) };
   if (status !== 402) return { decision: "NO_PAYMENT", reason: ["service_unavailable"], ...empty };
   const quote = arcQuote(payload);
   if (!quote) return { decision: "NO_PAYMENT", reason: ["no_arc_exact"], ...empty };
@@ -59,7 +76,7 @@ export function decideHttpPayment(status: number, payload: unknown, facts: Spend
     payee: quote.payee,
     serviceAvailable: true,
   });
-  return { ...decision, ...quote };
+  return { ...decision, ...quote, ...factRecord(facts) };
 }
 
 /** A verify response is not a payment, including `isValid: true`. */

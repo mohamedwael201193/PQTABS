@@ -28,7 +28,7 @@ async function readCapability(clients: Clients, tab: Address) {
     1,
   );
   await assertOurRoot(clients, owner);
-  const [agent, maxPerCall, expiry, payees, balance, tabState, head] = await withRpcRetry(
+  const [agent, maxPerCall, expiry, payees, balance, tabState, openExposure, maxOpenExposure, head] = await withRpcRetry(
     () =>
       Promise.all([
         clients.public.readContract({ address: tab, abi: tabAbi, functionName: "agent" }),
@@ -37,6 +37,8 @@ async function readCapability(clients: Clients, tab: Address) {
         clients.public.readContract({ address: tab, abi: tabAbi, functionName: "payees" }),
         clients.public.readContract({ address: USDC, abi: usdcAbi, functionName: "balanceOf", args: [tab] }),
         clients.public.readContract({ address: owner, abi: rootAbi, functionName: "tabs", args: [tab] }),
+        clients.public.readContract({ address: owner, abi: rootAbi, functionName: "openExposure" }),
+        clients.public.readContract({ address: owner, abi: rootAbi, functionName: "maxOpenExposure" }),
         clients.public.getBlock({ blockTag: "latest" }),
       ]),
     1,
@@ -48,6 +50,9 @@ async function readCapability(clients: Clients, tab: Address) {
     expiry,
     payees,
     balance,
+    cap: tabState[0],
+    openExposure,
+    maxOpenExposure,
     open: tabState[2] === true,
     now: head.timestamp,
   };
@@ -273,8 +278,10 @@ export function createApp(clients: Clients = loadClients(), getIndex?: () => Sql
       balance: facts.balance,
       expiry: facts.expiry,
       open: facts.open,
+      openExposure: facts.openExposure,
+      maxOpenExposure: facts.maxOpenExposure,
     });
-    return c.json(decision);
+    return c.json({ ...decision, capability: tab, cap: facts.cap.toString() });
   });
 
   app.post("/v1/relay/spend", async (c) => {
@@ -314,6 +321,8 @@ export function createApp(clients: Clients = loadClients(), getIndex?: () => Sql
       balance: facts.balance,
       expiry: facts.expiry,
       open: facts.open,
+      openExposure: facts.openExposure,
+      maxOpenExposure: facts.maxOpenExposure,
       serviceAvailable: true,
     });
     if (decision.decision !== "ALLOW") {

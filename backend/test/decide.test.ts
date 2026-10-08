@@ -13,6 +13,8 @@ const base = (): SpendFacts => ({
   balance: 20n,
   expiry: 200n,
   open: true,
+  openExposure: 80n,
+  maxOpenExposure: 100n,
   serviceAvailable: true,
 });
 
@@ -25,6 +27,7 @@ test("a valid spend is allowed only from the real inputs", () => {
   assert.equal(decideSpend({ ...base(), now: 200n }).reason.includes("expired"), true);
   assert.equal(decideSpend({ ...base(), signer: "0x0000000000000000000000000000000000000002" }).reason.includes("wrong_agent"), true);
   assert.equal(decideSpend({ ...base(), open: false }).reason.includes("capability_inactive"), true);
+  assert.equal(decideSpend({ ...base(), openExposure: 101n, maxOpenExposure: 100n }).reason.includes("exposure"), true);
   assert.equal(decideSpend({ ...base(), serviceAvailable: false }).decision, "NO_PAYMENT");
   assert.equal(decideOpen({ cap: 50n, openExposure: 80n, maxOpenExposure: 100n }).reason.includes("exposure"), true);
   assert.equal(decideOpen({ cap: 20n, openExposure: 80n, maxOpenExposure: 100n }).decision, "ALLOW");

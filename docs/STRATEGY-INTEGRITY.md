@@ -2,7 +2,7 @@
 
 PQTABS does not choose a market. There is no price feed, no model, and no random draw.
 
-A spend is allowed only by `decideSpend` in `backend/src/index/decide.ts`. Changing any of these inputs can change the result: the service being available, the capability being open, the time against expiry, the signer against the tab agent, the payee against the allowlist, the amount against `maxPerCall`, and the amount against the tab balance. Opening a capability is refused by `decideOpen` when `openExposure + cap` would pass `maxOpenExposure`.
+A spend is allowed only by `decideSpend` in `backend/src/index/decide.ts`. Changing any of these inputs can change the result: the service being available, the capability being open, the time against expiry, the signer against the tab agent, the payee against the allowlist, the amount against `maxPerCall`, the amount against the tab balance, and the root's open exposure against its ceiling. Opening a capability is refused by `decideOpen` when `openExposure + cap` would pass `maxOpenExposure`. The decide response repeats the agent, balance, per-payment limit, exposure, ceiling, and expiry that were used.
 
 `backend/test/decide.test.ts` checks allow, over max, over balance, wrong payee, expiry, wrong agent, closed capability, unavailable service, and exposure. Those are local inputs. They are not a mainnet payment.
 
