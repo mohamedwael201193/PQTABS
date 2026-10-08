@@ -910,7 +910,7 @@ function CreateFlow() {
               <div className="mt-6 rounded-lg border border-white/[.06] bg-white/[.015] p-4">
                 <p className="text-sm leading-relaxed text-muted-foreground">
                   When it expires, the agent can no longer spend. The remaining USDC stays in the
-                  capability until someone reclaims it to your treasury. That reclaim does not need
+                  capability until someone reclaims it to root cash. That reclaim does not need
                   your security key. A close before expiry does.
                 </p>
               </div>
@@ -940,6 +940,10 @@ function CreateFlow() {
                   <dt className={MICRO}>Agent</dt>
                   <dd className="mt-1.5 text-sm text-foreground">{selectedAgent.name}</dd>
                 </div>
+                <div className="col-span-2 sm:col-span-2">
+                  <dt className={MICRO}>Agent address</dt>
+                  <dd className="mt-1.5 break-all font-mono text-[10px] text-foreground">{selectedAgent.address}</dd>
+                </div>
                 <div>
                   <dt className={MICRO}>Total cap</dt>
                   <dd className="mt-1.5 font-display text-sm tabular text-foreground">
@@ -947,14 +951,16 @@ function CreateFlow() {
                   </dd>
                 </div>
                 <div>
-                  <dt className={MICRO}>Per payment</dt>
+                  <dt className={MICRO}>Max per payment</dt>
                   <dd className="mt-1.5 font-display text-sm tabular text-foreground">
                     {usd(effectivePerCall)}
                   </dd>
                 </div>
                 <div>
-                  <dt className={MICRO}>Recipients</dt>
-                  <dd className="mt-1.5 text-sm text-foreground">{recipientIds.size} approved</dd>
+                  <dt className={MICRO}>Allowed recipient</dt>
+                  <dd className="mt-1.5 text-sm text-foreground">
+                    {recipientIds.size === 1 ? selectedRecipientNames[0] : `${recipientIds.size} approved`}
+                  </dd>
                 </div>
                 <div>
                   <dt className={MICRO}>Expiry</dt>
@@ -1026,8 +1032,11 @@ function CreateFlow() {
                   <SecurityKeyUnlock onReady={setKeyReady} />
                   <details className="text-xs text-muted-foreground">
                     <summary className="cursor-pointer">Technical details</summary>
-                    <p className="mt-2 break-all font-mono text-[10px]">{prepared.digest}</p>
-                    {treasuryKey && <p className="mt-2 break-all font-mono text-[10px]">{treasuryKey}</p>}
+                    <p className="mt-2 font-mono text-[10px]">chainId 5042</p>
+                    <p className="mt-2 font-mono text-[10px]">nonce {prepared.nonce}</p>
+                    <p className="mt-2 font-mono text-[10px]">precompile 0x1800000000000000000000000000000000000004</p>
+                    {treasuryKey && <p className="mt-2 break-all font-mono text-[10px]">verifying key {treasuryKey}</p>}
+                    <p className="mt-2 break-all font-mono text-[10px]">digest {prepared.digest}</p>
                   </details>
                 </>
               ) : (
