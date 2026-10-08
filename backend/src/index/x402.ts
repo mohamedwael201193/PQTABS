@@ -61,3 +61,24 @@ export function decideHttpPayment(status: number, payload: unknown, facts: Spend
   });
   return { ...decision, ...quote };
 }
+
+/** A verify response is not a payment, including `isValid: true`. */
+export function readVerify(payload: unknown): Decision {
+  const body = asRecord(payload);
+  if (!body || body.isValid !== true) {
+    const reason = body && typeof body.invalidReason === "string" ? body.invalidReason : "verify_rejected";
+    return { decision: "NO_PAYMENT", reason: [reason] };
+  }
+  return { decision: "NO_PAYMENT", reason: ["verify_is_not_settlement"] };
+}
+
+/** A settlement counts only when the facilitator reports success and a transaction hash. */
+export function readSettlement(payload: unknown): Decision & { tx: string } {
+  const body = asRecord(payload);
+  const tx = body && typeof body.transaction === "string" ? body.transaction : "";
+  if (!body || body.success !== true || !/^0x[0-9a-fA-F]{64}$/.test(tx)) {
+    const reason = body && typeof body.errorReason === "string" ? body.errorReason : "not_settled";
+    return { decision: "NO_PAYMENT", reason: [reason], tx: "" };
+  }
+  return { decision: "ALLOW", reason: ["facilitator_reported_tx"], tx };
+}

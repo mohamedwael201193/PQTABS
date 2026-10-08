@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { decideHttpPayment } from "../src/index/x402.js";
+import { decideHttpPayment, readSettlement, readVerify } from "../src/index/x402.js";
 import type { SpendFacts } from "../src/index/decide.js";
 
 /** Captured 2026-10-08 from HTTP 402 on https://arcrouter.co/v1/chat/completions. Header matched this body. */
@@ -83,4 +83,12 @@ test("a merchant outside the capability is refused, and a non-402 is not a price
   const missing = decideHttpPayment(402, baseOnly, facts());
   assert.equal(missing.decision, "NO_PAYMENT");
   assert.deepEqual(missing.reason, ["no_arc_exact"]);
+});
+
+test("a facilitator verify is not a settlement", () => {
+  assert.deepEqual(readVerify({ isValid: false, invalidReason: "invalid_exact_evm_signature" }).reason, ["invalid_exact_evm_signature"]);
+  assert.deepEqual(readVerify({ isValid: false, invalidReason: "invalid_exact_evm_token_name_mismatch" }).reason, ["invalid_exact_evm_token_name_mismatch"]);
+  assert.deepEqual(readVerify({ isValid: true, payer: "0x56377522376b5273a97313992c7970B106cB3837" }).reason, ["verify_is_not_settlement"]);
+  assert.equal(readSettlement({ success: false, errorReason: "invalid_exact_evm_signature", transaction: "" }).decision, "NO_PAYMENT");
+  assert.equal(readSettlement({ success: true, transaction: "0x" + "ab".repeat(32) }).decision, "ALLOW");
 });
