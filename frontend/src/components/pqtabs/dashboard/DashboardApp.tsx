@@ -38,6 +38,7 @@ import CreateTabDialog from "./CreateTabDialog";
 import { DomainSetup } from "./DomainSetup";
 import CommandMenu from "./CommandMenu";
 import { toast } from "sonner";
+import { noteRootActivity } from "@/data/pq-vault";
 
 const NAV_ITEMS: { view: DashboardView; label: string; icon: LucideIcon }[] = [
   { view: "overview", label: "Overview", icon: LayoutDashboard },
@@ -145,6 +146,16 @@ export default function DashboardApp({ onExit }: { onExit: () => void }) {
   useEffect(() => {
     window.scrollTo({ top: 0 });
   }, [activeView]);
+
+  useEffect(() => {
+    const mark = () => noteRootActivity();
+    window.addEventListener("pointerdown", mark);
+    window.addEventListener("keydown", mark);
+    return () => {
+      window.removeEventListener("pointerdown", mark);
+      window.removeEventListener("keydown", mark);
+    };
+  }, []);
 
   const rateLimited = Boolean(error && /rate limit/i.test(error));
   const limitedSince = useRef<number | null>(null);
