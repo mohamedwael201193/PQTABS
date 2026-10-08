@@ -1,7 +1,7 @@
 import { digestFor, encodeClose, encodeOpen, signatureBytes } from "./actions";
 import { rootSignatureBlock } from "./root-sign-check";
 import { usd } from "./formatters";
-import { paymentSignatureHeader, quotedCharge, receiptSettlesSpend, serviceAnswer, settlementFailure, transactionFromPaymentResponse, type SpendAuthorization } from "./x402-pay";
+import { paymentSignatureHeader, payeeLabel, quotedCharge, receiptSettlesSpend, serviceAnswer, settlementFailure, transactionFromPaymentResponse, type SpendAuthorization } from "./x402-pay";
 import { arcClient } from "./wallet";
 import type { Hex } from "viem";
 import type {
@@ -258,11 +258,12 @@ function mapSnapshot(
   const recipients = new Map<string, Recipient>();
   const tabs: Tab[] = rows.map((row) => {
     for (const payee of row.payees) {
+      const label = payeeLabel(payee);
       recipients.set(payee.toLowerCase(), {
         id: payee,
-        name: short(payee),
+        name: label.name,
         address: payee,
-        category: "Infrastructure",
+        category: label.category,
       });
     }
     const status = tabStatus(row, now);

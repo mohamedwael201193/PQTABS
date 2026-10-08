@@ -38,6 +38,7 @@ import { lockRoot, rootUnlocked, signRootDigest, verifyingKey } from "@/data/pq-
 import { SecurityKeyUnlock } from "@/components/pqtabs/dashboard/SecurityKeyUnlock";
 import { initials, relFuture, usd } from "@/data/formatters";
 import { confirmRootSignature, loadSnapshot, prepareOpen, requestServicePrice, submitPrepared, type PreparedAction } from "@/data/production";
+import { payeeLabel } from "@/data/x402-pay";
 import { servicePayee } from "@/data/x402-pay";
 import { browserHoldsAgentKey, createAgentKey } from "@/data/spend";
 import type { Recipient, Tab } from "@/data/types";
@@ -86,6 +87,7 @@ const EXPIRY_PRESETS = [
 
 const CATEGORY_ORDER: Recipient["category"][] = [
   "Data",
+  "Service",
   "Infrastructure",
   "Compute",
   "Monitoring",
@@ -787,11 +789,12 @@ function CreateFlow() {
                       .then((payload) => {
                         const address = servicePayee(payload);
                         if (!address) throw new Error("The service did not name an Arc recipient. Nothing was added.");
+                        const label = payeeLabel(address);
                         const recipient: Recipient = {
                           id: address,
-                          name: "Paid service",
+                          name: label.category === "Service" ? label.name : "Paid service",
                           address,
-                          category: "Infrastructure",
+                          category: label.category,
                         };
                         setExtraRecipients((current) =>
                           current.some((item) => item.id.toLowerCase() === address.toLowerCase()) ? current : [...current, recipient],

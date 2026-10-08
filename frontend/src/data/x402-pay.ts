@@ -2,6 +2,13 @@ import { getAddress } from "viem";
 
 const USDC = "0x3600000000000000000000000000000000000000";
 const ARC = "eip155:5042";
+const ARCROUTER_PAYEE = "0x6bf001bb5f5e75396d92163325ca01fdebe2e9a9";
+
+/** The live ArcRouter payee. Any other address stays an address. */
+export function payeeLabel(payee: string): { name: string; category: "Service" | "Infrastructure" } {
+  if (payee.toLowerCase() === ARCROUTER_PAYEE) return { name: "ArcRouter", category: "Service" };
+  return { name: `${payee.slice(0, 6)}…${payee.slice(-4)}`, category: "Infrastructure" };
+}
 
 export type SpendAuthorization = {
   from: string;

@@ -58,7 +58,7 @@ export interface Recipient {
   name: string;
   /** Application-level payment identifier. */
   address: string;
-  category: "Data" | "Infrastructure" | "Compute" | "Monitoring" | "Communications";
+  category: "Data" | "Infrastructure" | "Compute" | "Monitoring" | "Communications" | "Service";
 }
 
 export interface Agent {

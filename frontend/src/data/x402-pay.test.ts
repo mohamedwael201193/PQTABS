@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { agentCanSign, arcExactAccept, chainExpirySeconds, paymentDeadline, paymentSignatureHeader, quotedCharge, receiptSettlesSpend, serviceAnswer, servicePayee, serviceTimeoutSeconds, settlementFailure, transactionFromPaymentResponse } from "./x402-pay.ts";
+import { agentCanSign, arcExactAccept, chainExpirySeconds, payeeLabel, paymentDeadline, paymentSignatureHeader, quotedCharge, receiptSettlesSpend, serviceAnswer, servicePayee, serviceTimeoutSeconds, settlementFailure, transactionFromPaymentResponse } from "./x402-pay.ts";
 
 const quoted = {
   x402Version: 2,
@@ -89,4 +89,6 @@ test("the payment header names the Arc accept and the EIP-3009 method", () => {
   assert.equal(serviceAnswer(200, { error: "payment required", accepts: [] }), "");
   assert.equal(serviceAnswer(200, { choices: [{ message: { content: "pong" } }] }), "pong");
   assert.equal(serviceAnswer(200, { choices: [{ message: { content: "  " } }] }), "");
+  assert.deepEqual(payeeLabel("0x6Bf001BB5f5E75396d92163325ca01FdEBe2e9A9"), { name: "ArcRouter", category: "Service" });
+  assert.equal(payeeLabel("0x0000000000000000000000000000000000000001").category, "Infrastructure");
 });
