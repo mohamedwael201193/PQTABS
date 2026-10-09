@@ -1,4 +1,5 @@
 import { digestFor, encodeClose, encodeOpen, signatureBytes } from "./actions";
+import { priceCheckFailure } from "./price-check-failure";
 import { rootSignatureBlock } from "./root-sign-check";
 import { usd } from "./formatters";
 import { paymentSignatureHeader, payeeLabel, quotedCharge, receiptSettlesSpend, serviceAnswer, settlementFailure, transactionFromPaymentResponse, type SpendAuthorization } from "./x402-pay";
@@ -707,7 +708,11 @@ export async function decideServicePrice(tab: string, paymentRequired: unknown):
     detail?: string;
   }) | null;
   if (!response.ok || !payload?.decision || !payload.price || !payload.payee) {
-    throw new Error(readableError(payload?.detail || payload?.error, "The price could not be checked. Nothing was signed."));
+    const detail = payload?.detail || payload?.error;
+    throw new Error(priceCheckFailure(
+      detail,
+      readableError(detail, "The price could not be checked against this capability. Nothing was signed. Nothing was broadcast."),
+    ));
   }
   return {
     decision: payload.decision,

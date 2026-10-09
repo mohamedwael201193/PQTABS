@@ -244,9 +244,25 @@ function TabDrawerBody({
           }
           setServicePrice(quote);
           setServicePriceNote("");
-          return decideServicePrice(tab.id, body).catch(() => {
-            if (!cancelled) setPolicyNote("The price could not be checked against this capability. Nothing was signed. Nothing was broadcast.");
-            return null;
+          const showFailure = (error: unknown) => {
+            if (cancelled) return;
+            const message = error instanceof Error ? error.message : "";
+            setPolicyNote(message || "The price could not be checked against this capability. Nothing was signed. Nothing was broadcast.");
+          };
+          return decideServicePrice(tab.id, body).catch(async (error: unknown) => {
+            const message = error instanceof Error ? error.message : "";
+            if (!/rate limiting/i.test(message)) {
+              showFailure(error);
+              return null;
+            }
+            await new Promise((resolve) => window.setTimeout(resolve, 2000));
+            if (cancelled) return null;
+            try {
+              return await decideServicePrice(tab.id, body);
+            } catch (retryError) {
+              showFailure(retryError);
+              return null;
+            }
           });
         })
         .then((decision) => {
