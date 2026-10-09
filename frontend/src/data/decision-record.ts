@@ -182,9 +182,12 @@ export function settlementReasons(reasons: readonly string[], message: string): 
   return [...reasons];
 }
 
-/** A refusal was never signed. An allow with no receipt was signed and then not broadcast. */
-export function paymentStatusLines(decision: string, txHash: string): string[] {
+/** A refusal was never signed, except the wrong-agent check, which signs a different key and does not broadcast it. An allow with no receipt was signed and then not broadcast. */
+export function paymentStatusLines(decision: string, txHash: string, reasons: readonly string[] = []): string[] {
   if (decision === "REFUSE" || decision === "NO_PAYMENT") {
+    if (reasons.includes("wrong_agent")) {
+      return ["Payment blocked", "The capability agent did not sign.", "Nothing was broadcast."];
+    }
     return ["Payment blocked", "Nothing was signed.", "Nothing was broadcast."];
   }
   if (decision === "NOT_SETTLED" || !/^0x[0-9a-fA-F]{64}$/.test(txHash)) {

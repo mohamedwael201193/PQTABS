@@ -22,7 +22,7 @@ function short(value: string): string {
 }
 
 export function PaymentDecision({ record }: { record: DecisionRecord }) {
-  const status = paymentStatusLines(record.decision, record.txHash);
+  const status = paymentStatusLines(record.decision, record.txHash, record.reason);
   const refused = record.decision === "REFUSE" || record.decision === "NO_PAYMENT";
   const rows: Array<[string, string]> = [
     ["Task", record.task || "—"],

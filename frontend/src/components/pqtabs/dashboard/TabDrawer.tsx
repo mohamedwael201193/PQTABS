@@ -579,7 +579,7 @@ function TabDrawerBody({
       await saveDecision(saved);
       usePqtabsData.getState().noteDecision();
       setShownDecision(saved);
-      setPayLog(["Check: wrong agent", "Payment blocked. This device key is not the agent on this capability. Nothing was signed. Nothing was broadcast."]);
+      setPayLog(["Check: wrong agent", "Payment blocked. This device key is not the agent on this capability. The capability agent did not sign. Nothing was broadcast."]);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "This check was not a refusal. Nothing was signed. Nothing was broadcast.";
       setPayLog((lines) => [...lines, message]);

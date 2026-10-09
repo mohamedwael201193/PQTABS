@@ -101,6 +101,7 @@ test("an unsettled allow says nothing was broadcast and does not say nothing was
     "Nothing was broadcast.",
   ]);
   assert.deepEqual(paymentStatusLines("REFUSE", ""), ["Payment blocked", "Nothing was signed.", "Nothing was broadcast."]);
+  assert.deepEqual(paymentStatusLines("REFUSE", "", ["wrong_agent"]), ["Payment blocked", "The capability agent did not sign.", "Nothing was broadcast."]);
   assert.deepEqual(paymentStatusLines("ALLOW", "0x" + "ab".repeat(32)), []);
 });
 
