@@ -150,7 +150,7 @@ export default function OverviewView() {
             Overview
           </h1>
           <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-            An agent can spend real USDC without control of your wallet or root cash. The root opens a small capability, and that capability is the only balance the agent can reach. x402 tells the agent the service price and recipient. If the request fits, the agent pays. If it does not, nothing is signed and nothing is sent. The result and the Arc receipt stay in Activity.
+            An agent can spend real USDC without control of your wallet or root cash. The root opens a small capability, and that capability is the only balance the agent can reach. x402 tells the agent the service price and recipient. The agent pays only when the capability allows the request and the service settles it on Arc. If the request does not fit, nothing is signed and nothing is sent. The result and the Arc receipt stay in Activity.
           </p>
         </div>
         <Button
