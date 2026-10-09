@@ -111,8 +111,9 @@ export default function Hero({ onLaunchApp }: { onLaunchApp: () => void }) {
           PQTABS lets an agent spend real USDC without giving that agent control of the treasury.
           You protect the treasury with a post-quantum root. The root opens a small capability,
           and that capability is the only balance the agent can reach. When the agent requests a
-          paid service, the service names the real price and recipient. If the request fits, the
-          agent pays. If it does not, nothing is signed and nothing is sent.
+          paid service, the service names the real price and recipient. The agent pays only when
+          the capability allows the request and the service settles it on Arc. If the request
+          does not fit, nothing is signed and nothing is sent.
         </motion.p>
 
         {/* CTAs */}
