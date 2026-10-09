@@ -149,8 +149,8 @@ export default function OverviewView() {
           <h1 className="mt-2 font-display text-2xl font-semibold tracking-tight md:text-3xl">
             Overview
           </h1>
-          <p className="mt-1.5 text-sm text-muted-foreground">
-            Everything your agents can reach, at a glance.
+          <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+            An agent can spend real USDC without control of your wallet or root cash. The root opens a small capability, and that capability is the only balance the agent can reach. x402 tells the agent the service price and recipient. If the request fits, the agent pays. If it does not, nothing is signed and nothing is sent. The result and the Arc receipt stay in Activity.
           </p>
         </div>
         <Button
