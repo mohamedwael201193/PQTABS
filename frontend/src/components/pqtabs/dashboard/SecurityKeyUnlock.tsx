@@ -37,6 +37,8 @@ export function SecurityKeyUnlock({ onReady }: { onReady: (ready: boolean) => vo
     let cancelled = false;
     void hasRootBackup(registrar).then((yes) => {
       if (!cancelled) setLocal(yes);
+    }).catch(() => {
+      if (!cancelled) setLocal(false);
     });
     return () => {
       cancelled = true;
@@ -133,6 +135,9 @@ export function SecurityKeyUnlock({ onReady }: { onReady: (ready: boolean) => vo
               return;
             }
             void accept(bytes, false);
+          }).catch(() => {
+            setLocal(false);
+            setError("No encrypted backup is on this device.");
           });
         }}
         className="bg-gold text-[#171204] hover:bg-[#eec95e]"
