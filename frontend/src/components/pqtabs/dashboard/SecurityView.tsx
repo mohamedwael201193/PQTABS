@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { cn } from "@/lib/utils";
 import { compareChainActivity } from "@/data/activity-order";
-import { hasRootBackup } from "@/data/root-backup";
+import { reencryptBackup } from "@/data/pq-vault";
+import { hasRootBackup, saveRootBackup } from "@/data/root-backup";
 import { relFuture, relTime, usd } from "@/data/formatters";
 import type { ActivityKind } from "@/data/types";
 import {
@@ -81,6 +82,12 @@ export default function SecurityView() {
   const registrar = usePqtabsData((state) => state.registrar);
   const setView = useDashboardUi((s) => s.setView);
   const [backupOnDevice, setBackupOnDevice] = useState<boolean | null>(null);
+  const [backupFile, setBackupFile] = useState<ArrayBuffer | null>(null);
+  const [currentPassphrase, setCurrentPassphrase] = useState("");
+  const [nextPassphrase, setNextPassphrase] = useState("");
+  const [reencrypting, setReencrypting] = useState(false);
+  const [reencryptNote, setReencryptNote] = useState<string | null>(null);
+  const [reencryptError, setReencryptError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -112,6 +119,35 @@ export default function SecurityView() {
     security.rotationIntervalDays * 24 - (security.lastRotationHoursAgo ?? 0)
   );
   const rotationImminent = nextRotationHours < 24 * 7;
+
+  async function replacePassphrase(event: FormEvent) {
+    event.preventDefault();
+    if (!backupFile || !account.pqVk || !registrar) return;
+    setReencrypting(true);
+    setReencryptError(null);
+    setReencryptNote(null);
+    try {
+      const backup = await reencryptBackup(registrar, backupFile, currentPassphrase, nextPassphrase, account.pqVk);
+      const bytes = await backup.arrayBuffer();
+      await saveRootBackup(registrar, bytes, account.rootAddress || null);
+      const url = URL.createObjectURL(backup);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "pqtabs-security-key.pqtabs";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      setBackupOnDevice(true);
+      setReencryptNote("The new file opens to this root's verifying key. The on-chain key was not changed, and no USDC moved.");
+    } catch (reason: unknown) {
+      setReencryptError(reason instanceof Error ? reason.message : "The backup was not re-encrypted.");
+    } finally {
+      setCurrentPassphrase("");
+      setNextPassphrase("");
+      setReencrypting(false);
+    }
+  }
 
   const secured = security.rootStatus === "secured";
 
@@ -238,6 +274,57 @@ export default function SecurityView() {
               The passphrase and the private key are not stored.
             </p>
             <p>If that encrypted copy and the downloaded file are both lost, the USDC in the root stays there. There is no operator recovery.</p>
+            <form className="space-y-3" onSubmit={(event) => void replacePassphrase(event)}>
+              <p className="text-foreground">Replace the backup passphrase</p>
+              <p>
+                A passphrase typed in chat is no longer private. This re-encrypts the same key on this device. It does not rotate the on-chain key and it does not move USDC.
+              </p>
+              <label className="block text-xs">
+                Current backup file
+                <input
+                  className="mt-1 block w-full text-xs"
+                  type="file"
+                  accept=".pqtabs,application/octet-stream"
+                  aria-label="Current backup file"
+                  onChange={(event) => {
+                    const chosen = event.target.files?.[0];
+                    if (!chosen) return;
+                    void chosen.arrayBuffer().then(setBackupFile);
+                  }}
+                />
+              </label>
+              <label className="block text-xs">
+                Current passphrase
+                <input
+                  className="mt-1 h-9 w-full rounded-lg border border-white/10 bg-transparent px-3 text-sm text-foreground outline-none"
+                  type="password"
+                  autoComplete="current-password"
+                  aria-label="Current passphrase"
+                  value={currentPassphrase}
+                  onChange={(event) => setCurrentPassphrase(event.target.value)}
+                />
+              </label>
+              <label className="block text-xs">
+                New passphrase
+                <input
+                  className="mt-1 h-9 w-full rounded-lg border border-white/10 bg-transparent px-3 text-sm text-foreground outline-none"
+                  type="password"
+                  autoComplete="new-password"
+                  aria-label="New passphrase"
+                  value={nextPassphrase}
+                  onChange={(event) => setNextPassphrase(event.target.value)}
+                />
+              </label>
+              <button
+                type="submit"
+                disabled={reencrypting || !backupFile || !account.pqVk}
+                className="h-9 rounded-lg bg-gold px-3 text-sm text-[#171204] disabled:opacity-50"
+              >
+                {reencrypting ? "Re-encrypting" : "Download the new backup"}
+              </button>
+              {reencryptNote && <p className="text-foreground">{reencryptNote}</p>}
+              {reencryptError && <p className="text-danger">{reencryptError}</p>}
+            </form>
           </div>
           <details className="mt-5 text-xs text-muted-foreground">
             <summary className="cursor-pointer text-foreground">Technical details</summary>

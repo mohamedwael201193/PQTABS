@@ -140,6 +140,49 @@ async function mintRootKey(registrar: string, passphrase: string): Promise<{ ver
   };
 }
 
+export function sameVerifyingKey(left: string, right: string): boolean {
+  const normalize = (value: string) => value.trim().toLowerCase().replace(/^0x/, "");
+  const actual = normalize(left);
+  const expected = normalize(right);
+  return actual.length === 64 && actual === expected;
+}
+
+/** Re-encrypts the same key. It does not rotate the on-chain verifying key. */
+export async function reencryptBackup(
+  registrar: string,
+  file: ArrayBuffer,
+  currentPassphrase: string,
+  nextPassphrase: string,
+  expectedVk: string,
+): Promise<Blob> {
+  if (nextPassphrase.length < 8) {
+    throw new Error("Use a new passphrase of at least 8 characters. It never leaves this device.");
+  }
+  if (nextPassphrase === currentPassphrase) {
+    throw new Error("Choose a different passphrase. The on-chain key was not changed.");
+  }
+  const api = await signer();
+  let json: string;
+  try {
+    json = api.backup_decrypt_utf8(currentPassphrase, bytesToHex(new Uint8Array(file)));
+  } catch {
+    throw new Error("That passphrase did not open this backup. Nothing was re-encrypted.");
+  }
+  const parsed = material(json, registrar);
+  if (!sameVerifyingKey(parsed.verifyingKeyHex, expectedVk)) {
+    throw new Error("This backup does not match the current root. Nothing was re-encrypted.");
+  }
+  const blobHex = api.backup_encrypt_hex(nextPassphrase, json);
+  const check = api.backup_decrypt_utf8(nextPassphrase, blobHex);
+  const again = material(check, registrar);
+  if (again.signingKeyHex !== parsed.signingKeyHex || again.verifyingKeyHex !== parsed.verifyingKeyHex) {
+    throw new Error("The new backup did not open to the same key. It was not saved.");
+  }
+  unlocked = parsed;
+  markUnlocked();
+  return new Blob([hexToBytes(blobHex).slice()], { type: "application/octet-stream" });
+}
+
 export async function unlockBackup(registrar: string, file: ArrayBuffer, passphrase: string): Promise<string> {
   publish("UNLOCKING");
   try {
