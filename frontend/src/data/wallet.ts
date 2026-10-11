@@ -1,6 +1,7 @@
 "use client";
 
 import { createPublicClient, createWalletClient, custom, defineChain, getAddress, http, type Address, type Hex } from "viem";
+import { createRootAccountRefusal, createRootFeeRefusal, quotedCreateRootFee } from "./create-root-fee";
 
 export const arc = defineChain({
   id: 5042,
@@ -150,10 +151,20 @@ export async function createSecurityDomain(vk: Hex, maxOpenExposure: bigint, use
   if (account.toLowerCase() !== registrar.toLowerCase()) {
     throw new Error("The wallet changed. The security domain was not created.");
   }
-  const client = walletClient();
-  const chainId = await client.getChainId();
+  const wallet = walletClient();
+  const chainId = await wallet.getChainId();
   if (chainId !== arc.id) throw new Error("Switch to Arc before creating a security domain.");
-  return client.writeContract({
+  const reader = arcClient();
+  const code = await reader.getCode({ address: account });
+  const delegated = createRootAccountRefusal(code ?? "0x");
+  if (delegated) throw new Error(delegated);
+  const [fee, balance] = await Promise.all([
+    estimateCreateRootFee(account, vk, maxOpenExposure, userSalt),
+    reader.getBalance({ address: account }),
+  ]);
+  const refusal = createRootFeeRefusal(balance, fee);
+  if (refusal) throw new Error(refusal);
+  return wallet.writeContract({
     account,
     address: FACTORY,
     abi: factoryAbi,
@@ -206,18 +217,30 @@ export async function fundRoot(root: Address, amountRaw: bigint): Promise<Hex> {
 }
 
 /** Native-USDC gas for createRoot. Value stays 0. This does not send a transaction. */
-export async function estimateCreateRootFee(registrar: Address, vk: Hex, maxOpenExposure: bigint): Promise<bigint> {
+export async function estimateCreateRootFee(
+  registrar: Address,
+  vk: Hex,
+  maxOpenExposure: bigint,
+  userSalt: Hex = "0x0000000000000000000000000000000000000000000000000000000000000000",
+): Promise<bigint> {
   const client = arcClient();
-  const salt = "0x0000000000000000000000000000000000000000000000000000000000000000" as Hex;
   const gas = await client.estimateContractGas({
     account: registrar,
     address: FACTORY,
     abi: factoryAbi,
     functionName: "createRoot",
-    args: [vk, maxOpenExposure, salt],
+    args: [vk, maxOpenExposure, userSalt],
   });
   const price = await client.getGasPrice();
-  return gas * price;
+  return quotedCreateRootFee(gas, price);
+}
+
+export async function readNativeBalance(account: Address): Promise<bigint> {
+  return arcClient().getBalance({ address: account });
+}
+
+export async function readAccountCode(account: Address): Promise<string> {
+  return (await arcClient().getCode({ address: account })) ?? "0x";
 }
 
 /** The connected wallet's USDC. This is not the treasury balance. */

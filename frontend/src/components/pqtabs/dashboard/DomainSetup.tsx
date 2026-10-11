@@ -8,7 +8,8 @@ import { parseUsdcRaw } from "@/data/actions";
 import { rememberRoot } from "@/data/production";
 import { createRootKey, rootUnlocked, verifyingKey } from "@/data/pq-vault";
 import { bindRootBackup, saveRootBackup } from "@/data/root-backup";
-import { arc, createSecurityDomain, estimateCreateRootFee, existingAccount, waitForRoot, walletClient } from "@/data/wallet";
+import { createRootAccountRefusal, createRootFeeRefusal, formatNativeUsdc } from "@/data/create-root-fee";
+import { arc, createSecurityDomain, estimateCreateRootFee, existingAccount, readAccountCode, readNativeBalance, waitForRoot, walletClient } from "@/data/wallet";
 import { usePqtabsData } from "@/lib/store";
 import { keccak256, toHex, type Hex } from "viem";
 
@@ -35,6 +36,8 @@ export function DomainSetup({ onExit, onReady }: { onExit: () => void; onReady: 
   const lock = useRef(false);
   const pendingHash = useRef<Hex | null>(null);
   const [fee, setFee] = useState<string | null>(null);
+  const [arcBalance, setArcBalance] = useState<string | null>(null);
+  const [feeBlock, setFeeBlock] = useState<string | null>(null);
 
   useEffect(() => {
     if (!saved || !kept || !registrar) return;
@@ -42,15 +45,30 @@ export function DomainSetup({ onExit, onReady }: { onExit: () => void; onReady: 
     if (!vk) return;
     let cancelled = false;
     setFee(null);
+    setArcBalance(null);
+    setFeeBlock(null);
     void (async () => {
       try {
         const maxOpenExposure = parseUsdcRaw(ceiling);
-        const native = await estimateCreateRootFee(registrar as `0x${string}`, vk as Hex, maxOpenExposure);
-        const whole = native / 10n ** 18n;
-        const fraction = (native % 10n ** 18n).toString().padStart(18, "0").slice(0, 6).replace(/0+$/, "");
-        if (!cancelled) setFee(fraction ? `${whole}.${fraction}` : `${whole}`);
+        const account = registrar as `0x${string}`;
+        const [native, balance, code] = await Promise.all([
+          estimateCreateRootFee(account, vk as Hex, maxOpenExposure),
+          readNativeBalance(account),
+          readAccountCode(account),
+        ]);
+        if (cancelled) return;
+        setFee(formatNativeUsdc(native));
+        setArcBalance(formatNativeUsdc(balance));
+        setFeeBlock(createRootAccountRefusal(code) ?? createRootFeeRefusal(balance, native));
       } catch {
-        if (!cancelled) setFee("unavailable");
+        if (cancelled) return;
+        setFee("unavailable");
+        try {
+          const code = await readAccountCode(registrar as `0x${string}`);
+          if (!cancelled) setFeeBlock(createRootAccountRefusal(code));
+        } catch {
+          if (!cancelled) setFeeBlock(null);
+        }
       }
     })();
     return () => {
@@ -107,6 +125,7 @@ export function DomainSetup({ onExit, onReady }: { onExit: () => void; onReady: 
       await sameWallet();
       const vk = verifyingKey(registrar);
       if (!vk) throw new Error("Download the backup file before creating the security domain.");
+      if (feeBlock) throw new Error(feeBlock);
       let hash = pendingHash.current;
       if (!hash) {
         const salt = keccak256(toHex(crypto.getRandomValues(new Uint8Array(32))));
@@ -120,6 +139,11 @@ export function DomainSetup({ onExit, onReady }: { onExit: () => void; onReady: 
         root = await waitForRoot(hash);
       } catch (reason: unknown) {
         const message = reason instanceof Error ? reason.message : "";
+        if (/insufficient funds/i.test(message)) {
+          pendingHash.current = null;
+          setSent(false);
+          throw new Error("This wallet does not have enough Arc USDC for the network fee. Nothing was broadcast.");
+        }
         if (message.includes("rejected")) {
           pendingHash.current = null;
           setSent(false);
@@ -135,7 +159,14 @@ export function DomainSetup({ onExit, onReady }: { onExit: () => void; onReady: 
       pendingHash.current = null;
       onReady();
     } catch (reason: unknown) {
-      setError(reason instanceof Error ? reason.message : "The security domain was not created.");
+      const message = reason instanceof Error ? reason.message : "";
+      if (/insufficient funds/i.test(message)) {
+        pendingHash.current = null;
+        setSent(false);
+        setError("This wallet does not have enough Arc USDC for the network fee. Nothing was broadcast.");
+      } else {
+        setError(message || "The security domain was not created.");
+      }
     } finally {
       lock.current = false;
       setBusy(null);
@@ -226,6 +257,12 @@ export function DomainSetup({ onExit, onReady }: { onExit: () => void; onReady: 
                   <p className="text-foreground">0 USDC</p>
                   <p className="mt-2 text-muted-foreground">Estimated network fee</p>
                   <p className="text-foreground">{fee == null ? "—" : fee === "unavailable" ? "unavailable" : `${fee} USDC`}</p>
+                  <p className="mt-2 text-muted-foreground">Arc balance for this fee</p>
+                  <p className="text-foreground">{arcBalance == null ? "—" : `${arcBalance} USDC`}</p>
+                  <p className="mt-3 leading-relaxed text-muted-foreground">
+                    The wallet can show its own alert for this site. This page cannot clear that alert. The fee is paid from Arc USDC held by this wallet.
+                  </p>
+                  {feeBlock && <p className="mt-3 text-danger">{feeBlock}</p>}
                   <p className="mt-2 text-muted-foreground">Creates</p>
                   <p className="text-foreground">1 post-quantum security domain</p>
                   <p className="mt-3 leading-relaxed text-muted-foreground">No USDC allowance is granted. No agent receives root access yet.</p>
@@ -239,7 +276,7 @@ export function DomainSetup({ onExit, onReady }: { onExit: () => void; onReady: 
               ) : null}
               <Button
                 type="submit"
-                disabled={busy !== null || (saved && !kept)}
+                disabled={busy !== null || (saved && !kept) || feeBlock !== null}
                 className="bg-gold text-[#171204] hover:bg-[#eec95e]"
               >
                 {busy ?? (saved ? (sent ? "Check Arc again" : "Confirm in your wallet") : "Download backup")}
