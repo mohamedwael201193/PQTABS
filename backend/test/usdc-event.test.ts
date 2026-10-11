@@ -11,3 +11,10 @@ test("an ERC-20 USDC transfer is stored once and its native twin is ignored", ()
   const counted = [erc20, twin].filter((amount): amount is string => amount != null);
   assert.deepEqual(counted, ["7"]);
 });
+
+test("the reclaim pair counts the 6-decimal transfer once", () => {
+  const erc20 = erc20SpendRaw(USDC, 9988n);
+  const twin = erc20SpendRaw(NATIVE_USDC_EMITTER, 9988n * 1_000_000_000_000n);
+  assert.equal(erc20, "9988");
+  assert.equal(twin, null);
+});

@@ -1,8 +1,9 @@
 "use client";
 
 import { motion, useReducedMotion } from "framer-motion";
+import { fundBar } from "@/data/fund-bar";
 import type { TreasuryTotals } from "@/data/types";
-import { pct, usd } from "@/data/formatters";
+import { usd } from "@/data/formatters";
 import { cn } from "@/lib/utils";
 
 /**
@@ -26,34 +27,14 @@ export function ExposureMeter({
   const inRoot = Math.max(0, totals.treasuryTotalUsd);
   const reach = Math.max(0, totals.exposureUsd);
   const reclaimable = Math.max(0, totals.reclaimableUsd);
-  const held = inRoot + reach + reclaimable;
-
-  const share = (n: number) => (held > 0 ? (n / held) * 100 : 0);
-  const reachPct = share(reach);
-
-  const segments = [
-    {
-      key: "available",
-      value: inRoot,
-      share: share(inRoot),
-      bar: "bg-white/[.06]",
-      text: "text-muted-foreground",
-    },
-    {
-      key: "allocated",
-      value: reach,
-      share: reachPct,
-      bar: "bg-gold/85",
-      text: "text-[#171204]",
-    },
-    {
-      key: "reclaimable",
-      value: reclaimable,
-      share: share(reclaimable),
-      bar: "bg-warning/80",
-      text: "text-[#171204]",
-    },
-  ];
+  const bar = fundBar({ inRoot, reach, reclaimable });
+  const held = bar.held;
+  const styles = {
+    available: { bar: "bg-white/15", text: "text-foreground" },
+    allocated: { bar: "bg-gold/85", text: "text-[#171204]" },
+    reclaimable: { bar: "bg-[#3d4a57]", text: "text-foreground" },
+  } as const;
+  const segments = bar.segments.map((segment) => ({ ...segment, ...styles[segment.key] }));
 
   return (
     <div className={cn("w-full", className)}>
@@ -68,7 +49,7 @@ export function ExposureMeter({
           </p>
         </div>
         <p className="font-mono text-[11px] tabular text-muted-foreground">
-          {pct(reachPct)} of funds held
+          {bar.headline}
         </p>
       </div>
 
@@ -102,7 +83,7 @@ export function ExposureMeter({
                   s.text
                 )}
               >
-                {pct(s.share)}
+                {s.label}
               </span>
             )}
           </motion.div>
@@ -123,7 +104,7 @@ export function ExposureMeter({
         <LegendRow dot="bg-white/25" label="Root cash" value={usd(inRoot)} />
         <LegendRow dot="bg-gold" label="Agent reachable" value={capabilitiesKnown ? usd(reach) : "not loaded"} />
         {reclaimable > 0 && (
-          <LegendRow dot="bg-warning" label="Awaiting reclaim" value={usd(reclaimable)} />
+          <LegendRow dot="bg-[#3d4a57]" label="Awaiting reclaim" value={usd(reclaimable)} />
         )}
       </div>
       <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
@@ -131,7 +112,9 @@ export function ExposureMeter({
           ? "The capability list has not finished, so what an agent can reach is not shown yet."
           : reach > 0
             ? `An agent can reach ${usd(reach)}. The ${usd(inRoot)} root cash is outside that capability.`
-            : "No capability is open, so an agent cannot spend this root."}
+            : reclaimable > 0
+              ? `No capability is open, so an agent cannot spend this root. ${usd(reclaimable)} is awaiting reclaim.`
+              : "No capability is open, so an agent cannot spend this root."}
       </p>
     </div>
   );

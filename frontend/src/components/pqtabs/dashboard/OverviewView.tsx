@@ -6,7 +6,8 @@ import { CountUp, EmptyState, Reveal } from "@/components/pqtabs/shared";
 import { Button } from "@/components/ui/button";
 import { ExposureMeter } from "@/components/pqtabs/visuals/ExposureMeter";
 import { parseUsdcRaw } from "@/data/actions";
-import { pct, usd } from "@/data/formatters";
+import { fundBar } from "@/data/fund-bar";
+import { usd } from "@/data/formatters";
 import { loadSnapshot } from "@/data/production";
 import { arcClient, fundRoot } from "@/data/wallet";
 import { useWalletUsdc } from "@/hooks/use-account-data";
@@ -130,13 +131,16 @@ export default function OverviewView() {
     .filter((t) => t.status === "active")
     .sort((a, b) => a.policy.expiresInHours - b.policy.expiresInHours);
   const recent = activity.slice(0, 6);
-  const held = totals.treasuryTotalUsd + totals.exposureUsd + totals.reclaimableUsd;
-  const exposurePct = held > 0 ? (totals.exposureUsd / held) * 100 : 0;
+  const heldBar = fundBar({
+    inRoot: totals.treasuryTotalUsd,
+    reach: totals.exposureUsd,
+    reclaimable: totals.reclaimableUsd,
+  });
 
   const securityStrip = [
     { label: "Root protection", value: "SLH-DSA verified on Arc", dot: "bg-success" },
     { label: "Agent capabilities", value: "Bounded by policy", dot: "bg-success" },
-    { label: "Reachable share", value: portfolioReady ? `${pct(exposurePct)} of funds held` : "list not loaded", dot: "bg-gold" },
+    { label: "Reachable share", value: portfolioReady ? heldBar.headline : "list not loaded", dot: "bg-gold" },
     { label: "Enforcement", value: "Onchain policy", dot: "bg-success" },
   ];
 
