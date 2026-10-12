@@ -1,6 +1,6 @@
-﻿{
+{
   "name": "pqtabs-sdk",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "TypeScript client for PQTABS on Arc: read capabilities, check spend policy, and pay for research inside an authorized USDC capability.",
   "keywords": [
     "pqtabs",

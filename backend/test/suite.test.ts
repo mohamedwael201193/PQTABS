@@ -6,6 +6,7 @@ const UNIT = [
   "accounting.test.js",
   "answer-quality.test.js",
   "decide.test.js",
+  "dev-session.test.js",
   "http.test.js",
   "index.test.js",
   "research.test.js",

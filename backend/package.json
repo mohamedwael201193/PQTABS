@@ -6,7 +6,7 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "start": "node dist/src/server.js",
-    "test": "tsc -p tsconfig.json && node --test --test-timeout=60000 dist/test/accounting.test.js dist/test/answer-quality.test.js dist/test/decide.test.js dist/test/http.test.js dist/test/index.test.js dist/test/research.test.js dist/test/rpc-error.test.js dist/test/spend-blob.test.js dist/test/spend-ledger.test.js dist/test/suite.test.js dist/test/usdc-event.test.js dist/test/validate.test.js dist/test/x402.test.js",
+    "test": "tsc -p tsconfig.json && node --test --test-timeout=60000 dist/test/accounting.test.js dist/test/answer-quality.test.js dist/test/decide.test.js dist/test/dev-session.test.js dist/test/http.test.js dist/test/index.test.js dist/test/research.test.js dist/test/rpc-error.test.js dist/test/spend-blob.test.js dist/test/spend-ledger.test.js dist/test/suite.test.js dist/test/usdc-event.test.js dist/test/validate.test.js dist/test/x402.test.js",
     "test:live": "tsc -p tsconfig.json && node --test --test-timeout=20000 dist/test/live.test.js",
     "lint": "biome check src test"
   },

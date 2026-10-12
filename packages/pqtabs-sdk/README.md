@@ -1,4 +1,4 @@
-﻿# pqtabs-sdk
+# pqtabs-sdk
 
 TypeScript client for [PQTABS](https://pqtabs.vercel.app) on Arc mainnet (chain `5042`).
 
@@ -150,3 +150,7 @@ Read-only calls prove the connection to the live backend and Arc. Running a paid
 
 MIT. See [LICENSE](./LICENSE).
 
+## Changelog
+
+- **0.1.1:** Packaging only. Removed a UTF-8 byte order mark from `package.json`, `README.md`, and `LICENSE`. No API change.
+- **0.1.0:** First release.

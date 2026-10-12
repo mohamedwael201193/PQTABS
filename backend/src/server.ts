@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import type { Address, Hex } from "viem";
 import { assertOurRoot, type Clients, factoryAbi, loadClients, readPortfolio, relay, rootAbi, tabAbi, usdcAbi, withRpcRetry } from "./chain.js";
 import { BARKEEP, CHAIN_ID, EXPLORER, MAX_BODY_BYTES, USDC } from "./constants.js";
+import { allowedOrigins, authenticate, createChallenge, createSession, DevAuthError, ensureDevTables, revokeSession, SqlDevStore } from "./dev/session.js";
 import { readRegistrarRoots, readRootState } from "./index/account.js";
 import { decideSpend } from "./index/decide.js";
 import { startIngest } from "./index/ingest.js";
@@ -20,6 +21,8 @@ import { asAddress, asHex, asUint, encodeExecute, encodeReclaim, encodeRetrySwee
 
 const seen = new Map<string, Hex>();
 const limits = new RateLimiter();
+/** Index handles whose developer-session tables already exist. Keyed by the handle, so each store is migrated once. */
+const devTablesReady = new WeakSet<object>();
 
 function clientIp(header: string | undefined): string {
   return header?.split(",")[0]?.trim() || "unknown";
@@ -79,7 +82,7 @@ export function createApp(clients: Clients = loadClients(), getIndex?: () => Sql
     c.set("requestId", requestId);
     c.header("x-request-id", requestId);
     c.header("access-control-allow-origin", "*");
-    c.header("access-control-allow-headers", "content-type");
+    c.header("access-control-allow-headers", "content-type, authorization");
     c.header("access-control-allow-methods", "GET,POST,OPTIONS");
     if (c.req.method === "OPTIONS") return c.body(null, 204);
     const kind = c.req.path.startsWith("/v1/relay") ? "relay" : "read";
@@ -285,6 +288,107 @@ export function createApp(clients: Clients = loadClients(), getIndex?: () => Sql
     const result = await relay(clients, root, encodeRetrySweep(tab), seen);
     log({ route: "/v1/relay/retry-sweep", root, tab, tx: result.hash });
     return c.json(result);
+  });
+
+  // Developer sessions: read-only, wallet-authorized, revocable. They never spend and never bypass a capability's checks.
+  const devIndex = async (): Promise<Sql> => {
+    const index = getIndex?.() ?? null;
+    if (!index) throw new RequestError(503, "index_unavailable", "The developer session store is not open.");
+    if (!devTablesReady.has(index)) {
+      await ensureDevTables(index);
+      devTablesReady.add(index);
+    }
+    return index;
+  };
+  const bearer = (c: { req: { header: (name: string) => string | undefined } }): string | undefined =>
+    c.req.header("authorization")?.replace(/^Bearer\s+/i, "") || undefined;
+  const devFailure = (c: { json: (body: unknown, status: number) => Response }, error: unknown) => {
+    if (error instanceof DevAuthError) return c.json({ error: error.code, detail: error.message }, error.status as 400);
+    throw error;
+  };
+
+  app.post("/v1/dev/challenge", async (c) => {
+    const body = await readBody(c);
+    try {
+      const headerOrigin = c.req.header("origin");
+      if (headerOrigin && body.origin !== headerOrigin) throw new DevAuthError("origin_mismatch", 403, "Origin header does not match the origin in the body");
+      const store = new SqlDevStore(await devIndex());
+      const result = await createChallenge({
+        store,
+        wallet: body.wallet,
+        origin: body.origin,
+        scopes: body.scopes,
+        now: Math.floor(Date.now() / 1000),
+        allowed: allowedOrigins(),
+      });
+      c.header("cache-control", "no-store");
+      return c.json({ nonce: result.nonce, message: result.message, expiresAt: result.expiresAt });
+    } catch (error) {
+      return devFailure(c, error);
+    }
+  });
+
+  app.post("/v1/dev/session", async (c) => {
+    const body = await readBody(c);
+    try {
+      const headerOrigin = c.req.header("origin");
+      if (headerOrigin && body.origin !== headerOrigin) throw new DevAuthError("origin_mismatch", 401, "Origin header does not match the origin in the body");
+      const store = new SqlDevStore(await devIndex());
+      const session = await createSession({
+        store,
+        wallet: body.wallet,
+        origin: body.origin,
+        scopes: body.scopes,
+        nonce: body.nonce,
+        signature: body.signature,
+        now: Math.floor(Date.now() / 1000),
+      });
+      c.header("cache-control", "no-store");
+      return c.json({
+        token: session.token,
+        wallet: session.wallet,
+        scopes: session.scopes,
+        expiresAt: session.expiresAt,
+        note: "Shown once. Keep it in memory or a secret store. It is read-only and cannot spend.",
+      });
+    } catch (error) {
+      return devFailure(c, error);
+    }
+  });
+
+  app.get("/v1/dev/session", async (c) => {
+    try {
+      const store = new SqlDevStore(await devIndex());
+      const session = await authenticate({ store, token: bearer(c), now: Math.floor(Date.now() / 1000) });
+      c.header("cache-control", "no-store");
+      return c.json({ wallet: session.wallet, scopes: session.scopes, expiresAt: session.expiresAt, revoked: false });
+    } catch (error) {
+      return devFailure(c, error);
+    }
+  });
+
+  app.post("/v1/dev/revoke", async (c) => {
+    try {
+      const store = new SqlDevStore(await devIndex());
+      await revokeSession({ store, token: bearer(c), now: Math.floor(Date.now() / 1000) });
+      return c.json({ revoked: true });
+    } catch (error) {
+      return devFailure(c, error);
+    }
+  });
+
+  app.get("/v1/dev/roots/:address/portfolio", async (c) => {
+    try {
+      const store = new SqlDevStore(await devIndex());
+      await authenticate({ store, token: bearer(c), requiredScope: "read:roots", now: Math.floor(Date.now() / 1000) });
+    } catch (error) {
+      return devFailure(c, error);
+    }
+    const root = asAddress(c.req.param("address"), "root");
+    const index = getIndex?.() ?? null;
+    const portfolio = index ? await readIndexedPortfolio(index, clients.public, clients.factory, root) : await readPortfolio(clients, root);
+    c.header("cache-control", "no-store");
+    return c.json({ root, ...portfolio });
   });
 
   app.post("/v1/research/quote", async (c) => {

@@ -9,7 +9,7 @@ import { CopyBlock } from "./CopyBlock";
  * and from each host's documentation. Nothing on this page moves money; the page only describes the tools.
  */
 
-const SDK_VERSION = "0.1.0";
+const SDK_VERSION = "0.1.1";
 const MCP_VERSION = "0.1.1";
 
 const INSTALL_SDK = "npm install pqtabs-sdk";
