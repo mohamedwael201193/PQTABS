@@ -1,0 +1,68 @@
+﻿{
+  "name": "pqtabs-mcp",
+  "version": "0.1.0",
+  "description": "Local stdio MCP server for PQTABS on Arc. Check capabilities, price research, and pay only inside an already-authorized USDC capability.",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "pqtabs",
+    "arc",
+    "usdc",
+    "agents",
+    "payments",
+    "capability"
+  ],
+  "license": "MIT",
+  "author": "mohamedwael201193",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mohamedwael201193/PQTABS.git",
+    "directory": "packages/pqtabs-mcp"
+  },
+  "homepage": "https://pqtabs.vercel.app/developers",
+  "bugs": {
+    "url": "https://github.com/mohamedwael201193/PQTABS/issues"
+  },
+  "type": "module",
+  "bin": {
+    "pqtabs-mcp": "./dist/src/cli.js"
+  },
+  "main": "./dist/src/server.js",
+  "types": "./dist/src/server.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/server.d.ts",
+      "import": "./dist/src/server.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist/src/**/*.js",
+    "dist/src/**/*.js.map",
+    "dist/src/**/*.d.ts",
+    "dist/src/**/*.d.ts.map",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome check src test",
+    "test": "npm run build && node --test --test-timeout=60000 dist/test/unit/*.test.js",
+    "test:protocol": "npm run build && node --test --test-timeout=180000 dist/test/protocol/*.test.js",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "pqtabs-sdk": "^0.1.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.2.4",
+    "@types/node": "24.7.2",
+    "typescript": "5.9.3"
+  }
+}

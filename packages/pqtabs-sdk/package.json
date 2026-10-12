@@ -1,0 +1,65 @@
+﻿{
+  "name": "pqtabs-sdk",
+  "version": "0.1.0",
+  "description": "TypeScript client for PQTABS on Arc: read capabilities, check spend policy, and pay for research inside an authorized USDC capability.",
+  "keywords": [
+    "pqtabs",
+    "arc",
+    "usdc",
+    "agents",
+    "payments",
+    "capability",
+    "post-quantum",
+    "x402"
+  ],
+  "license": "MIT",
+  "author": "mohamedwael201193",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mohamedwael201193/PQTABS.git",
+    "directory": "packages/pqtabs-sdk"
+  },
+  "homepage": "https://pqtabs.vercel.app/developers",
+  "bugs": {
+    "url": "https://github.com/mohamedwael201193/PQTABS/issues"
+  },
+  "type": "module",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist/src/**/*.js",
+    "dist/src/**/*.js.map",
+    "dist/src/**/*.d.ts",
+    "dist/src/**/*.d.ts.map",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome check src test",
+    "test": "npm run build && node --test --test-timeout=60000 dist/test/unit/*.test.js",
+    "test:integration": "npm run build && node --test --test-timeout=120000 dist/test/integration/*.test.js",
+    "test:live": "npm run build && node --test --test-timeout=120000 dist/test/live/*.test.js",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "dependencies": {
+    "viem": "^2.57.4",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.2.4",
+    "@types/node": "24.7.2",
+    "typescript": "5.9.3"
+  }
+}

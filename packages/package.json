@@ -1,0 +1,13 @@
+{
+  "name": "pqtabs-packages",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Workspace for the PQTABS SDK and MCP server. Each package is published separately.",
+  "workspaces": [
+    "pqtabs-sdk",
+    "pqtabs-mcp"
+  ],
+  "engines": {
+    "node": ">=20.19.0"
+  }
+}
