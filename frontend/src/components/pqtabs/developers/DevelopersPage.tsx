@@ -10,7 +10,7 @@ import { CopyBlock } from "./CopyBlock";
  */
 
 const SDK_VERSION = "0.1.0";
-const MCP_VERSION = "0.1.0";
+const MCP_VERSION = "0.1.1";
 
 const INSTALL_SDK = "npm install pqtabs-sdk";
 const INSTALL_MCP = "npm install -g pqtabs-mcp";
