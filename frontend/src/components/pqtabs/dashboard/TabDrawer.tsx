@@ -336,11 +336,12 @@ function TabDrawerBody({
           const reason = orderedReasons(decision.reason)[0] ?? "capability_inactive";
           setPolicyNote(`Payment blocked. ${paymentReasonSentence(reason)} Nothing was signed. Nothing was broadcast.`);
         })
-        .catch(() => {
+        .catch((error: unknown) => {
           if (cancelled) return;
           setServicePrice(null);
           setPolicyNote("");
-          setServicePriceNote("The service did not return a price. Nothing was signed.");
+          const message = error instanceof Error ? error.message : "";
+          setServicePriceNote(message || "The service did not return a price. Nothing was signed.");
         });
     }, 400);
     return () => {
