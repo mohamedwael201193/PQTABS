@@ -78,10 +78,18 @@ export type Clients = {
   factory: Address;
 };
 
-export function loadClients(env: NodeJS.ProcessEnv = process.env): Clients {
+export function loadClients(env: NodeJS.ProcessEnv = process.env, signal?: AbortSignal): Clients {
   const rpc = env.ARC_RPC_URL || RPC_URL;
   const factory = (env.FACTORY_ADDRESS || FACTORY) as Address;
-  const publicClient = createPublicClient({ chain: arc, transport: http(rpc) });
+  const publicClient = createPublicClient({
+    chain: arc,
+    transport: http(rpc, {
+      timeout: 10_000,
+      fetchFn: signal
+        ? (input, init) => fetch(input, { ...init, signal: init?.signal ? AbortSignal.any([init.signal, signal]) : signal })
+        : undefined,
+    }),
+  });
   const key = env.RELAYER_PRIVATE_KEY;
   if (!key) {
     return { public: publicClient, relayer: null, relayerAddress: null, factory };

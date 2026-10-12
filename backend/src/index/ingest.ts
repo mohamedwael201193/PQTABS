@@ -2,7 +2,7 @@ import { type Address, decodeEventLog, type Hex, type PublicClient, parseAbiItem
 import { withRpcRetry } from "../chain.js";
 import { FACTORY_BLOCK, RPC_URL, USDC } from "../constants.js";
 import { applyEvents, type IndexEvent, readCursor } from "./apply.js";
-import { startHeadFeed, headSocketOpen } from "./heads.js";
+import { headSocketOpen, startHeadFeed } from "./heads.js";
 import { indexHealth, ingestRead, noteIndexCursor, noteIndexError, noteIndexHead } from "./lane.js";
 import { reconcileVolatile } from "./portfolio.js";
 import type { Sql } from "./sql.js";

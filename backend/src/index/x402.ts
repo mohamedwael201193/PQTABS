@@ -1,5 +1,5 @@
 import { USDC } from "../constants.js";
-import { decideSpend, type Decision, type SpendFacts } from "./decide.js";
+import { type Decision, decideSpend, type SpendFacts } from "./decide.js";
 
 const ARC_NETWORK = "eip155:5042";
 

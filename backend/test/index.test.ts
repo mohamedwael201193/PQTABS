@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { Address, Hex, PublicClient } from "viem";
-import { applyEvents, type IndexEvent, readCursor, resetIndex, writeEvents } from "../src/index/apply.js";
 import { readRegistrarRoots, readRootState } from "../src/index/account.js";
+import { applyEvents, type IndexEvent, readCursor, resetIndex, writeEvents } from "../src/index/apply.js";
 import { headFromSubscription, httpToWebSocket } from "../src/index/heads.js";
 import { indexCoversHead, noteIndexCursor, noteIndexHead, noteRateLimit } from "../src/index/lane.js";
-import { tabFromStored, readIndexedPortfolio } from "../src/index/portfolio.js";
+import { readIndexedPortfolio, tabFromStored } from "../src/index/portfolio.js";
 import { openMemory, type Sql } from "../src/index/sql.js";
 
 const rootA = "0x846f56a8547Fe5cC3120c189c5640e84DAAB65Cf" as Address;

@@ -4,14 +4,14 @@ import type { Address, Hex } from "viem";
 import { assertOurRoot, type Clients, factoryAbi, loadClients, readPortfolio, relay, rootAbi, tabAbi, usdcAbi, withRpcRetry } from "./chain.js";
 import { BARKEEP, CHAIN_ID, EXPLORER, MAX_BODY_BYTES, USDC } from "./constants.js";
 import { readRegistrarRoots, readRootState } from "./index/account.js";
+import { decideSpend } from "./index/decide.js";
 import { startIngest } from "./index/ingest.js";
 import { indexHealth } from "./index/lane.js";
 import { readIndexedPortfolio } from "./index/portfolio.js";
-import { decideSpend } from "./index/decide.js";
-import { recallSpend, rememberSpend } from "./index/spend-ledger.js";
 import { parseSpendBlob, recoverSpendSigner, sameSpendTerms } from "./index/spend-blob.js";
-import { arcQuote, decideHttpPayment } from "./index/x402.js";
+import { recallSpend, rememberSpend } from "./index/spend-ledger.js";
 import { openIndex, type Sql } from "./index/sql.js";
+import { arcQuote, decideHttpPayment } from "./index/x402.js";
 import { RateLimiter } from "./limit.js";
 import { log } from "./log.js";
 import { asAddress, asHex, asUint, encodeExecute, encodeReclaim, encodeRetrySweep, encodeSpend, RequestError } from "./validate.js";
@@ -299,7 +299,7 @@ export function createApp(clients: Clients = loadClients(), getIndex?: () => Sql
     if (!sameSpendTerms(blob, { to, value, validAfter, validBefore, nonce })) {
       throw new RequestError(400, "policy_refused", "tampered_action");
     }
-    let signer;
+    let signer: Address;
     try {
       signer = await recoverSpendSigner(tab, blob);
     } catch {

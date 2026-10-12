@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { type Hex, encodeAbiParameters, getAddress, hexToBytes, keccak256, toHex } from "viem";
+import { encodeAbiParameters, getAddress, type Hex, hexToBytes, keccak256, toHex } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { parseSpendBlob, recoverSpendSigner, sameSpendTerms } from "../src/index/spend-blob.js";
 

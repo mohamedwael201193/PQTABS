@@ -9,7 +9,7 @@ test("the same authorization returns the stored hash and does not replace it", a
   const sql = await openMemory();
   assert.equal(await recallSpend(sql, "0xabc"), null);
   await rememberSpend(sql, "0xabc", hash);
-  await rememberSpend(sql, "0xabc", "0x" + "11".repeat(32));
+  await rememberSpend(sql, "0xabc", `0x${"11".repeat(32)}`);
   assert.equal(await recallSpend(sql, "0xabc"), hash);
   await sql.close();
 });

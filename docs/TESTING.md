@@ -7,7 +7,7 @@ git submodule update --init --recursive
 forge test
 forge test --fuzz-runs 256 --match-contract ExposureInvariantTest
 cd signer && cargo test
-cd ../backend && npm ci && npm test && npm run lint
+cd ../backend && npm ci && npm test && npm run test:live && npm run lint
 python ../scripts/check_pins.py
 python ../scripts/secret_scan.py
 ```
@@ -27,7 +27,9 @@ cargo test --manifest-path signer/wasm/Cargo.toml --lib browser_digest
 cargo build --manifest-path signer/wasm/Cargo.toml --target wasm32-unknown-unknown --release
 ```
 
-`npm test` compiles the backend and runs the allowlist, rate-limit, HTTP rejection, and a live read of chain 5042. The live read expects factory bytecode and root A `openExposure == 0`.
+`npm test` compiles the backend and runs the deterministic suite: policy, index, HTTP rejection, spend blob, spend ledger, and the file-accounting check. It does not call Arc. Each test has a 60 second deadline.
+
+`npm run test:live` is the read-only mainnet suite. It checks chain 5042, the factory pin, and receipt `0x1352cc1963ee0e62c0c04ff634412c4257327755a9d5cf58eefe113d14b2e4a5`. The test deadline is 20 seconds. The client abort signal cancels the HTTP calls when that deadline fires. A rate limit or abort fails with `BLOCKED` and a reason. It does not scan portfolio history.
 
 ## Live probes
 

@@ -44,9 +44,13 @@ Reference x402 code can route a non-65-byte signature to ERC-1271. Arcus was not
 
 The path that worked: keep ArcRouter for the quote only. After policy allows the price and the recipient, POST the 213-byte blob to the existing relayer route `POST /v1/relay/spend`. The relayer calls USDC `transferWithAuthorization` with the `bytes` signature. USDC calls the capability. Call a model only after the receipt has exactly one 6-decimal USDC log from the capability to the allowlisted payee for that amount.
 
-Proven settlement: `0x1352cc1963ee0e62c0c04ff634412c4257327755a9d5cf58eefe113d14b2e4a5`, status success, block `25501696`. It moved 32 raw USDC (`0.000032`) from capability `0x586E42Da69529A4665D4644e6FDe5fdAa4aeA321` to ArcRouter. The capability balance became `9968`. The answer came from Pollinations model `gpt-oss-20b` at `https://text.pollinations.ai/openai`. The charged amount is the quoted ceiling. No unused-ceiling refund was observed, so do not claim one.
+Proven settlement: `0x1352cc1963ee0e62c0c04ff634412c4257327755a9d5cf58eefe113d14b2e4a5`, status success, block `25501796`. It moved 32 raw USDC (`0.000032`) from capability `0x586E42Da69529A4665D4644e6FDe5fdAa4aeA321` to ArcRouter. The capability balance became `9968`. The answer came from Pollinations model `gpt-oss-20b` at `https://text.pollinations.ai/openai`. The charged amount is the quoted ceiling. No unused-ceiling refund was observed, so do not claim one.
+
+The USDC recipient stays ArcRouter because that is the capability's only allowlisted payee, and the research answer is already returned only after that receipt matches. A project-owned recipient would not be a new service. It would be a transfer to ourselves, and this capability cannot change its payee in place. Root cash is 0 and open exposure already equals the ceiling, so another capability cannot be opened first. Closing this one needs the post-quantum signature in the browser. Do not broadcast that close unless the user unlocks the matching backup and approves the exact transaction.
 
 The first click of that attempt returned `rate_limited` and broadcast nothing. The capability balance stayed `10000`. A second click with a new authorization settled once. A retry of identical calldata is idempotent on one backend instance. A new click is a new nonce and a new charge.
+
+`backend` `npm test` used to include `live.test.ts`. That test called `readPortfolio`, which walks every log window from factory block `24623258` to head, and the Node test runner's default timeout is infinite. The process stayed in that RPC loop after the last unit suite. The live command is now `npm run test:live`. It reads the chain id, the factory implementation, and this one receipt. It does not scan history. Pass `AbortSignal` from the test into `loadClients` so the deadline closes the HTTP calls.
 
 ## What not to do
 

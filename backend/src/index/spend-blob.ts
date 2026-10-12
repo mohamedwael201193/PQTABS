@@ -1,4 +1,4 @@
-import { type Address, type Hex, getAddress, hexToBigInt, hexToBytes, recoverTypedDataAddress, toHex } from "viem";
+import { type Address, getAddress, type Hex, hexToBigInt, hexToBytes, recoverTypedDataAddress, toHex } from "viem";
 import { USDC } from "../constants.js";
 
 /** 65-byte ECDSA, payee, value, validAfter, validBefore, nonce. Same layout as the browser signer. */
