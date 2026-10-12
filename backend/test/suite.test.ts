@@ -6,6 +6,7 @@ const UNIT = [
   "decide.test.js",
   "http.test.js",
   "index.test.js",
+  "research.test.js",
   "rpc-error.test.js",
   "spend-blob.test.js",
   "spend-ledger.test.js",

@@ -8,6 +8,8 @@ import { decideSpend } from "./index/decide.js";
 import { startIngest } from "./index/ingest.js";
 import { indexHealth } from "./index/lane.js";
 import { readIndexedPortfolio } from "./index/portfolio.js";
+import { askPollinations, buildResearchQuote, dedicatedPayee, oneUsdcTransfer, parseBarkeepPayment, quoteAgrees, researchDelivery, researchTariff } from "./index/research.js";
+import { openQuote, readQuote, rememberQuote, saveDelivery } from "./index/research-store.js";
 import { parseSpendBlob, recoverSpendSigner, sameSpendTerms } from "./index/spend-blob.js";
 import { recallSpend, rememberSpend } from "./index/spend-ledger.js";
 import { openIndex, type Sql } from "./index/sql.js";
@@ -265,10 +267,50 @@ export function createApp(clients: Clients = loadClients(), getIndex?: () => Sql
     return c.json(result);
   });
 
+  app.post("/v1/research/quote", async (c) => {
+    const body = await readBody(c);
+    const task = typeof body.task === "string" ? body.task : "";
+    const merchant = dedicatedPayee(process.env.MERCHANT_PAYEE, [clients.relayerAddress ?? ""]);
+    if (!merchant) throw new RequestError(503, "merchant_unconfigured", "The merchant receiving address is not configured.");
+    const index = getIndex?.() ?? null;
+    if (!index) throw new RequestError(503, "index_unavailable", "The quote store is not open.");
+    const price = researchTariff();
+    const now = Math.floor(Date.now() / 1000);
+    let draft: ReturnType<typeof buildResearchQuote>;
+    try {
+      draft = buildResearchQuote({
+        id: crypto.randomUUID(),
+        task,
+        payee: merchant,
+        price,
+        now,
+        resourceUrl: "https://pqtabs.onrender.com/v1/research",
+      });
+    } catch {
+      throw new RequestError(400, "bad_task", "The question is empty or too long. Nothing was signed.");
+    }
+    const existing = await openQuote(index, draft.bodyHash, now);
+    if (existing) {
+      const again = buildResearchQuote({
+        id: existing.id,
+        task: existing.task,
+        payee: merchant,
+        price: BigInt(existing.price),
+        now: Number(existing.expires_at) - 600,
+        resourceUrl: "https://pqtabs.onrender.com/v1/research",
+      });
+      return c.json({ paymentRequired: again.paymentRequired, quoteId: existing.id, scheme: "pqtabs-barkeep", standardExact: false, replayed: true });
+    }
+    await rememberQuote(index, draft);
+    return c.json({ paymentRequired: draft.paymentRequired, quoteId: draft.id, scheme: "pqtabs-barkeep", standardExact: false, replayed: false });
+  });
+
   app.post("/v1/x402/decide", async (c) => {
     const body = await readBody(c);
     const tab = asAddress(body.tab, "tab");
-    if (!arcQuote(body.paymentRequired)) throw new RequestError(400, "policy_refused", "no_arc_exact");
+    if (!arcQuote(body.paymentRequired) && !parseBarkeepPayment(body.paymentRequired)) {
+      throw new RequestError(400, "policy_refused", "no_arc_exact");
+    }
     const facts = await readCapability(clients, tab);
     const decision = decideHttpPayment(402, body.paymentRequired, {
       now: facts.now,
@@ -305,13 +347,23 @@ export function createApp(clients: Clients = loadClients(), getIndex?: () => Sql
     } catch {
       throw new RequestError(400, "policy_refused", "invalid_signature");
     }
+    const custom = parseBarkeepPayment(body.paymentRequired);
     const quote = arcQuote(body.paymentRequired);
-    if (!quote) throw new RequestError(400, "policy_refused", "no_arc_exact");
-    if (quote.price !== value.toString() || quote.payee.toLowerCase() !== to.toLowerCase()) {
+    const index = getIndex?.() ?? null;
+    if (custom) {
+      const stored = await readQuote(index, custom.quoteId);
+      if (!stored) throw new RequestError(400, "policy_refused", "unknown_quote");
+      const agreement = quoteAgrees(stored, custom, to, value.toString(), Math.floor(Date.now() / 1000));
+      if (agreement !== "ok") throw new RequestError(400, "policy_refused", agreement);
+      const merchant = dedicatedPayee(process.env.MERCHANT_PAYEE, [clients.relayerAddress ?? ""]);
+      if (!merchant) throw new RequestError(503, "merchant_unconfigured", "The merchant receiving address is not configured.");
+      if (merchant.toLowerCase() !== to.toLowerCase()) throw new RequestError(400, "policy_refused", "wrong_payee");
+    } else if (!quote) {
+      throw new RequestError(400, "policy_refused", "no_arc_exact");
+    } else if (quote.price !== value.toString() || quote.payee.toLowerCase() !== to.toLowerCase()) {
       throw new RequestError(400, "policy_refused", "quote_mismatch");
     }
     const data = encodeSpend({ tab, to, value, validAfter, validBefore, nonce, signature });
-    const index = getIndex?.() ?? null;
     const prior = (await recallSpend(index, data)) ?? seen.get(data) ?? null;
     if (prior) {
       log({ route: "/v1/relay/spend", tab, tx: prior });
@@ -344,6 +396,34 @@ export function createApp(clients: Clients = loadClients(), getIndex?: () => Sql
     }
     log({ route: "/v1/relay/spend", root: facts.owner, tab, tx: result.hash });
     return c.json({ ...result, decision, scheme: "pqtabs-barkeep", standardExact: false, replayed: false });
+  });
+
+  app.post("/v1/research/result", async (c) => {
+    const body = await readBody(c);
+    const quoteId = typeof body.quoteId === "string" ? body.quoteId : "";
+    const txHash = typeof body.txHash === "string" ? body.txHash : "";
+    const tab = asAddress(String(body.tab ?? ""), "tab");
+    if (!/^0x[0-9a-fA-F]{64}$/.test(txHash)) throw new RequestError(400, "bad_hash", "A result needs the Arc transaction hash.");
+    const index = getIndex?.() ?? null;
+    const stored = await readQuote(index, quoteId);
+    if (!stored) throw new RequestError(400, "unknown_quote", "That quote is not stored.");
+    if (stored.tx_hash && stored.tx_hash.toLowerCase() !== txHash.toLowerCase()) {
+      throw new RequestError(409, "quote_already_settled", "This quote is already bound to a different transaction.");
+    }
+    if (stored.status === "complete" && stored.result && stored.tx_hash) {
+      return c.json({ status: "complete", result: stored.result, model: stored.model, txHash: stored.tx_hash, scheme: "pqtabs-barkeep", standardExact: false });
+    }
+    const receipt = await withRpcRetry(() => clients.public.getTransactionReceipt({ hash: txHash as Hex }), 1);
+    const matched = oneUsdcTransfer(
+      { status: receipt.status, logs: receipt.logs.map((log) => ({ address: log.address, topics: log.topics, data: log.data })) },
+      { from: tab, to: stored.payee, value: stored.price },
+    );
+    if (!matched) throw new RequestError(409, "receipt_mismatch", "The Arc receipt is not this quote.");
+    const answered = stored.result ? { text: stored.result, model: stored.model } : await askPollinations(stored.task);
+    const status = researchDelivery(true, answered.text);
+    if (status === "unpaid") throw new RequestError(409, "receipt_mismatch", "The Arc receipt is not this quote.");
+    await saveDelivery(index, quoteId, txHash, status, answered.text, answered.model);
+    return c.json({ status, result: answered.text, model: answered.model, txHash, scheme: "pqtabs-barkeep", standardExact: false });
   });
 
   return app;

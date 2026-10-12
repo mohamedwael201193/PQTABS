@@ -24,6 +24,23 @@ function record(value: unknown): Record<string, unknown> | null {
   return value as Record<string, unknown>;
 }
 
+/** The PQTABS Barkeep requirement. This is not an `exact` EIP-3009 accept. */
+export function barkeepAccept(paymentRequired: unknown): Record<string, unknown> | null {
+  const body = record(paymentRequired);
+  if (!body || body.scheme !== "pqtabs-barkeep" || body.standardExact !== false || !Array.isArray(body.accepts)) return null;
+  for (const item of body.accepts) {
+    const row = record(item);
+    if (!row || row.scheme !== "pqtabs-barkeep" || row.network !== ARC) continue;
+    if (typeof row.asset !== "string" || row.asset.toLowerCase() !== USDC) continue;
+    return row;
+  }
+  return null;
+}
+
+function pricedAccept(paymentRequired: unknown): Record<string, unknown> | null {
+  return barkeepAccept(paymentRequired) ?? arcExactAccept(paymentRequired);
+}
+
 /** The Arc exact accept, with the method field the facilitator requires before it checks the signature. */
 export function arcExactAccept(paymentRequired: unknown): Record<string, unknown> | null {
   const body = record(paymentRequired);
@@ -40,7 +57,7 @@ export function arcExactAccept(paymentRequired: unknown): Record<string, unknown
 
 /** The Arc exact price from a 402. A Base row is not a quote. */
 export function serviceQuote(paymentRequired: unknown): { price: string; payee: string; network: string } | null {
-  const accepted = arcExactAccept(paymentRequired);
+  const accepted = pricedAccept(paymentRequired);
   const payee = servicePayee(paymentRequired);
   const price = accepted && typeof accepted.amount === "string" ? accepted.amount : "";
   if (!accepted || !payee || !/^[0-9]+$/.test(price)) return null;
@@ -56,7 +73,7 @@ export function formatRawUsdc(value: string): string {
   return fraction ? `${whole}.${fraction} USDC` : `${whole} USDC`;
 }
 export function servicePayee(paymentRequired: unknown): string | null {
-  const accepted = arcExactAccept(paymentRequired);
+  const accepted = pricedAccept(paymentRequired);
   const payTo = accepted && typeof accepted.payTo === "string" ? accepted.payTo : "";
   if (!payTo) return null;
   try {
@@ -115,8 +132,14 @@ export function chainExpirySeconds(value: string): number {
 }
 
 /** The service's own timeout. A missing or short window is not a reason to use the capability expiry. */
+export function quoteIdOf(paymentRequired: unknown): string {
+  const extra = record(barkeepAccept(paymentRequired)?.extra);
+  const id = extra && typeof extra.quoteId === "string" ? extra.quoteId : "";
+  return /^[0-9a-f-]{36}$/.test(id) ? id : "";
+}
+
 export function serviceTimeoutSeconds(paymentRequired: unknown): number {
-  const accepted = arcExactAccept(paymentRequired);
+  const accepted = pricedAccept(paymentRequired);
   const raw = accepted?.maxTimeoutSeconds;
   if (typeof raw === "number" && Number.isInteger(raw)) return raw;
   if (typeof raw === "string" && /^[0-9]+$/.test(raw)) return Number(raw);

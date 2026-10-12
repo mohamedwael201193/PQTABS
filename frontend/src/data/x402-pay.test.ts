@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { agentCanSign, arcExactAccept, chainExpirySeconds, formatRawUsdc, payeeLabel, paymentDeadline, paymentSignatureHeader, quotedCharge, receiptSettlesSpend, serviceAnswer, servicePayee, serviceQuote, serviceTimeoutSeconds, settlementFailure, transactionFromPaymentResponse } from "./x402-pay.ts";
+import { agentCanSign, arcExactAccept, barkeepAccept, chainExpirySeconds, formatRawUsdc, payeeLabel, paymentDeadline, paymentSignatureHeader, quoteIdOf, quotedCharge, receiptSettlesSpend, serviceAnswer, servicePayee, serviceQuote, serviceTimeoutSeconds, settlementFailure, transactionFromPaymentResponse } from "./x402-pay.ts";
 
 const quoted = {
   x402Version: 2,
@@ -102,4 +102,30 @@ test("the payment header names the Arc accept and the EIP-3009 method", () => {
   assert.equal(serviceAnswer(200, { choices: [{ message: { content: "  " } }] }), "");
   assert.deepEqual(payeeLabel("0x6Bf001BB5f5E75396d92163325ca01FdEBe2e9A9"), { name: "ArcRouter", category: "Service" });
   assert.equal(payeeLabel("0x0000000000000000000000000000000000000001").category, "Infrastructure");
+});
+
+test("a pqtabs-barkeep quote is the price and an exact row is not that quote", () => {
+  const id = "11111111-1111-4111-8111-111111111111";
+  const payment = {
+    scheme: "pqtabs-barkeep",
+    standardExact: false,
+    accepts: [{
+      scheme: "pqtabs-barkeep",
+      network: "eip155:5042",
+      asset: "0x3600000000000000000000000000000000000000",
+      amount: "32",
+      payTo: "0x1111111111111111111111111111111111111111",
+      maxTimeoutSeconds: 600,
+      extra: { quoteId: id },
+    }],
+  };
+  assert.equal(arcExactAccept(payment), null);
+  assert.equal(barkeepAccept(payment)?.amount, "32");
+  assert.deepEqual(serviceQuote(payment), {
+    price: "32",
+    payee: "0x1111111111111111111111111111111111111111",
+    network: "eip155:5042",
+  });
+  assert.equal(serviceTimeoutSeconds(payment), 600);
+  assert.equal(quoteIdOf(payment), id);
 });

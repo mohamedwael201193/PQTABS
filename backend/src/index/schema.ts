@@ -56,6 +56,20 @@ CREATE TABLE IF NOT EXISTS spend_attempts (
   calldata text PRIMARY KEY,
   tx_hash text NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS research_quotes (
+  id text PRIMARY KEY,
+  body_hash text NOT NULL,
+  task text NOT NULL,
+  price text NOT NULL,
+  payee text NOT NULL,
+  max_tokens integer NOT NULL,
+  expires_at bigint NOT NULL,
+  tx_hash text,
+  status text NOT NULL,
+  result text NOT NULL DEFAULT '',
+  model text NOT NULL DEFAULT ''
+);
 `;
 
 /** Columns added after the first production database. Safe to run on every boot. */
@@ -68,4 +82,17 @@ export const MIGRATIONS = [
   "ALTER TABLE capabilities ADD COLUMN IF NOT EXISTS payees text",
   "UPDATE capabilities SET usdc_balance = '0' WHERE swept IS TRUE AND usdc_balance IS NULL",
   "CREATE TABLE IF NOT EXISTS spend_attempts (calldata text PRIMARY KEY, tx_hash text NOT NULL)",
+  `CREATE TABLE IF NOT EXISTS research_quotes (
+    id text PRIMARY KEY,
+    body_hash text NOT NULL,
+    task text NOT NULL,
+    price text NOT NULL,
+    payee text NOT NULL,
+    max_tokens integer NOT NULL,
+    expires_at bigint NOT NULL,
+    tx_hash text,
+    status text NOT NULL,
+    result text NOT NULL DEFAULT '',
+    model text NOT NULL DEFAULT ''
+  )`,
 ];

@@ -984,7 +984,7 @@ function TabDrawerBody({
         <section className="space-y-3 border-t border-white/[.06] pt-5">
           <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Research agent</p>
           <p className="text-xs leading-relaxed text-muted-foreground">
-            USDC goes to the allowlisted recipient through a PQTABS Barkeep authorization. This is not an ArcRouter x402 purchase. Pollinations answers after the Arc receipt matches. Running the same question again after an answer starts a new charge.
+            Arc Research is a PQTABS tariff. The quote names the merchant, the price, and chain 5042. USDC moves only if this capability allows that merchant. The answer is returned after the Arc receipt matches. This is not an ArcRouter x402 purchase. Asking again after an answer starts a new charge. Retrying a paid task with no answer does not.
           </p>
           <textarea
             value={task}
@@ -1006,7 +1006,16 @@ function TabDrawerBody({
               </div>
               <div>
                 <dt className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">USDC recipient</dt>
-                <dd className="mt-0.5 text-foreground">{payeeLabel(servicePrice.payee).name}</dd>
+                <dd className="mt-0.5 break-all text-foreground">
+                  {payeeLabel(servicePrice.payee).name}
+                  <button
+                    type="button"
+                    className="ml-2 font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground"
+                    onClick={() => void navigator.clipboard.writeText(servicePrice.payee)}
+                  >
+                    Copy
+                  </button>
+                </dd>
               </div>
               <div>
                 <dt className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Scheme</dt>
@@ -1196,8 +1205,8 @@ function TabDrawerBody({
                   }
                   if (!result) {
                     setTaskPhase("ANSWER_MISSING");
-                    setPayLog((lines) => [...lines, "Arc receipt matched. The model returned no text. No second charge was sent."]);
-                    toast.error("Arc receipt matched. The model returned no text. No second charge was sent.");
+                    setPayLog((lines) => [...lines, "SETTLED_RESULT_PENDING. The Arc receipt matched. The answer is not ready. Retrying does not charge again."]);
+                    toast.error("Settlement confirmed. The result is still pending. Retrying does not charge again.");
                     return;
                   }
                   setTaskPhase("SETTLED");

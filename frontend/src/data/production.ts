@@ -3,8 +3,8 @@ import { priceCheckFailure } from "./price-check-failure";
 import { rootSignatureBlock } from "./root-sign-check";
 import { spendKind } from "./spend-kind";
 import { usd } from "./formatters";
-import { presentAnswer, researchAnswer, RESEARCH_URL } from "./research-answer";
-import { paymentSignatureHeader, payeeLabel, quotedCharge, receiptSettlesSpend, serviceAnswer, settlementFailure, transactionFromPaymentResponse, type SpendAuthorization } from "./x402-pay";
+import { presentAnswer } from "./research-answer";
+import { paymentSignatureHeader, payeeLabel, quoteIdOf, quotedCharge, receiptSettlesSpend, serviceAnswer, settlementFailure, transactionFromPaymentResponse, type SpendAuthorization } from "./x402-pay";
 import { arcClient } from "./wallet";
 import type { Hex } from "viem";
 import type {
@@ -677,31 +677,27 @@ export async function settleResearch(input: {
   if (!receiptSettlesSpend(proof, { from: input.tab, to: input.to, value: input.value })) {
     throw new Error(`Arc included ${payload.hash}, and that receipt is not this payment.`);
   }
-  const answered = await askResearch(input.task);
+  const delivered = await readResearchResult(input.task, quoteIdOf(input.paymentRequired), payload.hash, input.tab);
   return {
     transaction: payload.hash,
-    result: answered.text,
-    model: answered.model,
+    result: delivered.text,
+    model: delivered.model,
     receipt: { status: receipt.status, blockNumber: receipt.blockNumber.toString() },
     charge: input.value,
   };
 }
 
-async function askResearch(task: string): Promise<{ text: string; model: string }> {
+async function readResearchResult(task: string, quoteId: string, txHash: string, tab: string): Promise<{ text: string; model: string }> {
+  if (!quoteId) return { text: "", model: "" };
   try {
-    const response = await fetch(RESEARCH_URL, {
+    const response = await fetch(`${BACKEND_URL}/v1/research/result`, {
       method: "POST",
       headers: { "content-type": "application/json", accept: "application/json" },
-      body: JSON.stringify({
-        model: "openai",
-        messages: [{ role: "user", content: task }],
-        max_tokens: 400,
-      }),
+      body: JSON.stringify({ quoteId, txHash, tab }),
     });
-    const payload = await response.json().catch(() => null);
-    if (!response.ok) return { text: "", model: "" };
-    const parsed = researchAnswer(payload);
-    return { text: presentAnswer(task, parsed.text).text, model: parsed.text ? parsed.model : "" };
+    const payload = (await response.json().catch(() => null)) as { status?: string; result?: string; model?: string } | null;
+    if (!response.ok || payload?.status !== "complete" || !payload.result) return { text: "", model: "" };
+    return { text: presentAnswer(task, payload.result).text, model: payload.model ?? "" };
   } catch {
     return { text: "", model: "" };
   }
@@ -718,16 +714,19 @@ function serviceBody(task: string) {
 }
 
 export async function requestServicePrice(task: string): Promise<unknown> {
-  const response = await fetch(SERVICE_URL, {
+  const response = await fetch(`${BACKEND_URL}/v1/research/quote`, {
     method: "POST",
     headers: { "content-type": "application/json", accept: "application/json" },
-    body: JSON.stringify(serviceBody(task)),
+    body: JSON.stringify({ task }),
   });
-  const payload = await response.json().catch(() => null);
-  if (response.status !== 402 || !payload) {
+  const payload = (await response.json().catch(() => null)) as { error?: string; paymentRequired?: unknown } | null;
+  if (response.status === 503 || payload?.error === "merchant_unconfigured") {
+    throw new Error("The merchant receiving address is not configured. Nothing was signed. Nothing was broadcast.");
+  }
+  if (!response.ok || !payload?.paymentRequired) {
     throw new Error("The service did not return a price. Nothing was signed.");
   }
-  return payload;
+  return payload.paymentRequired;
 }
 
 /** Retry the priced request. The service's facilitator broadcasts. This client does not. */

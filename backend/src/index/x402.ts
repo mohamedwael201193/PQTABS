@@ -1,5 +1,6 @@
 import { USDC } from "../constants.js";
 import { type Decision, decideSpend, type SpendFacts } from "./decide.js";
+import { parseBarkeepPayment } from "./research.js";
 
 const ARC_NETWORK = "eip155:5042";
 
@@ -67,7 +68,25 @@ function factRecord(facts: SpendContext) {
 
 export function decideHttpPayment(status: number, payload: unknown, facts: SpendContext): QuotedDecision {
   const empty = { resource: "", price: "", asset: "", network: "", payee: "", ...factRecord(facts) };
-  if (status !== 402) return { decision: "NO_PAYMENT", reason: ["service_unavailable"], ...empty };
+  if (status !== 402 && !parseBarkeepPayment(payload)) return { decision: "NO_PAYMENT", reason: ["service_unavailable"], ...empty };
+  const custom = parseBarkeepPayment(payload);
+  if (custom) {
+    const decision = decideSpend({
+      ...facts,
+      amount: BigInt(custom.price),
+      payee: custom.payee,
+      serviceAvailable: true,
+    });
+    return {
+      ...decision,
+      resource: custom.resource,
+      price: custom.price,
+      asset: USDC,
+      network: "eip155:5042",
+      payee: custom.payee,
+      ...factRecord(facts),
+    };
+  }
   const quote = arcQuote(payload);
   if (!quote) return { decision: "NO_PAYMENT", reason: ["no_arc_exact"], ...empty };
   const decision = decideSpend({
