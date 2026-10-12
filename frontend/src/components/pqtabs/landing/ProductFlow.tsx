@@ -28,7 +28,7 @@ export default function ProductFlow({ onLaunchApp }: { onLaunchApp: () => void }
     <SectionShell id="product" index="08" label="The Product Flow">
       <SectionHeading
         title="Create a bounded capability."
-        lead="Five decisions, plain language, one confirmation. The interface states policy in human terms — the contracts enforce it."
+        lead="A few plain-language choices and one confirmation. The interface shows the policy, and the backend refuses out-of-policy spends."
       />
 
       <Reveal delay={0.05} className="mt-12 md:mt-16">
@@ -140,7 +140,7 @@ export default function ProductFlow({ onLaunchApp }: { onLaunchApp: () => void }
                 </div>
                 <div>
                   <div className="flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                    <span>Expires in 24h</span>
+                    <span>Example expiry: 24h</span>
                     <span className="tabular text-foreground">24:00</span>
                   </div>
                   <div className="mt-1.5 h-1 rounded-full bg-white/[.07]">
@@ -171,7 +171,7 @@ export default function ProductFlow({ onLaunchApp }: { onLaunchApp: () => void }
               <blockquote className="mt-5 flex-1 border-l-2 border-gold/60 pl-4">
                 <p className="text-sm leading-relaxed text-foreground/90">
                   This gives the agent you choose a cap, a per-payment limit,
-                  approved recipients, and an expiry. You set every number.
+                  one payee, and an expiry. You set each value.
                 </p>
               </blockquote>
 

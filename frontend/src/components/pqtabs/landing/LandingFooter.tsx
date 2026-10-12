@@ -19,8 +19,8 @@ const PRODUCT_LINKS = [
 const STACK = ["Arc", "Barkeep", "USDC", "SLH-DSA"];
 
 const PROTOCOL_NOTES = [
-  "Policy enforced onchain",
-  "Root never signs payments",
+  "Capabilities opened onchain",
+  "Payments run inside open capabilities",
   "Tabs expire by default",
 ];
 

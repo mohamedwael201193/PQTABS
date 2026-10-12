@@ -31,19 +31,19 @@ const STEPS: { num: string; title: string; body: string; icon: Icon3DName }[] = 
   {
     num: "02",
     title: "Open a capability",
-    body: "Fund a capability with a cap, a per-call limit, approved recipients and an expiry. Policy is set by you.",
+    body: "Fund a capability with a cap, a per-payment maximum, one payee, and an expiry. You set these values.",
     icon: "card",
   },
   {
     num: "03",
     title: "Agents spend within bounds",
-    body: "The agent pays allowed recipients within limits. Arc checks a payment that reaches it. A payment rejected before that is not in the ledger.",
+    body: "The agent pays only the quoted payee, within the cap. A payment the backend refuses is never signed or sent.",
     icon: "robot",
   },
   {
     num: "04",
     title: "Expire and reclaim",
-    body: "After expiry the agent can no longer spend. The remaining USDC stays until someone reclaims it. That call does not need the root key.",
+    body: "After expiry the agent can no longer spend. Anyone can then return the remaining USDC to the root.",
     icon: "shield",
   },
 ];
@@ -55,7 +55,7 @@ export default function HowItWorks() {
     <SectionShell id="how" index="04" label="How PQTABS Works">
       <SectionHeading
         title="One root. Many capabilities. Spending stays inside them."
-        lead="The post-quantum root never authorizes individual payments. It issues bounded spending capabilities — Barkeep tabs — that carry their own policy."
+        lead="The post-quantum root does not authorize each payment. It opens bounded spending capabilities — Barkeep tabs — that carry their own policy."
       />
 
       <Reveal delay={0.05} className="mt-12 md:mt-16">

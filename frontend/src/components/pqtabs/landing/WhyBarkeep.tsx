@@ -182,7 +182,7 @@ function LayerStack({ reduced }: { reduced: boolean | null }) {
           <line x1="664" y1="114" x2="656" y2="122" stroke={DANGER} strokeWidth="1.7" strokeLinecap="round" />
         </motion.g>
         <text x="686" y="114" fontSize="8" letterSpacing="1.4" fill="rgba(229,72,77,0.8)" className="font-mono">
-          AGENTS NEVER TOUCH THE ROOT
+          AGENTS DO NOT SIGN ROOT ACTIONS
         </text>
       </motion.g>
     </svg>

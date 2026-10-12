@@ -23,7 +23,7 @@ const FACTS = [
   {
     kicker: "What it protects",
     title: "Rare root actions",
-    body: "Opening a capability, closing one, and rotating the root key. Day-to-day payments never touch the root.",
+    body: "Opening a capability, closing one, and rotating the root key. Day-to-day payments run inside an open capability.",
   },
 ];
 

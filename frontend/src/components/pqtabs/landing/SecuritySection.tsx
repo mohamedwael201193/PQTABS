@@ -18,7 +18,7 @@ export default function SecuritySection() {
         <SectionHeading
           className="flex-1"
           title="Assume the agent is compromised."
-          lead="Design for the day it happens. With PQTABS, a compromised agent reaches exactly as far as its capability — and not one dollar further."
+          lead="Design for the day it happens. With PQTABS, a compromised agent reaches only its open capability: its cap, its payee, and its expiry."
         />
         {/* Fixed-recipient policy lock — staged in the heading's negative space */}
         <div className="hidden shrink-0 pt-6 md:block" aria-hidden="true">

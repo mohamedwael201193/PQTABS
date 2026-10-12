@@ -59,7 +59,7 @@ export default function InsightSection() {
               </div>
               <p className="mt-7 max-w-sm text-[15px] leading-relaxed text-muted-foreground">
                 Rare and deliberate. Signs opening a capability, closing one,
-                and rotating the root key. There is no recovery. Protected
+                and rotating the root key. There is no operator recovery: keep the device backup and export safe. Protected
                 by SLH-DSA — a post-quantum signature scheme.
               </p>
               <p className="mt-6 flex items-center gap-2.5 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground/75">
@@ -80,8 +80,8 @@ export default function InsightSection() {
                 <Icon3D name="card" size={88} float decorative />
               </div>
               <p className="mt-7 max-w-sm text-[15px] leading-relaxed text-muted-foreground">
-                Frequent and automated. Agents pay vendors inside policy
-                limits they can never change.
+                Frequent and automated. Agents pay inside an open capability. They
+                cannot change its cap or payee.
               </p>
               <p className="mt-6 flex items-center gap-2.5 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground/75">
                 <span className="h-1 w-1 rounded-full bg-teal" aria-hidden="true" />

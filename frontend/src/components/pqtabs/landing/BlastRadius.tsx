@@ -57,11 +57,11 @@ export default function BlastRadius() {
             <div className="mt-5 flex flex-wrap gap-2">
               <span className="inline-flex items-center gap-1.5 rounded-full border border-white/[.08] bg-white/[.03] px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
                 <Users className="size-3.5 text-gold/70" strokeWidth={1.5} aria-hidden="true" />
-                3 approved recipients
+                One payee (example)
               </span>
               <span className="inline-flex items-center gap-1.5 rounded-full border border-white/[.08] bg-white/[.03] px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
                 <Clock className="size-3.5 text-gold/70" strokeWidth={1.5} aria-hidden="true" />
-                Expires in 24h
+                Example expiry: 24h
               </span>
             </div>
 
@@ -152,8 +152,8 @@ export default function BlastRadius() {
             </div>
 
             <p className="mt-8 border-t border-white/[.06] pt-5 font-mono text-[11px] leading-relaxed text-muted-foreground">
-              The agent can never reach the rest — not with the key, not with
-              the cap, not with time.
+              Outside the open capability, the rest of the treasury is out of the agent's reach.
+              
             </p>
           </div>
         </div>

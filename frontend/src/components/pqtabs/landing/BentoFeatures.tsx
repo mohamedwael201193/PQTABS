@@ -25,9 +25,9 @@ const CARDS: { icon: Icon3DName; kicker: string; title: string; body: string }[]
   [
     {
       icon: "lock",
-      kicker: "ALLOW-LIST",
-      title: "Fixed recipients",
-      body: "Payments outside the approved list are rejected automatically.",
+      kicker: "ONE PAYEE",
+      title: "Fixed payee",
+      body: "Payments to any other address are refused before anything is signed.",
     },
     {
       icon: "hourglass",
@@ -39,13 +39,13 @@ const CARDS: { icon: Icon3DName; kicker: string; title: string; body: string }[]
       icon: "robot",
       kicker: "SEPARATION",
       title: "Isolated agent keys",
-      body: "Agent credentials can never touch — or become — the root.",
+      body: "Agent keys spend only inside open capabilities. They do not sign root actions.",
     },
     {
       icon: "gauge",
       kicker: "RATE BOUND",
       title: "Per-payment limits",
-      body: "A hard ceiling on every single call, not just a monthly total.",
+      body: "A maximum on each payment, in addition to the capability's total cap.",
     },
   ];
 
@@ -68,7 +68,7 @@ export default function BentoFeatures() {
             <span className="text-gradient-gold">vault</span> with an allowance.
           </>
         }
-        lead="Every capability carries its own policy — recipients, per-call limits and expiry travel with the money."
+        lead="Every capability carries its own cap, per-payment maximum, payee, and expiry."
       />
 
       <div className="mt-12 grid grid-cols-1 gap-4 sm:grid-cols-2 md:mt-14 lg:grid-cols-4">
@@ -82,7 +82,7 @@ export default function BentoFeatures() {
                     Assume breach
                   </p>
                   <h3 className="mt-4 font-display text-2xl font-semibold leading-[1.12] tracking-tight text-foreground md:text-3xl">
-                    Nothing is reachable beyond the cap.
+                    Nothing is reachable beyond the open cap.
                   </h3>
                 </div>
                 <span className="mt-1 block shrink-0 origin-top-right scale-[.6] sm:scale-90 lg:scale-100">
@@ -90,8 +90,8 @@ export default function BentoFeatures() {
                 </span>
               </div>
               <p className="mt-5 max-w-md text-sm leading-relaxed text-muted-foreground md:text-[15px]">
-                The post-quantum root signs every capability into existence.
-                Recipients, limits and expiry are bound into the capability itself —
+                The post-quantum root opens every capability.
+                The cap, per-payment maximum, payee, and expiry are set at opening —
                 before an agent can spend.
               </p>
               <div className="mt-auto pt-8 md:pt-10">

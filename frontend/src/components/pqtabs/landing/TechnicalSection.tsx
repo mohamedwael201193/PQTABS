@@ -28,7 +28,7 @@ const SPEC = [
   {
     key: "CAPABILITIES",
     title: "Barkeep tabs",
-    body: "Bounded spending objects: funded cap, per-call limit, recipient allowlist, expiry.",
+    body: "Bounded spending objects: funded cap, per-payment maximum, one payee, expiry.",
   },
   {
     key: "SETTLEMENT",
@@ -38,19 +38,19 @@ const SPEC = [
   {
     key: "POLICY",
     title: "Onchain enforcement",
-    body: "Policy lives in the capability itself. The interface displays it; the chain enforces it.",
+    body: "The interface shows the policy. The backend refuses an out-of-policy spend before anything is signed.",
   },
   {
     key: "CUSTODY",
     title: "No operator recovery",
-    body: "This device keeps an encrypted backup. The downloaded file is for a new device. If both are lost, the USDC stays in the root. The private key is not stored. Agents cannot rotate the key.",
+    body: "This device keeps an encrypted backup. The downloaded file is for a new device. If both are lost, the USDC stays in the root. The backend does not store the root key. Agents cannot rotate the key.",
   },
 ];
 
 const TRUTH = [
   { statement: "UI displays policy", note: "WHAT YOU SEE", gold: false },
   { statement: "Backend relays activity", note: "WHAT YOU WATCH", gold: false },
-  { statement: "Blockchain enforces policy", note: "WHAT GUARANTEES IT", gold: true },
+  { statement: "Arc records every settled payment", note: "WHAT SETTLES IT", gold: true },
 ];
 
 export default function TechnicalSection() {
