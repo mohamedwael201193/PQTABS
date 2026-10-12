@@ -8,6 +8,7 @@ import { startIngest } from "./index/ingest.js";
 import { indexHealth } from "./index/lane.js";
 import { readIndexedPortfolio } from "./index/portfolio.js";
 import { decideSpend } from "./index/decide.js";
+import { recallSpend, rememberSpend } from "./index/spend-ledger.js";
 import { parseSpendBlob, recoverSpendSigner, sameSpendTerms } from "./index/spend-blob.js";
 import { arcQuote, decideHttpPayment } from "./index/x402.js";
 import { openIndex, type Sql } from "./index/sql.js";
@@ -309,6 +310,13 @@ export function createApp(clients: Clients = loadClients(), getIndex?: () => Sql
     if (quote.price !== value.toString() || quote.payee.toLowerCase() !== to.toLowerCase()) {
       throw new RequestError(400, "policy_refused", "quote_mismatch");
     }
+    const data = encodeSpend({ tab, to, value, validAfter, validBefore, nonce, signature });
+    const index = getIndex?.() ?? null;
+    const prior = (await recallSpend(index, data)) ?? seen.get(data) ?? null;
+    if (prior) {
+      log({ route: "/v1/relay/spend", tab, tx: prior });
+      return c.json({ hash: prior, scheme: "pqtabs-barkeep", standardExact: false, replayed: true });
+    }
     const facts = await readCapability(clients, tab);
     const decision = decideSpend({
       now: facts.now,
@@ -328,10 +336,14 @@ export function createApp(clients: Clients = loadClients(), getIndex?: () => Sql
     if (decision.decision !== "ALLOW") {
       throw new RequestError(400, "policy_refused", decision.reason.join(","));
     }
-    const data = encodeSpend({ tab, to, value, validAfter, validBefore, nonce, signature });
     const result = await relay(clients, USDC, data, seen);
+    try {
+      await rememberSpend(index, data, result.hash);
+    } catch {
+      /* The hash is still returned. The in-memory cache covers this process. */
+    }
     log({ route: "/v1/relay/spend", root: facts.owner, tab, tx: result.hash });
-    return c.json({ ...result, decision });
+    return c.json({ ...result, decision, scheme: "pqtabs-barkeep", standardExact: false, replayed: false });
   });
 
   return app;

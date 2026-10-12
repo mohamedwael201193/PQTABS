@@ -28,6 +28,7 @@ import { relFuture, usd } from "@/data/formatters";
 import { isAddress } from "@/data/actions";
 import { decisionRecord, expiryWhen, orderedReasons, paymentReasonSentence, settledDecision, settlementReasons, shownReachableUsd, type DecisionFacts, type DecisionRecord, type QuotedDecision } from "@/data/decision-record";
 import { loadDecisions, saveDecision } from "@/data/decision-store";
+import { ChargeConfirm, readAttempt, reconcileAttempt, writeAttempt } from "@/data/paid-attempt";
 import { savedPaymentRecord } from "@/data/saved-payment";
 import { arcClock, BACKEND_URL, confirmRootSignature, describeReturn, decideServicePrice, loadSnapshot, prepareClose, productionProvider, requestServicePrice, settleResearch, SettlementPending, submitPrepared, type PreparedAction, type ServiceDecision } from "@/data/production";
 import { probeAmount, probePayment, probeRefusal, replayRefusal, spentAuthorization, UNAVAILABLE_SERVICE_URL, unavailableServiceRefusal, capabilityPayment, expiredRefusal, expiryStillOpen, type ProbeName } from "@/data/refusal-probe";
@@ -258,6 +259,8 @@ function TabDrawerBody({
   const [savedDecisions, setSavedDecisions] = useState<DecisionRecord[]>([]);
   const answerRef = useRef<HTMLDivElement>(null);
   const payLock = useRef(false);
+  const chargeAgain = useRef(false);
+  const [chargeArmed, setChargeArmed] = useState(false);
   const decisionEpoch = usePqtabsData((state) => state.decisionEpoch);
   const registrarNow = usePqtabsData((state) => state.registrar);
 
@@ -981,13 +984,15 @@ function TabDrawerBody({
         <section className="space-y-3 border-t border-white/[.06] pt-5">
           <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Research agent</p>
           <p className="text-xs leading-relaxed text-muted-foreground">
-            {settledRecord?.result
-              ? "A new run pays the quoted price again, then the model answers the new question."
-              : "The quote names the approved recipient. Arc settles that transfer, then the model answers this question."}
+            USDC goes to the allowlisted recipient through a PQTABS Barkeep authorization. This is not an ArcRouter x402 purchase. Pollinations answers after the Arc receipt matches. Running the same question again after an answer starts a new charge.
           </p>
           <textarea
             value={task}
-            onChange={(event) => setTask(event.target.value)}
+            onChange={(event) => {
+              chargeAgain.current = false;
+              setChargeArmed(false);
+              setTask(event.target.value);
+            }}
             aria-label="Research question"
             placeholder="Enter a research question"
             rows={3}
@@ -1000,8 +1005,16 @@ function TabDrawerBody({
                 <dd className="mt-0.5 text-foreground">{formatRawUsdc(servicePrice.price)}</dd>
               </div>
               <div>
-                <dt className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Service</dt>
+                <dt className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">USDC recipient</dt>
                 <dd className="mt-0.5 text-foreground">{payeeLabel(servicePrice.payee).name}</dd>
+              </div>
+              <div>
+                <dt className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Scheme</dt>
+                <dd className="mt-0.5 text-foreground">PQTABS Barkeep</dd>
+              </div>
+              <div>
+                <dt className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Answer</dt>
+                <dd className="mt-0.5 text-foreground">Pollinations</dd>
               </div>
               <div>
                 <dt className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Network</dt>
@@ -1109,9 +1122,40 @@ function TabDrawerBody({
                   const now = await arcClock();
                   const deadline = paymentDeadline(now, chainExpirySeconds(decision.expiry), serviceTimeoutSeconds(paymentRequired));
                   setPayLog((lines) => [...lines, "Policy approved"]);
+                  const stored = readAttempt(window.localStorage, tab.id);
+                  const action = reconcileAttempt(
+                    stored,
+                    { tab: tab.id, task: asked, price: decision.price, payee: decision.payee },
+                    chargeAgain.current,
+                    now,
+                  );
+                  if (action === "confirm") throw new ChargeConfirm();
+                  if (action === "reuse" && stored) {
+                    signedLocally = true;
+                    setPayLog((lines) => [...lines, "Resubmitting the same authorization"]);
+                    return {
+                      paymentRequired,
+                      decision,
+                      signed: { nonce: stored.nonce, blob: stored.signature as `0x${string}` },
+                      deadline: Number(stored.validBefore),
+                    };
+                  }
                   setTaskPhase("AUTHORIZING");
                   const signed = await authorizationBlob(key, tab.id, decision.payee, BigInt(decision.price), BigInt(deadline));
                   signedLocally = true;
+                  chargeAgain.current = false;
+                  setChargeArmed(false);
+                  writeAttempt(window.localStorage, {
+                    tab: tab.id,
+                    task: asked,
+                    price: decision.price,
+                    payee: decision.payee,
+                    nonce: signed.nonce,
+                    validBefore: String(deadline),
+                    signature: signed.blob,
+                    txHash: "",
+                    settled: false,
+                  });
                   return { paymentRequired, decision, signed, deadline };
                 })
                 .then(({ paymentRequired, decision, signed, deadline }) => {
@@ -1146,13 +1190,18 @@ function TabDrawerBody({
                     toast.message("The wallet changed. The receipt belongs to the previous wallet.");
                     return;
                   }
-                  setTaskPhase("SETTLED");
-                  setPayLog((lines) => [...lines, "Arc payment confirmed"]);
+                  const prior = readAttempt(window.localStorage, tab.id);
+                  if (prior) {
+                    writeAttempt(window.localStorage, { ...prior, txHash: transaction, settled: Boolean(result) });
+                  }
                   if (!result) {
-                    setPayLog((lines) => [...lines, "Payment blocked. The service result was not usable. No further payment was sent."]);
-                    toast.error(`Arc included ${transaction.slice(0, 10)}… The service result was not usable. No further payment was sent.`);
+                    setTaskPhase("ANSWER_MISSING");
+                    setPayLog((lines) => [...lines, "Arc receipt matched. The model returned no text. No second charge was sent."]);
+                    toast.error("Arc receipt matched. The model returned no text. No second charge was sent.");
                     return;
                   }
+                  setTaskPhase("SETTLED");
+                  setPayLog((lines) => [...lines, "Arc receipt matched"]);
                   setPayLog((lines) => [...lines, "Service response received"]);
                   setPayNotice("");
                   toast.success("Paid. The answer is above.");
@@ -1167,7 +1216,16 @@ function TabDrawerBody({
                   }
                 })
                 .catch(async (error: unknown) => {
+                  if (error instanceof ChargeConfirm) {
+                    chargeAgain.current = true;
+                    setChargeArmed(true);
+                    setTaskPhase("SETTLED");
+                    setPayNotice("This question already has an Arc receipt. Press Pay again to start a new charge.");
+                    return;
+                  }
                   if (error instanceof SettlementPending) {
+                    const prior = readAttempt(window.localStorage, tab.id);
+                    if (prior) writeAttempt(window.localStorage, { ...prior, txHash: error.hash, settled: false });
                     setTaskPhase("SETTLEMENT_PENDING");
                     setPayNotice(`Transaction submitted. Receipt pending. ${error.hash}`);
                     toast.message("Transaction submitted. Receipt pending.");
@@ -1201,7 +1259,7 @@ function TabDrawerBody({
             }}
             className="mt-3 h-9 bg-gold text-[#171204] hover:bg-[#eec95e]"
           >
-            {paying ? <Loader2 className="size-4 animate-spin" /> : "Run paid task"}
+            {paying ? <Loader2 className="size-4 animate-spin" /> : chargeArmed ? "Pay again" : "Run paid task"}
           </Button>
           <details className="text-xs text-muted-foreground">
             <summary className="cursor-pointer">Payment checks</summary>

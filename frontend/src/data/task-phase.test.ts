@@ -11,6 +11,7 @@ test("the first task starts at the quote, not at a previous settlement", () => {
   assert.equal(stepIndex("SETTLEMENT_PENDING"), 3);
   assert.equal(stepIndex("FAILED_NO_SETTLEMENT"), 3);
   assert.equal(stepIndex("SETTLED"), 4);
+  assert.equal(stepIndex("ANSWER_MISSING"), 4);
   assert.equal(closedCapabilityMessage().includes("Nothing was signed"), true);
   assert.equal(replayCheckMessage().startsWith("Replay check:"), true);
   assert.equal(replayCheckMessage().includes("Run task"), false);

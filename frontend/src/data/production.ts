@@ -3,7 +3,7 @@ import { priceCheckFailure } from "./price-check-failure";
 import { rootSignatureBlock } from "./root-sign-check";
 import { spendKind } from "./spend-kind";
 import { usd } from "./formatters";
-import { researchAnswer, RESEARCH_URL } from "./research-answer";
+import { presentAnswer, researchAnswer, RESEARCH_URL } from "./research-answer";
 import { paymentSignatureHeader, payeeLabel, quotedCharge, receiptSettlesSpend, serviceAnswer, settlementFailure, transactionFromPaymentResponse, type SpendAuthorization } from "./x402-pay";
 import { arcClient } from "./wallet";
 import type { Hex } from "viem";
@@ -700,7 +700,8 @@ async function askResearch(task: string): Promise<{ text: string; model: string 
     });
     const payload = await response.json().catch(() => null);
     if (!response.ok) return { text: "", model: "" };
-    return researchAnswer(payload);
+    const parsed = researchAnswer(payload);
+    return { text: presentAnswer(task, parsed.text).text, model: parsed.text ? parsed.model : "" };
   } catch {
     return { text: "", model: "" };
   }

@@ -5,6 +5,7 @@ import Markdown from "react-markdown";
 import type { DecisionRecord } from "@/data/decision-record";
 import { capabilityRemaining, expiryWhen, orderedReasons, paymentReasonSentence, paymentStatusLines } from "@/data/decision-record";
 import { answerMarkdown } from "@/data/answer-prose";
+import { presentAnswer } from "@/data/research-answer";
 import { payeeLabel } from "@/data/x402-pay";
 import { TxResult } from "@/components/pqtabs/dashboard/TxResult";
 
@@ -55,7 +56,10 @@ const markdown = {
 
 export function PaymentDecision({ record }: { record: DecisionRecord }) {
   const paid = settled(record);
+  const shown = presentAnswer(record.task, record.result);
   const status = paymentStatusLines(record.decision, record.txHash, record.reason);
+  const charged = rawUsdc(record.charge || record.price);
+  const ceiling = rawUsdc(record.price);
   const refused = record.decision === "REFUSE" || record.decision === "NO_PAYMENT";
   const facts: Array<[string, string]> = [
     ["Price", rawUsdc(record.charge || record.price)],
@@ -66,26 +70,55 @@ export function PaymentDecision({ record }: { record: DecisionRecord }) {
     ["Expires", expiryWhen(record.expiry)],
   ];
 
+  if (paid && shown.text) {
+    return (
+      <article aria-label="Answer" className="rounded-xl border border-gold/25 bg-[#12140f] px-4 py-4 sm:px-5">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-gold">Answer</p>
+          <p className="font-mono text-[10px] text-muted-foreground">{serviceName(record.service)}</p>
+        </div>
+        <p className="mt-3 text-sm leading-6 text-muted-foreground">{record.task}</p>
+        <div className="mt-4 border-t border-white/[.06] pt-4">
+          <Markdown components={markdown}>{answerMarkdown(shown.text)}</Markdown>
+        </div>
+        {shown.sources.length > 0 ? (
+          <ul className="mt-4 space-y-1">
+            {shown.sources.map((source) => (
+              <li key={source.href}>
+                <a href={source.href} target="_blank" rel="noreferrer" className="text-sm text-foreground underline decoration-white/25 underline-offset-2">
+                  {source.title}
+                </a>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        <p className="mt-4 text-sm leading-6 text-foreground/85">
+          Charged {charged}. Quote ceiling {ceiling}. PQTABS Barkeep authorization, not an ArcRouter x402 purchase.
+        </p>
+        <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3">
+          <div>
+            <dt className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Payee</dt>
+            <dd className="mt-1 text-sm text-foreground">{payeeLabel(record.payee).name}</dd>
+          </div>
+          <div>
+            <dt className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Remaining</dt>
+            <dd className="mt-1 text-sm text-foreground">{rawUsdc(capabilityRemaining(record))}</dd>
+          </div>
+        </dl>
+        <div className="mt-3">
+          <TxResult hash={record.txHash} label="Arc receipt" amount={charged} recipient={record.payee} status={record.receipt?.status} />
+        </div>
+      </article>
+    );
+  }
+
   return (
     <article className="space-y-3">
-      {paid && record.result ? (
-        <section aria-label="Answer" className="rounded-xl border border-gold/25 bg-[#12140f] px-4 py-4 sm:px-5">
-          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-gold">Answer</p>
-            <p className="font-mono text-[10px] text-muted-foreground">{serviceName(record.service)}</p>
-          </div>
-          <p className="mt-3 text-sm leading-6 text-muted-foreground">{record.task}</p>
-          <div className="mt-4 border-t border-white/[.06] pt-4 [overflow-wrap:anywhere]">
-            <Markdown components={markdown}>{answerMarkdown(record.result)}</Markdown>
-          </div>
-        </section>
-      ) : null}
-
       <section className="rounded-xl border border-white/[.08] bg-white/[.02] px-4 py-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Payment</p>
           <p className={paid ? "font-mono text-[10px] uppercase tracking-[0.14em] text-success" : "font-mono text-[10px] uppercase tracking-[0.14em] text-foreground"}>
-            {paid ? "Paid on Arc" : record.decision === "ALLOW" ? "ALLOW" : record.decision}
+            {paid ? "Receipt confirmed" : record.decision === "ALLOW" ? "ALLOW" : record.decision}
           </p>
         </div>
         {status.length > 0 ? (
@@ -99,7 +132,7 @@ export function PaymentDecision({ record }: { record: DecisionRecord }) {
           </div>
         ) : (
           <p className="mt-2 text-sm leading-6 text-foreground/85">
-            {rawUsdc(record.charge || record.price)} moved from this capability to {payeeLabel(record.payee).name}.
+            {charged} moved from this capability to {payeeLabel(record.payee).name}. The model returned no text. No second charge was sent.
           </p>
         )}
         <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3">

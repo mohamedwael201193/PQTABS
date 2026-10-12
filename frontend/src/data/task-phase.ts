@@ -6,6 +6,7 @@ export const TASK_PHASES = [
   "VERIFYING_PAYMENT",
   "SETTLEMENT_PENDING",
   "SETTLED",
+  "ANSWER_MISSING",
   "FAILED_NO_SETTLEMENT",
 ] as const;
 
@@ -28,6 +29,7 @@ export function stepIndex(phase: TaskPhase): number {
     case "FAILED_NO_SETTLEMENT":
       return 3;
     case "SETTLED":
+    case "ANSWER_MISSING":
       return 4;
   }
 }
@@ -53,7 +55,7 @@ export function facilitatorCode(message: string): string {
 
 export function signedRejectionMessage(reason: string): string {
   if (/rate_limited/i.test(reason)) {
-    return "Arc is busy. A local signature was created. No transaction was sent. Run the task again.";
+    return "Arc is busy. This authorization was not broadcast. Run the task again to resubmit it. That retry is not a second charge.";
   }
   const detail = facilitatorCode(reason);
   return `Signature rejected before broadcast (${detail}). A local signature was created. No transaction was sent.`;
