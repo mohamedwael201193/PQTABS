@@ -91,3 +91,16 @@ The first click of that attempt returned `rate_limited` and broadcast nothing. T
 - The research tariff is 360 raw. Net per task before overhead is negative at that price (about -1,786 to -2,112 raw). Break-even before overhead is about 2,146 to 2,472 raw.
 - Per-capability overhead is about 22,462 raw, divided across the payments in that capability. A one-payment capability cannot be sustainable at this price.
 - A price or cap change is a product decision. Do not apply it, and do not claim profitability, without an explicit user approval and fresh receipts. The HISTORY entry for 2026-10-12 has the working figures.
+## Rate limits and relays (2026-10-12)
+
+- The backend keeps two per-client buckets, one for reads and one for relays (`backend/src/limit.ts`). Reads allow 240 per minute and relays allow 8 per minute. Reads never use up the relay allowance, and relays never use up the read allowance.
+- A refused request returns 429 with `retry-after` and a readable `detail` that says nothing was sent. The frontend must show that `detail`, not the raw `rate_limited` code. `busyMessage` in `frontend/src/data/limits.ts` does this.
+- The limiter refuses before the handler and before the `onError` log. A limiter 429 therefore leaves no error line in Render logs. Diagnose it from the response body and `retry-after`, not from the logs.
+- A refused request sends nothing: no signing, no broadcast, and no receipt. It is safe to wait and try again.
+- The limiter lives in process memory per backend instance, so a restart clears it.
+- Arc RPC facts, from the Arc docs (`rpc-endpoints`, `gas-and-fees`, `deterministic-finality`, `evm-differences`):
+  - `eth_getLogs` is limited to 10,000 blocks. A larger range returns `-32012`. Page in chunks of 9,999 blocks or fewer.
+  - `-32014` comes from load-balanced backends near the head. Retry after a backoff. Do not treat `eth_blockNumber` followed by `getLogs(toBlock=that)` as atomic.
+  - The 20 gwei `maxFeePerGas` floor comes from the evm-differences page. Underpriced transactions vanish with no receipt. The gas-and-fees page labels 20 gwei as testnet and says it may change before mainnet launch.
+  - `-32005` (burst) is not in the official docs. It appears only in a DEV post, so do not rely on it. Pace `getLogs` anyway.
+  - Finality is deterministic: a committed block is final, so skip reorg handling. Still handle pending, dropped, and `status: 0` transactions.
