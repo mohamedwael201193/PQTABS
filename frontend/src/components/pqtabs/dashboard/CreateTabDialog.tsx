@@ -68,7 +68,7 @@ const STEP_META = [
   { label: "REVIEW", title: "What exactly are you approving?", sub: "Read the capability back before you open it." },
 ] as const;
 
-const CAP_MIN = 0.01;
+const CAP_MIN = 0.00036;
 const CAP_SLIDER_MAX = 1;
 const HOURS_MIN = 1;
 
@@ -147,8 +147,8 @@ function CreateFlow() {
   // ----- flow state (fresh on every mount) -----------------------------------
   const [step, setStep] = useState(1);
   const [agentId, setAgentId] = useState<string | null>(createPresetAgentId);
-  const [capInput, setCapInput] = useState("0.01");
-  const [perCall, setPerCall] = useState(0.01);
+  const [capInput, setCapInput] = useState("0.000360");
+  const [perCall, setPerCall] = useState(0.00036);
   const [agentDraft, setAgentDraft] = useState("");
   const [agentName, setAgentName] = useState("");
   const [agentKeyError, setAgentKeyError] = useState("");
@@ -235,7 +235,7 @@ function CreateFlow() {
       : step === 2
         ? capTooHigh
           ? "Not enough available funds"
-          : "Enter a cap of at least 0.01 USDC"
+          : "Enter a cap of at least 0.00036 USDC"
         : step === 3
           ? "Approve at least one recipient"
           : step === 4
@@ -671,9 +671,9 @@ function CreateFlow() {
                   value={[Math.min(Math.max(cap, CAP_MIN), CAP_SLIDER_MAX)]}
                   min={CAP_MIN}
                   max={CAP_SLIDER_MAX}
-                  step={0.01}
+                  step={0.000001}
                   aria-label="Capability budget"
-                  onValueChange={([v]) => setCapInput(v.toFixed(2))}
+                  onValueChange={([v]) => setCapInput(v.toFixed(6))}
                 />
               </div>
               {capTooHigh && (
@@ -683,7 +683,7 @@ function CreateFlow() {
               )}
               {!capTooHigh && capTooLow && (
                 <p aria-live="polite" className="mt-3 text-xs text-danger">
-                  Set a cap of at least 0.01 USDC.
+                  Set a cap of at least 0.00036 USDC.
                 </p>
               )}
 
@@ -701,7 +701,7 @@ function CreateFlow() {
                     value={[effectivePerCall]}
                     min={CAP_MIN}
                     max={Math.max(CAP_MIN, cap || CAP_MIN)}
-                    step={0.01}
+                    step={0.000001}
                     aria-label="Maximum per payment"
                     onValueChange={([v]) => setPerCall(v)}
                   />
