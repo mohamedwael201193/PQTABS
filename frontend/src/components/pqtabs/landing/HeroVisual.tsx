@@ -122,7 +122,8 @@ export function HeroVisual({ className }: { className?: string }) {
         py.set(0);
       }}
       className={cn("relative w-full select-none", className)}
-      aria-hidden="true"
+      role="img"
+      aria-label="PQTABS flow: the treasury is held by a post-quantum root. The root funds three bounded capabilities, and each capability pays one agent within its cap. A direct attempt by an agent to reach the root is blocked."
     >
       {/* Atmosphere — melts into the page background */}
       <div
@@ -448,7 +449,7 @@ export function HeroVisual({ className }: { className?: string }) {
             fontSize="8.5"
             letterSpacing="1.6"
           >
-            DIRECT ROOT ACCESS — BLOCKED
+            DIRECT ROOT ACCESS: BLOCKED
           </text>
         </motion.g>
       </svg>
