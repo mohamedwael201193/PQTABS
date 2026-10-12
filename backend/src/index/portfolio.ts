@@ -153,6 +153,7 @@ async function readLiveBalances(client: PublicClient, rows: readonly CapabilityR
   const pending = rows.filter((row) => row.swept !== true);
   if (pending.length === 0 || readsRateLimited()) return live;
   try {
+    // Three attempts absorb a brief Arc 429 shared with the indexer. A read that still fails is unknown, not stored.
     const results = (await withRpcRetry(
       () =>
         client.multicall({
@@ -164,7 +165,7 @@ async function readLiveBalances(client: PublicClient, rows: readonly CapabilityR
             args: [row.tab as Address] as const,
           })),
         }),
-      1,
+      3,
     )) as readonly CallResult[];
     results.forEach((result, index) => {
       if (result.status === "success" && typeof result.result === "bigint") {
