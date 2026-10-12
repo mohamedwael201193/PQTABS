@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { closedCapabilityMessage, explorerTxUrl, replayCheckMessage, signedRejectionMessage, stepIndex } from "./task-phase.ts";
+import { closedCapabilityMessage, explorerTxUrl, replayCheckMessage, signedRejectionMessage, signedRejectionToast, stepIndex } from "./task-phase.ts";
 
 test("the first task starts at the quote, not at a previous settlement", () => {
   assert.equal(stepIndex("READY"), 0);
@@ -32,4 +32,10 @@ test("a facilitator rejection names the signature and the absence of a transacti
   assert.match(message, /A local signature was created/);
   assert.match(message, /No transaction was sent/);
   assert.equal(message.includes("No Arc transaction was recorded. No Arc"), false);
+  const busy = signedRejectionMessage("simulation failed (rate_limited)");
+  assert.match(busy, /Arc is busy/);
+  assert.equal(busy.includes("Signature rejected"), false);
+  assert.equal(signedRejectionToast("rate_limited", true), "Arc is busy. Nothing was sent.");
+  assert.equal(signedRejectionToast("invalid_exact_evm_signature", true), "Signature rejected before broadcast.");
+  assert.equal(signedRejectionToast("closed", false), "Payment blocked.");
 });

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { capabilityRemaining, decisionRecord, decisionsForRegistrar, expiryWhen, orderedReasons, paymentReasonSentence, paymentStatusLines, settledDecision, settlementReasons, type DecisionFacts } from "./decision-record.ts";
+import { capabilityRemaining, decisionRecord, decisionsForRegistrar, expiryWhen, orderedReasons, paymentReasonSentence, paymentStatusLines, settledDecision, settlementReasons, shownReachableUsd, type DecisionFacts } from "./decision-record.ts";
 
 const facts = (): DecisionFacts => ({
   task: "Reply with one word: pong",
@@ -117,6 +117,9 @@ test("a settled payment shows the capability balance after that price", () => {
   assert.equal(capabilityRemaining({ ...refused, remaining_capability_balance: "9988" }), "9988");
   const unsettled = decisionRecord({ ...facts(), decision: "ALLOW", reason: ["capability_active"], remaining_capability_balance: "9988" }, "2026-10-08T02:01:00.000Z");
   assert.equal(capabilityRemaining(unsettled), "9988");
+  assert.equal(Math.round(shownReachableUsd(0.01, settled) * 1_000_000), 9988);
+  assert.equal(Math.round(shownReachableUsd(0.009988, settled) * 1_000_000), 9988);
+  assert.equal(shownReachableUsd(0, settled), 0);
 });
 
 test("a missing receipt leads the research reasons", () => {

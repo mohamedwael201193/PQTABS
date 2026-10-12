@@ -52,6 +52,15 @@ export function facilitatorCode(message: string): string {
 }
 
 export function signedRejectionMessage(reason: string): string {
+  if (/rate_limited/i.test(reason)) {
+    return "Arc is busy. A local signature was created. No transaction was sent. Run the task again.";
+  }
   const detail = facilitatorCode(reason);
   return `Signature rejected before broadcast (${detail}). A local signature was created. No transaction was sent.`;
+}
+
+export function signedRejectionToast(reason: string, signedLocally: boolean): string {
+  if (!signedLocally) return "Payment blocked.";
+  if (/rate_limited/i.test(reason)) return "Arc is busy. Nothing was sent.";
+  return "Signature rejected before broadcast.";
 }

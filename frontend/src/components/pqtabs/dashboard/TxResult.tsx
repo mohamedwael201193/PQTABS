@@ -39,9 +39,13 @@ export function TxResult({
       >
         <Copy className="size-3.5" strokeWidth={1.75} />
       </button>
-      {amount ? <p className="ml-auto shrink-0 text-xs text-foreground">{amount}</p> : null}
+      {amount ? <p className="ml-auto shrink-0 font-mono text-[11px] tabular text-foreground">{amount}</p> : null}
+      {status ? (
+        <p className="shrink-0 font-mono text-[10px] uppercase tracking-[0.12em] text-success">
+          {status === "success" || status === "0x1" ? "Confirmed" : status}
+        </p>
+      ) : null}
       {recipient ? <p className="sr-only">{recipient}</p> : null}
-      {status ? <p className="sr-only">{status}</p> : null}
     </article>
   );
 }

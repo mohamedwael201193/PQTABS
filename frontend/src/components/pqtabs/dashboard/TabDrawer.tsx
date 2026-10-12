@@ -26,8 +26,9 @@ import {
 import { StatusChip } from "@/components/pqtabs/shared";
 import { relFuture, usd } from "@/data/formatters";
 import { isAddress } from "@/data/actions";
-import { decisionRecord, expiryWhen, orderedReasons, paymentReasonSentence, settledDecision, settlementReasons, type DecisionFacts, type DecisionRecord, type QuotedDecision } from "@/data/decision-record";
-import { saveDecision } from "@/data/decision-store";
+import { decisionRecord, expiryWhen, orderedReasons, paymentReasonSentence, settledDecision, settlementReasons, shownReachableUsd, type DecisionFacts, type DecisionRecord, type QuotedDecision } from "@/data/decision-record";
+import { loadDecisions, saveDecision } from "@/data/decision-store";
+import { savedPaymentRecord } from "@/data/saved-payment";
 import { arcClock, BACKEND_URL, confirmRootSignature, describeReturn, decideServicePrice, loadSnapshot, prepareClose, productionProvider, requestServicePrice, settleResearch, SettlementPending, submitPrepared, type PreparedAction, type ServiceDecision } from "@/data/production";
 import { probeAmount, probePayment, probeRefusal, replayRefusal, spentAuthorization, UNAVAILABLE_SERVICE_URL, unavailableServiceRefusal, capabilityPayment, expiredRefusal, expiryStillOpen, type ProbeName } from "@/data/refusal-probe";
 import { agentAddress, authorizationBlob, recallAgentKey, USDC } from "@/data/spend";
@@ -38,10 +39,10 @@ import { lockRoot, rootUnlocked, signRootDigest, verifyingKey } from "@/data/pq-
 import { SecurityKeyUnlock } from "@/components/pqtabs/dashboard/SecurityKeyUnlock";
 import { PaymentDecision } from "@/components/pqtabs/dashboard/PaymentDecision";
 import { TxResult } from "@/components/pqtabs/dashboard/TxResult";
-import { closedCapabilityMessage, replayCheckMessage, signedRejectionMessage, stepIndex, type TaskPhase } from "@/data/task-phase";
+import { closedCapabilityMessage, replayCheckMessage, signedRejectionMessage, signedRejectionToast, stepIndex, type TaskPhase } from "@/data/task-phase";
 import type { Tab } from "@/data/types";
-import { useActivity, useAgents, useDashboardUi, usePqtabsData, useRecipients, useTabs } from "@/lib/store";
 import { cn } from "@/lib/utils";
+import { useActivity, useAgents, useDashboardUi, usePqtabsData, useRecipients, useTabs } from "@/lib/store";
 import { ActivityRow } from "./shared/ActivityRow";
 
 const SHEET_CLASS =
@@ -254,7 +255,30 @@ function TabDrawerBody({
   const [payNotice, setPayNotice] = useState("");
   const [payLog, setPayLog] = useState<string[]>([]);
   const [shownDecision, setShownDecision] = useState<DecisionRecord | null>(null);
+  const [savedDecisions, setSavedDecisions] = useState<DecisionRecord[]>([]);
+  const answerRef = useRef<HTMLDivElement>(null);
   const payLock = useRef(false);
+  const decisionEpoch = usePqtabsData((state) => state.decisionEpoch);
+  const registrarNow = usePqtabsData((state) => state.registrar);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadDecisions(registrarNow)
+      .then((rows) => {
+        if (cancelled) return;
+        const mine = rows
+          .filter((row) => row.capability.toLowerCase() === tab.id.toLowerCase())
+          .sort((a, b) => (a.at < b.at ? 1 : -1));
+        setSavedDecisions(mine);
+        setShownDecision((current) => current ?? mine[0] ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setSavedDecisions([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [decisionEpoch, registrarNow, tab.id]);
 
   useEffect(() => {
     if (tab.status !== "active" || !tab.expiryUnix) return;
@@ -721,7 +745,20 @@ function TabDrawerBody({
   const spendHistory = activity.filter(
     (a) => a.tabId === tab.id && (a.kind === "payment" || a.kind === "policy_blocked")
   );
-  const spent = Math.max(0, tab.capUsd - tab.balanceUsd);
+  const knownHashes = new Set(
+    activity.map((row) => row.txHash?.toLowerCase()).filter((hash): hash is string => Boolean(hash)),
+  );
+  const localSpends = savedDecisions.flatMap((record) => {
+    const row = savedPaymentRecord(record);
+    if (!row?.txHash || knownHashes.has(row.txHash.toLowerCase())) return [];
+    return [row];
+  });
+  const history = [...localSpends, ...spendHistory];
+  const settledRecord = [shownDecision, ...savedDecisions].find(
+    (record) => record?.decision === "ALLOW" && /^0x[0-9a-fA-F]{64}$/.test(record.txHash),
+  ) ?? null;
+  const reachableUsd = tab.balanceKnown === false ? tab.balanceUsd : shownReachableUsd(tab.balanceUsd, settledRecord);
+  const spent = Math.max(0, tab.capUsd - reachableUsd);
   const spentPct = tab.capUsd > 0 ? Math.min(100, (spent / tab.capUsd) * 100) : 0;
   const expiringSoon = tab.status === "active" && tab.policy.expiresInHours < 24;
   const statusSentence =
@@ -793,7 +830,7 @@ function TabDrawerBody({
             </p>
             <div className="mt-1 flex flex-wrap items-baseline gap-2">
               <span className="font-display text-3xl font-semibold leading-none tabular text-gold">
-                {tab.balanceKnown === false ? "—" : usd(tab.balanceUsd)}
+                {tab.balanceKnown === false ? "—" : usd(reachableUsd)}
               </span>
               <span className="font-mono text-xs tabular text-muted-foreground">
                 of {usd(tab.capUsd)} cap
@@ -873,13 +910,13 @@ function TabDrawerBody({
                 Spend history
               </p>
               <span className="font-mono text-[10px] tabular text-muted-foreground">
-                {spendHistory.length} records
+                {history.length} {history.length === 1 ? "record" : "records"}
               </span>
             </div>
-            {spendHistory.length > 0 ? (
+            {history.length > 0 ? (
               <div className="max-h-64 overflow-y-auto scrollbar-thin rounded-lg border border-white/[.06]">
                 <ul className="divide-y divide-white/[.05]">
-                  {spendHistory.map((record) => (
+                  {history.map((record) => (
                     <li key={record.id}>
                       <ActivityRow record={record} />
                     </li>
@@ -934,11 +971,19 @@ function TabDrawerBody({
             </div>
           </section>
 
+          {settledRecord?.result ? (
+            <div ref={answerRef}>
+              <PaymentDecision record={settledRecord} />
+            </div>
+          ) : null}
+
           {tab.status === "active" && tab.expiryUnix && (
         <section className="space-y-3 border-t border-white/[.06] pt-5">
           <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Research agent</p>
           <p className="text-xs leading-relaxed text-muted-foreground">
-            The quote names the approved recipient. Arc settles that transfer, then the model answers this question.
+            {settledRecord?.result
+              ? "A new run pays the quoted price again, then the model answers the new question."
+              : "The quote names the approved recipient. Arc settles that transfer, then the model answers this question."}
           </p>
           <textarea
             value={task}
@@ -964,7 +1009,7 @@ function TabDrawerBody({
               </div>
               <div>
                 <dt className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Remaining</dt>
-                <dd className="mt-0.5 text-foreground">{usd(tab.balanceUsd)}</dd>
+                <dd className="mt-0.5 text-foreground">{usd(reachableUsd)}</dd>
               </div>
               <div className="col-span-2">
                 <dt className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Expires</dt>
@@ -980,12 +1025,24 @@ function TabDrawerBody({
               This browser does not hold this agent's encrypted key, so it cannot sign a payment until you restore the backup.
             </p>
           )}
-          <ol className="flex gap-3 overflow-x-auto text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
-            {(["Quote", "Policy", "Sign", "Settle", "Result"] as const).map((label, index) => (
-              <li key={label} className={index === stepIndex(taskPhase) ? "shrink-0 text-foreground" : "shrink-0"}>
-                {label}
-              </li>
-            ))}
+          <ol className="flex flex-wrap gap-1.5" aria-label="Payment steps">
+            {(["Quote", "Policy", "Sign", "Settle", "Result"] as const).map((label, index) => {
+              const current = index === stepIndex(taskPhase);
+              const done = index < stepIndex(taskPhase);
+              return (
+                <li
+                  key={label}
+                  className={cn(
+                    "rounded-full border px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.12em]",
+                    current && "border-gold/40 bg-gold/10 text-foreground",
+                    done && !current && "border-white/10 text-muted-foreground",
+                    !current && !done && "border-transparent text-muted-foreground/45",
+                  )}
+                >
+                  {label}
+                </li>
+              );
+            })}
           </ol>
           {payNotice ? <p className="text-xs leading-relaxed text-foreground">{payNotice}</p> : null}
           <Button
@@ -1098,7 +1155,16 @@ function TabDrawerBody({
                   }
                   setPayLog((lines) => [...lines, "Service response received"]);
                   setPayNotice("");
-                  toast.success("Paid. The answer is in the decision below.");
+                  toast.success("Paid. The answer is above.");
+                  window.setTimeout(() => answerRef.current?.scrollIntoView({ block: "start" }), 60);
+                  try {
+                    const fresh = await loadSnapshot(registrar);
+                    if (usePqtabsData.getState().registrar.toLowerCase() === registrar.toLowerCase()) {
+                      usePqtabsData.getState().acceptPortfolio(fresh);
+                    }
+                  } catch {
+                    /* The receipt is already on screen. */
+                  }
                 })
                 .catch(async (error: unknown) => {
                   if (error instanceof SettlementPending) {
@@ -1126,7 +1192,7 @@ function TabDrawerBody({
                   }
                   const notice = signedLocally ? signedRejectionMessage(message) : message;
                   setPayNotice(notice);
-                  toast.error(signedLocally ? "Signature rejected before broadcast." : "Payment blocked.");
+                  toast.error(signedRejectionToast(message, signedLocally));
                 })
                 .finally(() => {
                   payLock.current = false;
@@ -1193,7 +1259,7 @@ function TabDrawerBody({
             </Button>
           </div>
           </details>
-          {shownDecision ? <div className="mt-3"><PaymentDecision record={shownDecision} /></div> : null}
+          {shownDecision && !shownDecision.result ? <div className="mt-3"><PaymentDecision record={shownDecision} /></div> : null}
           {payLog.length > 0 && (
             <ul className="space-y-1" aria-live="polite">
               {payLog.map((line) => (

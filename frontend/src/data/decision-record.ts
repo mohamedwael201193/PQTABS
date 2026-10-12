@@ -145,6 +145,19 @@ export function capabilityRemaining(record: {
   return (left - price).toString();
 }
 
+/** Prefer the receipt's remaining balance when the portfolio still shows the pre-payment amount. */
+export function shownReachableUsd(
+  portfolioUsd: number,
+  record: Parameters<typeof capabilityRemaining>[0] | null,
+): number {
+  if (!(portfolioUsd > 0) || !record) return portfolioUsd;
+  const raw = capabilityRemaining(record);
+  if (!/^[0-9]+$/.test(raw)) return portfolioUsd;
+  const fromReceipt = Number(raw) / 1_000_000;
+  if (!Number.isFinite(fromReceipt)) return portfolioUsd;
+  return Math.min(portfolioUsd, fromReceipt);
+}
+
 const BLOCKING_REASONS = new Set([
   "receipt_missing",
   "facilitator_rejected",
