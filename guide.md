@@ -104,3 +104,10 @@ The first click of that attempt returned `rate_limited` and broadcast nothing. T
   - The 20 gwei `maxFeePerGas` floor comes from the evm-differences page. Underpriced transactions vanish with no receipt. The gas-and-fees page labels 20 gwei as testnet and says it may change before mainnet launch.
   - `-32005` (burst) is not in the official docs. It appears only in a DEV post, so do not rely on it. Pace `getLogs` anyway.
   - Finality is deterministic: a committed block is final, so skip reorg handling. Still handle pending, dropped, and `status: 0` transactions.
+## After a paid task (2026-10-12)
+
+- An open capability with a 0 balance still counts its full cap in open exposure. Only a close transaction releases it. The drawer's Close capability button does this. The relayer pays the gas, and no USDC moves because the balance is 0. Do not close a capability without the user's approval.
+- The quote note is re-checked when the capability balance changes, and it is cleared when a payment settles. A capability at 0 is refused by `decideSpend` with reason `balance` before any signing. The drawer then says "Payment blocked. The service price exceeds the remaining capability balance."
+- Typing a question in the drawer runs a quote and a price check. It does not sign or send anything.
+- An answer sentence that names a product the attached Arc sources do not cover is listed under "Not verified". The model text is kept. Remove the flag only when a source on the page covers the sentence.
+- If `/v1/x402/decide` returns 429 once and then 200, the first call was most likely refused by the Arc RPC inside `readCapability`, not by the app limiter. Retry once after a short wait.
