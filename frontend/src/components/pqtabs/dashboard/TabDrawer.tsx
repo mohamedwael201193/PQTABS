@@ -1003,6 +1003,7 @@ function TabDrawerBody({
             className="w-full resize-none rounded-lg border border-white/10 bg-transparent px-3 py-2 text-sm leading-5 text-foreground outline-none"
           />
           {servicePrice ? (
+            <>
             <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
               <div>
                 <dt className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Price ceiling</dt>
@@ -1042,6 +1043,10 @@ function TabDrawerBody({
                 <dd className="mt-0.5 text-foreground">{expiryWhen(String(tab.expiryUnix))}</dd>
               </div>
             </dl>
+            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+              Demo subsidy. The relayer pays the network fee for this demo. One measured spend cost about 0.0021 USDC of gas, more than this price. This is not a sustainable price.
+            </p>
+            </>
           ) : (
             <p className="text-xs text-muted-foreground">{servicePriceNote}</p>
           )}

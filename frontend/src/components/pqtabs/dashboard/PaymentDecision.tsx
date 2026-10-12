@@ -132,6 +132,9 @@ export function PaymentDecision({ record }: { record: DecisionRecord }) {
         <p className="mt-4 text-sm leading-6 text-foreground/85">
           Charged {charged}. Quote ceiling {ceiling}. PQTABS Barkeep authorization, not an ArcRouter x402 purchase.
         </p>
+        <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+          Demo subsidy. The relayer paid the network fee for this call. One measured spend cost about 0.0021 USDC of gas, more than the {charged} charge. This is not a sustainable price.
+        </p>
         <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3">
           <div>
             <dt className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Payee</dt>
