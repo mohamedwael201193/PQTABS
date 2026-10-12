@@ -83,8 +83,19 @@ export function createApp(clients: Clients = loadClients(), getIndex?: () => Sql
     c.header("access-control-allow-methods", "GET,POST,OPTIONS");
     if (c.req.method === "OPTIONS") return c.body(null, 204);
     const kind = c.req.path.startsWith("/v1/relay") ? "relay" : "read";
-    if (!limits.allow(clientIp(c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip")), kind)) {
-      return c.json({ error: "rate_limited", requestId }, 429);
+    const client = clientIp(c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip"));
+    if (!limits.allow(client, kind)) {
+      // Refused before any handler runs, so nothing was signed or broadcast.
+      const wait = limits.retryAfterSeconds(client, kind);
+      c.header("retry-after", String(wait));
+      return c.json(
+        {
+          error: "rate_limited",
+          detail: `Too many requests from this connection. Wait ${wait} seconds, then try again. Nothing was sent.`,
+          requestId,
+        },
+        429,
+      );
     }
     await next();
     if (c.error) return;

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { getAddress } from "viem";
+import { READS_PER_MINUTE } from "../src/constants.js";
 import { RateLimiter } from "../src/limit.js";
 import { encodeExecute, encodeReclaim, encodeRetrySweep, encodeSpend, RequestError } from "../src/validate.js";
 
@@ -69,5 +70,21 @@ describe("rate limit", () => {
     assert.equal(limiter.allow("b", "relay"), true);
     clock += 61_000;
     assert.equal(limiter.allow("a", "relay"), true);
+  });
+
+  it("does not let reads use up the relay allowance", () => {
+    const limiter = new RateLimiter(() => 1_000);
+    for (let i = 0; i < READS_PER_MINUTE; i++) assert.equal(limiter.allow("a", "read"), true);
+    assert.equal(limiter.allow("a", "read"), false);
+    assert.equal(limiter.allow("a", "relay"), true);
+  });
+
+  it("says how long until the oldest request leaves the window", () => {
+    let clock = 1_000;
+    const limiter = new RateLimiter(() => clock);
+    for (let i = 0; i < READS_PER_MINUTE; i++) limiter.allow("a", "read");
+    clock += 20_000;
+    assert.equal(limiter.allow("a", "read"), false);
+    assert.equal(limiter.retryAfterSeconds("a", "read"), 40);
   });
 });

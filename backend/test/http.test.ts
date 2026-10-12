@@ -30,4 +30,25 @@ describe("http boundary", () => {
     });
     assert.equal(rejected.status, 413);
   });
+
+  it("keeps a relay open when the same client has been reading heavily, and explains a refused read", async () => {
+    const app = createApp(loadClients({ ARC_RPC_URL: "https://rpc.mainnet.arc.io" }));
+    const client = { "x-forwarded-for": "203.0.113.7" };
+    for (let i = 0; i < 300; i++) await app.request("/v1/config", { headers: client });
+
+    const refused = await app.request("/v1/config", { headers: client });
+    assert.equal(refused.status, 429);
+    assert.ok(Number(refused.headers.get("retry-after")) >= 1);
+    const refusedBody = await refused.json();
+    assert.equal(refusedBody.error, "rate_limited");
+    assert.match(refusedBody.detail, /Too many requests.*Nothing was sent/);
+
+    const relay = await app.request("/v1/relay/execute", {
+      method: "POST",
+      headers: { "content-type": "application/json", ...client },
+      body: JSON.stringify({ root: "not-an-address", action: "0x01", nonce: "0", deadline: "1", signature: "0x11" }),
+    });
+    assert.equal(relay.status, 400);
+    assert.equal((await relay.json()).error, "bad_address");
+  });
 });

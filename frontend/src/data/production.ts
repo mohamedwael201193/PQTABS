@@ -1,4 +1,5 @@
 import { digestFor, encodeClose, encodeOpen, signatureBytes } from "./actions";
+import { busyMessage, indexingPause } from "./limits";
 import { priceCheckFailure } from "./price-check-failure";
 import { rootSignatureBlock } from "./root-sign-check";
 import { spendKind } from "./spend-kind";
@@ -117,6 +118,8 @@ type PortfolioEvent = {
 
 function readableError(detail: string | undefined, fallback: string): string {
   if (!detail) return fallback;
+  const busy = busyMessage(detail);
+  if (busy) return busy;
   if (detail.includes("rate limit") || detail.includes("429")) {
     return "Network reads are busy. Your last confirmed state is still safe.";
   }
@@ -217,11 +220,13 @@ export async function loadSnapshot(registrar: string): Promise<AccountSnapshot> 
 const ROOT_KEY = "pqtabs.root";
 
 async function waitForPortfolio(root: string, gate?: { cancelled: boolean; onIndex?: (note: string) => void }): Promise<PortfolioJson> {
+  let pause = 3_000;
   for (;;) {
     const portfolio = await getJson<PortfolioJson>(`/v1/roots/${root}/portfolio`);
     if (portfolio.freshness !== "indexing" || portfolio.tabs.length > 0 || gate?.cancelled) return portfolio;
     gate?.onIndex?.(`Updating through Arc block ${portfolio.indexedThrough ?? "0"}`);
-    await new Promise((resolve) => setTimeout(resolve, 3_000));
+    await new Promise((resolve) => setTimeout(resolve, pause));
+    pause = indexingPause(pause);
   }
 }
 

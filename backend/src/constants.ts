@@ -8,7 +8,7 @@ export const MAX_BODY_BYTES = 65_536;
 export const SIG_LEN = 7856;
 export const SPEND_BLOB_LEN = 213;
 export const MIN_FEE = 20_000_000_000n;
-export const READS_PER_MINUTE = 60;
+export const READS_PER_MINUTE = 240;
 export const RELAYS_PER_MINUTE = 8;
 /** Factory deployment block. Log scans start here. */
 export const FACTORY_BLOCK = 24_623_258n;
