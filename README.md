@@ -124,7 +124,7 @@ Known limits, stated plainly:
 
 ## Test totals
 
-Verified on 2026-10-12 from this repository at commit `6299974` (Phase 1 research changes).
+Verified on 2026-10-12 from this repository at commit `6299974` (research answer quality).
 
 | Suite | Command | Result |
 |---|---|---|
