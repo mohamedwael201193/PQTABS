@@ -9,7 +9,7 @@ import {
 } from "pqtabs-sdk";
 import { z } from "zod";
 
-export const PACKAGE_VERSION = "0.1.0";
+export const PACKAGE_VERSION = "0.1.1";
 
 const addressSchema = z.string().regex(/^0x[0-9a-fA-F]{40}$/, "expected an EVM address");
 const txHashSchema = z.string().regex(/^0x[0-9a-fA-F]{64}$/, "expected a 32-byte transaction hash");
@@ -226,7 +226,7 @@ export function createPqtabsServer(options: ServerOptions): McpServer {
     {
       title: "Check a spend against policy",
       description:
-        "Prices one question and asks the backend whether the capability would allow that payment now. Returns ALLOW or REFUSE with the backend's reasons. Read-only: nothing is signed or broadcast.",
+        "Prices one question and asks the backend whether the capability would allow that payment now. Returns ALLOW or REFUSE with the backend's reasons. Creates a quote record on the backend, which is not a payment: nothing is signed, broadcast, or moved.",
       inputSchema: { tab: addressSchema, task: taskSchema },
       outputSchema: {
         quoteId: z.string(),
@@ -243,7 +243,7 @@ export function createPqtabsServer(options: ServerOptions): McpServer {
         maxPerCallRaw: z.string(),
         signerMatchesAgent: z.boolean().nullable(),
       },
-      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
     ({ tab, task }) =>
       run(async () => {

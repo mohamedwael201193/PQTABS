@@ -161,6 +161,9 @@ test("MOCKED: with an agent key the paid tool is offered and marked as state-cha
     assert.equal(paid.annotations?.destructiveHint, true);
     assert.equal(paid.inputSchema.type, "object");
     assert.ok(paid.inputSchema.required?.includes("confirmSpend"));
+    const check = tools.find((tool) => tool.name === "pqtabs_check_spend_policy");
+    assert.equal(check?.annotations?.readOnlyHint, false, "check_spend_policy writes a quote record");
+    assert.match(check?.description ?? "", /Creates a quote record/);
     const read = tools.find((tool) => tool.name === "pqtabs_get_portfolio");
     assert.equal(read?.annotations?.readOnlyHint, true);
   } finally {

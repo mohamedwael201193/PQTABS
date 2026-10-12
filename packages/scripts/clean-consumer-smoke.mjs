@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Clean-consumer smoke test for the PQTABS packages.
  *
  *   node scripts/clean-consumer-smoke.mjs            packs the local packages and installs the tarballs
@@ -86,7 +86,7 @@ try {
     run("npm", ["pack", "--pack-destination", workdir], { cwd: sdkDir });
     run("npm", ["pack", "--pack-destination", workdir], { cwd: mcpDir });
     tarballs.sdk = join(workdir, "pqtabs-sdk-0.1.0.tgz");
-    tarballs.mcp = join(workdir, "pqtabs-mcp-0.1.0.tgz");
+    tarballs.mcp = join(workdir, "pqtabs-mcp-0.1.1.tgz");
   }
 
   const project = join(workdir, "consumer");
@@ -96,7 +96,7 @@ try {
     private: true,
     type: "module",
     dependencies: useRegistry
-      ? { "pqtabs-mcp": "0.1.0", "pqtabs-sdk": "0.1.0" }
+      ? { "pqtabs-mcp": "0.1.1", "pqtabs-sdk": "0.1.0" }
       : { "pqtabs-mcp": `file:${tarballs.mcp.replaceAll("\\", "/")}`, "pqtabs-sdk": `file:${tarballs.sdk.replaceAll("\\", "/")}` },
   };
   writeFileSync(join(project, "package.json"), JSON.stringify(manifest, null, 2));
@@ -106,7 +106,7 @@ try {
 
   const installed = JSON.parse(readFileSync(join(project, "node_modules", "pqtabs-mcp", "package.json"), "utf8").replace(/^\uFEFF/, ""));
   const installedSdk = JSON.parse(readFileSync(join(project, "node_modules", "pqtabs-sdk", "package.json"), "utf8").replace(/^\uFEFF/, ""));
-  check(installed.version === "0.1.0" && installedSdk.version === "0.1.0", "installed versions are 0.1.0 / 0.1.0");
+  check(installed.version === "0.1.1" && installedSdk.version === "0.1.0", "installed versions are mcp 0.1.1 / sdk 0.1.0");
 
   const probe = join(project, "probe.mjs");
   writeFileSync(
@@ -140,7 +140,7 @@ assert.throws(() => new PqtabsClient({ backendUrl: "http://example.com" }), Pqta
 console.log("  ok   sdk entry points import; plain http is refused for a remote backend");
 
 // 2. The MCP package exports a server factory and a version that matches.
-assert.equal(PACKAGE_VERSION, "0.1.0");
+assert.equal(PACKAGE_VERSION, "0.1.1");
 assert.equal(typeof createPqtabsServer, "function");
 console.log("  ok   mcp entry points import (version " + PACKAGE_VERSION + ")");
 

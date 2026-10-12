@@ -1,4 +1,4 @@
-﻿# pqtabs-mcp
+# pqtabs-mcp
 
 A local **stdio** [Model Context Protocol](https://modelcontextprotocol.io) server for [PQTABS](https://pqtabs.vercel.app) on Arc mainnet (chain `5042`). It lets an AI host check a PQTABS capability, price an Arc Research question, verify a receipt, and, only when you enable it, pay for research inside a capability the root already authorized.
 
@@ -142,3 +142,7 @@ npm run test:protocol   # starts the built server over stdio; read-only calls to
 
 MIT. See [LICENSE](./LICENSE).
 
+## Changelog
+
+- **0.1.1:** `pqtabs_check_spend_policy` is marked `readOnlyHint: false` and its description says it creates a quote record on the backend. Nothing is signed, broadcast, or moved. The 0.1.0 README and annotation called it read-only; this release corrects both. No behavior change.
+- **0.1.0:** first release.

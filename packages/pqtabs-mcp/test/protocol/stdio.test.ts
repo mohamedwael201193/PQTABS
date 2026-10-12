@@ -76,6 +76,8 @@ test("protocol: the server advertises the read tools, with schemas and safety an
   }
   const status = tools.find((tool) => tool.name === "pqtabs_status");
   assert.equal(status?.annotations?.readOnlyHint, true);
+  const check = tools.find((tool) => tool.name === "pqtabs_check_spend_policy");
+  assert.equal(check?.annotations?.readOnlyHint, false, "check_spend_policy creates a quote record");
 });
 
 test("protocol: status is read from the live backend and Arc RPC", async () => {
