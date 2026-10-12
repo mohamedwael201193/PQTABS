@@ -61,11 +61,12 @@ describe("arc mainnet reads", () => {
       assert.equal(spends[0].raw, "32");
 
       const [balance, exposure, rootUsdc, payees, tab] = await Promise.all([
-        clients.public.readContract({ address: USDC, abi: usdcAbi, functionName: "balanceOf", args: [CAPABILITY] }),
-        clients.public.readContract({ address: ROOT, abi: rootAbi, functionName: "openExposure" }),
-        clients.public.readContract({ address: USDC, abi: usdcAbi, functionName: "balanceOf", args: [ROOT] }),
-        clients.public.readContract({ address: CAPABILITY, abi: tabAbi, functionName: "payees" }),
-        clients.public.readContract({ address: ROOT, abi: rootAbi, functionName: "tabs", args: [CAPABILITY] }),
+        // Balances move with every later spend, so these are read at the receipt's block to stay a fixed historical check.
+        clients.public.readContract({ address: USDC, abi: usdcAbi, functionName: "balanceOf", args: [CAPABILITY], blockNumber: BLOCK }),
+        clients.public.readContract({ address: ROOT, abi: rootAbi, functionName: "openExposure", blockNumber: BLOCK }),
+        clients.public.readContract({ address: USDC, abi: usdcAbi, functionName: "balanceOf", args: [ROOT], blockNumber: BLOCK }),
+        clients.public.readContract({ address: CAPABILITY, abi: tabAbi, functionName: "payees", blockNumber: BLOCK }),
+        clients.public.readContract({ address: ROOT, abi: rootAbi, functionName: "tabs", args: [CAPABILITY], blockNumber: BLOCK }),
       ]);
       assert.equal(balance, 9968n);
       assert.equal(exposure, 10000n);

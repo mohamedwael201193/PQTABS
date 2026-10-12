@@ -15,9 +15,9 @@ import { cn } from "@/lib/utils";
 export function TabCard({ tab, onOpen }: { tab: Tab; onOpen?: (id: string) => void }) {
   const agents = useAgents();
   const agent = agents.find((a) => a.id === tab.agentId);
-  const balanceKnown = tab.balanceKnown !== false;
-  const spent = balanceKnown ? Math.max(0, tab.capUsd - tab.balanceUsd) : 0;
-  const spentPct = balanceKnown && tab.capUsd > 0 ? Math.min(100, (spent / tab.capUsd) * 100) : 0;
+  const spentKnown = tab.spentKnown === true;
+  const spent = spentKnown ? Math.max(0, tab.spentUsd ?? 0) : 0;
+  const spentPct = spentKnown && tab.capUsd > 0 ? Math.min(100, (spent / tab.capUsd) * 100) : 0;
   const expiringSoon = tab.status === "active" && tab.policy.expiresInHours < 24;
 
   return (
@@ -55,7 +55,7 @@ export function TabCard({ tab, onOpen }: { tab: Tab; onOpen?: (id: string) => vo
         <div
           className="h-[5px] w-full overflow-hidden rounded-full bg-white/[.08]"
           role="progressbar"
-          aria-label={`${usd(spent)} spent of ${usd(tab.capUsd)} cap`}
+          aria-label={spentKnown ? `${usd(spent)} spent of ${usd(tab.capUsd)} cap` : "Spent not confirmed"}
           aria-valuenow={Math.round(spentPct)}
           aria-valuemin={0}
           aria-valuemax={100}
@@ -66,7 +66,7 @@ export function TabCard({ tab, onOpen }: { tab: Tab; onOpen?: (id: string) => vo
           />
         </div>
         <p className="mt-1.5 font-mono text-[10px] uppercase tracking-[0.14em] tabular text-muted-foreground">
-          {tab.balanceKnown === false ? "Balance not confirmed" : `Spent ${usd(spent)} of ${usd(tab.capUsd)}`}
+          {spentKnown ? `Spent ${usd(spent)} of ${usd(tab.capUsd)}` : "Spent not confirmed"}
         </p>
       </div>
 

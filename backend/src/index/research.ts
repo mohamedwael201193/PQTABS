@@ -227,6 +227,24 @@ export function quoteAgrees(
   return "ok";
 }
 
+/**
+ * Facts the model must use when it answers about Arc. Each one is taken from Arc's docs (docs.arc.io).
+ * Anything outside these facts must be marked as uncertain rather than stated.
+ */
+export const RESEARCH_SYSTEM_PROMPT = [
+  "You answer questions about the Arc blockchain for a paid research desk.",
+  "Answer the question asked, in at most 150 words. Use Markdown: short paragraphs, a numbered list for steps, or a table only for a comparison. Finish every sentence.",
+  "Use only these verified facts about Arc unless you are certain of something else and say so:",
+  "1. Arc mainnet is live. Chain ID 5042.",
+  "2. Arc is an EVM-compatible Layer-1 blockchain.",
+  "3. Consensus today is Malachite, a Tendermint-style Byzantine fault tolerant protocol, run by a permissioned Proof-of-Authority validator set. It is not proof-of-stake and not a DAG. A proof-of-stake launch is planned for later, not live.",
+  "4. Finality is deterministic and under one second.",
+  "5. USDC is the native gas token. Gas is paid in USDC.",
+  "6. Paying gas in other stablecoins (Stablecoin Services) is planned, not live.",
+  "7. Arc Privacy Sector is planned, not live.",
+  "If the question needs a fact outside this list, say you are not certain. Do not invent prices, fees, dates, or validator counts.",
+].join("\n");
+
 /** Groq text. A missing key, error, timeout, or empty completion is not an answer. The key is never logged. */
 export async function askGroq(task: string, env: NodeJS.ProcessEnv = process.env, fetchImpl: typeof fetch = fetch): Promise<{ text: string; model: string }> {
   const key = env.GROQ_API_KEY?.trim() ?? "";
@@ -241,8 +259,12 @@ export async function askGroq(task: string, env: NodeJS.ProcessEnv = process.env
       headers: { authorization: `Bearer ${key}`, "content-type": "application/json", accept: "application/json" },
       body: JSON.stringify({
         model,
-        messages: [{ role: "user", content: task }],
+        messages: [
+          { role: "system", content: RESEARCH_SYSTEM_PROMPT },
+          { role: "user", content: task },
+        ],
         max_tokens: RESEARCH_MAX_TOKENS,
+        reasoning_effort: "low",
       }),
       signal: controller.signal,
     });

@@ -129,7 +129,10 @@ export function expiryWhen(value: string): string {
   return date.toISOString().replace(".000Z", " UTC").replace("T", " ");
 }
 
-/** The stored balance is the one read before payment. A settled receipt means that price left the capability. */
+/**
+ * The capability balance right after this receipt's payment: the balance read before payment, less the price.
+ * It describes that receipt only. It is not the current balance; the portfolio's live balance is.
+ */
 export function capabilityRemaining(record: {
   decision: string;
   txHash: string;
@@ -143,19 +146,6 @@ export function capabilityRemaining(record: {
   const price = BigInt(record.price);
   if (price > left) return remaining;
   return (left - price).toString();
-}
-
-/** Prefer the receipt's remaining balance when the portfolio still shows the pre-payment amount. */
-export function shownReachableUsd(
-  portfolioUsd: number,
-  record: Parameters<typeof capabilityRemaining>[0] | null,
-): number {
-  if (!(portfolioUsd > 0) || !record) return portfolioUsd;
-  const raw = capabilityRemaining(record);
-  if (!/^[0-9]+$/.test(raw)) return portfolioUsd;
-  const fromReceipt = Number(raw) / 1_000_000;
-  if (!Number.isFinite(fromReceipt)) return portfolioUsd;
-  return Math.min(portfolioUsd, fromReceipt);
 }
 
 const BLOCKING_REASONS = new Set([

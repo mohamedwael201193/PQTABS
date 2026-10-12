@@ -8,6 +8,7 @@ import {
   oneUsdcTransfer,
   parseBarkeepPayment,
   quoteAgrees,
+  RESEARCH_SYSTEM_PROMPT,
   researchBodyHash,
   researchDelivery,
   researchTariff,
@@ -132,4 +133,24 @@ test("a missing key, a provider error, or an empty completion is not an answer",
   });
   assert.equal(answered.text, "Arc mainnet is chain 5042.");
   assert.equal(answered.model, "openai/gpt-oss-120b");
+});
+
+test("the Groq request carries the verified Arc facts, the user task, the token cap, and low reasoning effort", async () => {
+  const sent: { messages: { role: string; content: string }[]; max_tokens: number; reasoning_effort: string; model: string }[] = [];
+  await askGroq("Is Arc proof of stake?", { GROQ_API_KEY: "present" }, async (_url, init) => {
+    sent.push(JSON.parse(String(init?.body)));
+    return new Response(JSON.stringify({ choices: [{ message: { content: "No. Arc uses Malachite BFT." } }] }), { status: 200 });
+  });
+  assert.equal(sent.length, 1);
+  const body = sent[0];
+  assert.equal(body.messages.length, 2);
+  assert.equal(body.messages[0].role, "system");
+  assert.equal(body.messages[0].content, RESEARCH_SYSTEM_PROMPT);
+  assert.match(body.messages[0].content, /Malachite/);
+  assert.match(body.messages[0].content, /not proof-of-stake/);
+  assert.match(body.messages[0].content, /USDC is the native gas token/);
+  assert.equal(body.messages[1].role, "user");
+  assert.equal(body.messages[1].content, "Is Arc proof of stake?");
+  assert.equal(body.max_tokens, 400);
+  assert.equal(body.reasoning_effort, "low");
 });

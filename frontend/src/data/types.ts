@@ -99,6 +99,10 @@ export interface Tab {
   limitKnown?: boolean;
   /** Remaining USDC in raw 6-decimal units, when Arc reported it. */
   balanceRaw?: string;
+  /** Spent USDC from verified payments: cap minus the chain balance while open, otherwise the sum of payments. */
+  spentUsd?: number;
+  /** False when the backend could not state spent for this response. Spent then shows as not confirmed. */
+  spentKnown?: boolean;
   /** Per-payment limit in raw 6-decimal units, when Arc reported it. */
   maxPerCallRaw?: string;
   policy: TabPolicy;

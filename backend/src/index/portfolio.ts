@@ -4,7 +4,7 @@ import { assertOurRoot, rootAbi, tabAbi, usdcAbi, withRpcRetry } from "../chain.
 import { USDC } from "../constants.js";
 import { RequestError } from "../validate.js";
 import { readCursor } from "./apply.js";
-import { indexHealth, noteIndexError, noteRateLimit } from "./lane.js";
+import { indexHealth, noteIndexError, noteRateLimit, readsRateLimited } from "./lane.js";
 import type { Sql } from "./sql.js";
 
 export type Freshness = "live" | "recent" | "indexing" | "degraded";
@@ -51,6 +51,51 @@ type ActivityRow = {
 
 const inflight = new Map<string, Promise<IndexedPortfolio>>();
 
+export type CapabilityFigures = {
+  balanceKnown: boolean;
+  balance: bigint;
+  spentKnown: boolean;
+  spent: bigint;
+};
+
+/**
+ * Available and spent for one capability, from chain balance and verified payments only.
+ * An open capability was funded with exactly its cap, and only payments reduce it, so spent is cap minus balance.
+ * A closed capability has released its cap, so spent is the sum of verified payments.
+ * A failed balance read is unknown. It never falls back to a stored value.
+ */
+export function capabilityFigures(input: {
+  cap: bigint;
+  open: boolean;
+  swept: boolean;
+  liveBalance: bigint | null;
+  payments: bigint;
+}): CapabilityFigures {
+  if (input.swept) return { balanceKnown: true, balance: 0n, spentKnown: true, spent: input.payments };
+  if (input.liveBalance == null) {
+    return { balanceKnown: false, balance: 0n, spentKnown: !input.open, spent: input.open ? 0n : input.payments };
+  }
+  if (!input.open) return { balanceKnown: true, balance: input.liveBalance, spentKnown: true, spent: input.payments };
+  const spent = input.cap > input.liveBalance ? input.cap - input.liveBalance : 0n;
+  return { balanceKnown: true, balance: input.liveBalance, spentKnown: true, spent };
+}
+
+/** Sum of verified payments per capability. A transfer back to the root is a return, not a payment. */
+export function paymentTotals(
+  rows: readonly { kind: string; tab: string | null; payee: string | null; amount: string | null }[],
+  root: string,
+): Map<string, bigint> {
+  const totals = new Map<string, bigint>();
+  for (const row of rows) {
+    if (row.kind !== "spend" || !row.tab || !row.amount || !row.payee) continue;
+    if (row.payee.toLowerCase() === root.toLowerCase()) continue;
+    if (!/^[0-9]+$/.test(row.amount)) continue;
+    const key = row.tab.toLowerCase();
+    totals.set(key, (totals.get(key) ?? 0n) + BigInt(row.amount));
+  }
+  return totals;
+}
+
 export function tabFromStored(root: Address, row: CapabilityRow): PortfolioTab {
   const closed = row.close_block != null && row.close_block !== "";
   const swept = row.swept === true;
@@ -73,7 +118,63 @@ export function tabFromStored(root: Address, row: CapabilityRow): PortfolioTab {
     openedAt: row.opened_at,
     balanceKnown,
     limitKnown,
+    spentRaw: "0",
+    spentKnown: false,
   };
+}
+
+/** Overlay the chain balance and verified payments on the stored row. The stored balance is never shown as current. */
+function withFigures(
+  tab: PortfolioTab,
+  row: CapabilityRow,
+  payments: ReadonlyMap<string, bigint>,
+  live: ReadonlyMap<string, bigint>,
+): PortfolioTab {
+  const key = row.tab.toLowerCase();
+  const figures = capabilityFigures({
+    cap: BigInt(row.cap),
+    open: tab.open,
+    swept: row.swept === true,
+    liveBalance: row.swept === true ? 0n : (live.get(key) ?? null),
+    payments: payments.get(key) ?? 0n,
+  });
+  return {
+    ...tab,
+    usdc: figures.balance.toString(),
+    balanceKnown: figures.balanceKnown,
+    spentRaw: figures.spent.toString(),
+    spentKnown: figures.spentKnown,
+  };
+}
+
+/** One batched read of each unswept capability's USDC balance. A failed row is absent, so it stays unknown. */
+async function readLiveBalances(client: PublicClient, rows: readonly CapabilityRow[]): Promise<Map<string, bigint>> {
+  const live = new Map<string, bigint>();
+  const pending = rows.filter((row) => row.swept !== true);
+  if (pending.length === 0 || readsRateLimited()) return live;
+  try {
+    const results = (await withRpcRetry(
+      () =>
+        client.multicall({
+          allowFailure: true,
+          contracts: pending.map((row) => ({
+            address: USDC as Address,
+            abi: usdcAbi,
+            functionName: "balanceOf" as const,
+            args: [row.tab as Address] as const,
+          })),
+        }),
+      1,
+    )) as readonly CallResult[];
+    results.forEach((result, index) => {
+      if (result.status === "success" && typeof result.result === "bigint") {
+        live.set(pending[index].tab.toLowerCase(), result.result);
+      }
+    });
+  } catch (error) {
+    if (isRateLimit(error)) noteRateLimit();
+  }
+  return live;
 }
 
 function storedPayees(value: string | null | undefined): Address[] {
@@ -129,8 +230,10 @@ async function readIndexedPortfolioBody(sql: Sql, client: PublicClient, factory:
   const freshness: Freshness =
     gap == null ? "degraded" : gap <= 2n ? "live" : gap <= 120n ? "recent" : health.lastError ? "degraded" : "indexing";
   const stamps = activityRows.map((row) => row.observed_at).filter((stamp) => stamp && stamp !== "0");
+  const payments = paymentTotals(activityRows, root);
+  const live = await readLiveBalances(client, capabilityRows);
   return {
-    tabs: capabilityRows.map((row) => tabFromStored(root, row)),
+    tabs: capabilityRows.map((row) => withFigures(tabFromStored(root, row), row, payments, live)),
     activity: activityFrom(activityRows),
     asOf: health.chainTime || stamps[0] || "0",
     freshness,

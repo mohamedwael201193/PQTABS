@@ -88,6 +88,8 @@ type PortfolioTab = {
   openedAt: string;
   balanceKnown?: boolean;
   limitKnown?: boolean;
+  spentRaw?: string;
+  spentKnown?: boolean;
 };
 
 type PortfolioJson = {
@@ -162,7 +164,8 @@ async function readBody(response: Response): Promise<{ error?: string; detail?: 
 }
 
 async function getJson<T>(path: string): Promise<T> {
-  const response = await fetch(`${BACKEND_URL}${path}`);
+  // Balances change on every payment. A cached response would show a figure that no longer matches the chain.
+  const response = await fetch(`${BACKEND_URL}${path}`, { cache: "no-store" });
   const body = (await readBody(response)) as T & { error?: string; detail?: string };
   if (response.ok) return body;
   throw new Error(readableError(body.detail || body.error, `read failed (${response.status})`));
@@ -298,6 +301,8 @@ function mapSnapshot(
       balanceKnown,
       limitKnown,
       balanceRaw: balanceKnown ? row.usdc : undefined,
+      spentUsd: row.spentKnown === true ? usdc(row.spentRaw ?? "0") : 0,
+      spentKnown: row.spentKnown === true,
       maxPerCallRaw: limitKnown ? row.maxPerCall : undefined,
       policy: {
         maxPerCallUsd: limitKnown ? usdc(row.maxPerCall) : 0,

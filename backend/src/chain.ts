@@ -175,6 +175,10 @@ export type PortfolioTab = {
   balanceKnown?: boolean;
   /** False when this response did not read the per-payment limit from Arc. */
   limitKnown?: boolean;
+  /** Raw USDC spent: cap minus the chain balance while open, otherwise the sum of verified payments. */
+  spentRaw?: string;
+  /** False when spent cannot be stated for this response, for example when the balance read failed. */
+  spentKnown?: boolean;
 };
 
 export type PortfolioEvent = {

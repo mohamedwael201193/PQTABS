@@ -10,3 +10,13 @@ export function answerMarkdown(raw: string): string {
   }
   return text;
 }
+
+/**
+ * A model answer that stops at the output limit ends mid-sentence.
+ * A complete answer ends with a sentence mark, a closing bracket or quote, a table row, or a closing emphasis mark.
+ */
+export function answerIncomplete(raw: string): boolean {
+  const text = raw.trim();
+  if (!text) return false;
+  return !/[.!?)"'`*\]|\u201d\u2019]$/.test(text);
+}

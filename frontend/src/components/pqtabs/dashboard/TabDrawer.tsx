@@ -26,7 +26,7 @@ import {
 import { StatusChip } from "@/components/pqtabs/shared";
 import { relFuture, usd } from "@/data/formatters";
 import { isAddress } from "@/data/actions";
-import { decisionRecord, expiryWhen, orderedReasons, paymentReasonSentence, settledDecision, settlementReasons, shownReachableUsd, type DecisionFacts, type DecisionRecord, type QuotedDecision } from "@/data/decision-record";
+import { decisionRecord, expiryWhen, orderedReasons, paymentReasonSentence, settledDecision, settlementReasons, type DecisionFacts, type DecisionRecord, type QuotedDecision } from "@/data/decision-record";
 import { loadDecisions, saveDecision } from "@/data/decision-store";
 import { ChargeConfirm, readAttempt, reconcileAttempt, writeAttempt } from "@/data/paid-attempt";
 import { savedPaymentRecord } from "@/data/saved-payment";
@@ -761,9 +761,12 @@ function TabDrawerBody({
   const settledRecord = [shownDecision, ...savedDecisions].find(
     (record) => record?.decision === "ALLOW" && /^0x[0-9a-fA-F]{64}$/.test(record.txHash),
   ) ?? null;
-  const reachableUsd = tab.balanceKnown === false ? tab.balanceUsd : shownReachableUsd(tab.balanceUsd, settledRecord);
-  const spent = Math.max(0, tab.capUsd - reachableUsd);
-  const spentPct = tab.capUsd > 0 ? Math.min(100, (spent / tab.capUsd) * 100) : 0;
+  // Reachable and spent come from the backend, which reads the chain balance and verified payments.
+  // The local receipt is not used to adjust them, so the card, this drawer, and the receipt agree.
+  const reachableUsd = tab.balanceKnown === false ? 0 : tab.balanceUsd;
+  const spentKnown = tab.spentKnown === true;
+  const spent = spentKnown ? Math.max(0, tab.spentUsd ?? 0) : 0;
+  const spentPct = spentKnown && tab.capUsd > 0 ? Math.min(100, (spent / tab.capUsd) * 100) : 0;
   const expiringSoon = tab.status === "active" && tab.policy.expiresInHours < 24;
   const statusSentence =
     tab.status === "active"
@@ -843,7 +846,7 @@ function TabDrawerBody({
             <div
               className="mt-3 h-[5px] w-full overflow-hidden rounded-full bg-white/[.08]"
               role="progressbar"
-              aria-label={`${usd(spent)} spent of ${usd(tab.capUsd)} cap`}
+              aria-label={spentKnown ? `${usd(spent)} spent of ${usd(tab.capUsd)} cap` : "Spent not confirmed"}
               aria-valuenow={Math.round(spentPct)}
               aria-valuemin={0}
               aria-valuemax={100}
@@ -851,7 +854,7 @@ function TabDrawerBody({
               <div className="h-full rounded-full bg-gold/85" style={{ width: `${spentPct}%` }} />
             </div>
             <p className="mt-1.5 font-mono text-[10px] uppercase tracking-[0.14em] tabular text-muted-foreground">
-              {usd(spent)} spent of {usd(tab.capUsd)}
+              {spentKnown ? `${usd(spent)} spent of ${usd(tab.capUsd)}` : "Spent not confirmed"}
             </p>
           </div>
 
@@ -1032,7 +1035,7 @@ function TabDrawerBody({
               </div>
               <div>
                 <dt className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Remaining</dt>
-                <dd className="mt-0.5 text-foreground">{usd(reachableUsd)}</dd>
+                <dd className="mt-0.5 text-foreground">{tab.balanceKnown === false ? "—" : usd(reachableUsd)}</dd>
               </div>
               <div className="col-span-2">
                 <dt className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Expires</dt>

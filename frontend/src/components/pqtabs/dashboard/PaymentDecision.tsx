@@ -2,9 +2,10 @@
 
 import type { ReactNode } from "react";
 import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import type { DecisionRecord } from "@/data/decision-record";
 import { capabilityRemaining, expiryWhen, orderedReasons, paymentReasonSentence, paymentStatusLines } from "@/data/decision-record";
-import { answerMarkdown } from "@/data/answer-prose";
+import { answerIncomplete, answerMarkdown } from "@/data/answer-prose";
 import { presentAnswer } from "@/data/research-answer";
 import { payeeLabel } from "@/data/x402-pay";
 import { TxResult } from "@/components/pqtabs/dashboard/TxResult";
@@ -47,6 +48,20 @@ const markdown = {
   strong: ({ children }: { children?: ReactNode }) => (
     <strong className="font-medium text-foreground">{children}</strong>
   ),
+  table: ({ children }: { children?: ReactNode }) => (
+    <div className="mt-4 overflow-x-auto rounded-lg border border-white/[.08]">
+      <table className="w-full min-w-[32rem] border-collapse text-left text-sm leading-6">{children}</table>
+    </div>
+  ),
+  thead: ({ children }: { children?: ReactNode }) => <thead className="bg-white/[.03]">{children}</thead>,
+  th: ({ children }: { children?: ReactNode }) => (
+    <th className="border-b border-white/[.08] px-3 py-2 font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
+      {children}
+    </th>
+  ),
+  td: ({ children }: { children?: ReactNode }) => (
+    <td className="border-t border-white/[.06] px-3 py-2 align-top text-foreground/90">{children}</td>
+  ),
   a: ({ href, children }: { href?: string; children?: ReactNode }) => (
     <a href={href} target="_blank" rel="noreferrer" className="underline decoration-white/25 underline-offset-2">
       {children}
@@ -64,7 +79,7 @@ export function PaymentDecision({ record }: { record: DecisionRecord }) {
   const facts: Array<[string, string]> = [
     ["Price", rawUsdc(record.charge || record.price)],
     ["Payee", payeeLabel(record.payee).name],
-    ["Remaining", rawUsdc(capabilityRemaining(record))],
+    ["Remaining after this payment", rawUsdc(capabilityRemaining(record))],
     ["Per payment", rawUsdc(record.maxPerCall)],
     ["Network", record.network || "—"],
     ["Expires", expiryWhen(record.expiry)],
@@ -78,9 +93,31 @@ export function PaymentDecision({ record }: { record: DecisionRecord }) {
           <p className="font-mono text-[10px] text-muted-foreground">{serviceName(record.service)}</p>
         </div>
         <p className="mt-3 text-sm leading-6 text-muted-foreground">{record.task}</p>
+        {answerIncomplete(shown.text) ? (
+          <p className="mt-3 rounded-md border border-warning/30 bg-warning/[.06] px-3 py-2 text-sm leading-6 text-foreground/85">
+            This answer was cut off at the output limit. The payment is complete and was charged once. The rest of the answer was not returned.
+          </p>
+        ) : null}
         <div className="mt-4 border-t border-white/[.06] pt-4">
-          <Markdown components={markdown}>{answerMarkdown(shown.text)}</Markdown>
+          <Markdown components={markdown} remarkPlugins={[remarkGfm]}>
+            {answerMarkdown(shown.text)}
+          </Markdown>
         </div>
+        {shown.corrections.length > 0 ? (
+          <div className="mt-4 rounded-md border border-white/[.08] bg-white/[.02] px-3 py-3">
+            <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Corrections to the model text</p>
+            <ul className="mt-2 space-y-2">
+              {shown.corrections.map((item) => (
+                <li key={item.href + item.text} className="text-sm leading-6 text-foreground/85">
+                  {item.text}{" "}
+                  <a href={item.href} target="_blank" rel="noreferrer" className="text-foreground underline decoration-white/25 underline-offset-2">
+                    Source
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
         {shown.sources.length > 0 ? (
           <ul className="mt-4 space-y-1">
             {shown.sources.map((source) => (
@@ -101,7 +138,7 @@ export function PaymentDecision({ record }: { record: DecisionRecord }) {
             <dd className="mt-1 text-sm text-foreground">{payeeLabel(record.payee).name}</dd>
           </div>
           <div>
-            <dt className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Remaining</dt>
+            <dt className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Remaining after this payment</dt>
             <dd className="mt-1 text-sm text-foreground">{rawUsdc(capabilityRemaining(record))}</dd>
           </div>
         </dl>

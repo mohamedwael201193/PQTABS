@@ -3,6 +3,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 
 const UNIT = [
+  "accounting.test.js",
   "decide.test.js",
   "http.test.js",
   "index.test.js",
