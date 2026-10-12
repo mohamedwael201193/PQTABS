@@ -5,6 +5,7 @@ import { Coins, Landmark, Layers, Plus, Wallet } from "lucide-react";
 import { CountUp, EmptyState, Reveal } from "@/components/pqtabs/shared";
 import { Button } from "@/components/ui/button";
 import { ExposureMeter } from "@/components/pqtabs/visuals/ExposureMeter";
+import { TxResult } from "@/components/pqtabs/dashboard/TxResult";
 import { parseUsdcRaw } from "@/data/actions";
 import { fundBar } from "@/data/fund-bar";
 import { usd } from "@/data/formatters";
@@ -30,6 +31,7 @@ function FundNotice() {
   const [amount, setAmount] = useState("0.01");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [depositHash, setDepositHash] = useState<string | null>(null);
 
   if (!root) return null;
   let sendable = false;
@@ -50,6 +52,7 @@ function FundNotice() {
         throw new Error("The wallet changed. The deposit was not sent.");
       }
       const hash = await fundRoot(live.snapshot.account.rootAddress as `0x${string}`, parseUsdcRaw(amount));
+      setDepositHash(hash);
       const receipt = await arcClient().waitForTransactionReceipt({ hash });
       if (receipt.status !== "success") throw new Error("The deposit reverted.");
       const after = usePqtabsData.getState();
@@ -109,6 +112,7 @@ function FundNotice() {
         </Button>
       </div>
       {message && <p className="mt-3 text-xs text-muted-foreground">{message}</p>}
+      <TxResult hash={depositHash ?? undefined} label="Deposit" amount={`${amount} USDC`} status="Included on Arc" />
     </section>
   );
 }

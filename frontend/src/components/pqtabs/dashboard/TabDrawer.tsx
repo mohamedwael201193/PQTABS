@@ -37,6 +37,8 @@ import { agentCanSign, chainExpirySeconds, formatRawUsdc, payeeLabel, paymentDea
 import { lockRoot, rootUnlocked, signRootDigest, verifyingKey } from "@/data/pq-vault";
 import { SecurityKeyUnlock } from "@/components/pqtabs/dashboard/SecurityKeyUnlock";
 import { PaymentDecision } from "@/components/pqtabs/dashboard/PaymentDecision";
+import { TxResult } from "@/components/pqtabs/dashboard/TxResult";
+import { closedCapabilityMessage, replayCheckMessage, signedRejectionMessage, stepIndex, type TaskPhase } from "@/data/task-phase";
 import type { Tab } from "@/data/types";
 import { useActivity, useAgents, useDashboardUi, usePqtabsData, useRecipients, useTabs } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -94,17 +96,36 @@ export default function TabDrawer() {
 
   const [closing, setClosing] = useState(false);
   const [reclaiming, setReclaiming] = useState(false);
+  const [actionReceipt, setActionReceipt] = useState<{ hash: string; label: string } | null>(null);
 
   const liveId = liveTab?.id ?? null;
   useEffect(() => {
     setClosing(false);
     setReclaiming(false);
+    setActionReceipt(null);
   }, [liveId]);
 
   // If the capability disappears while its drawer is open, close gracefully.
   useEffect(() => {
     if (open && !liveTab) closeDrawer();
   }, [open, liveTab, closeDrawer]);
+
+  useEffect(() => {
+    if (!open) return;
+    const registrar = usePqtabsData.getState().registrar;
+    if (!registrar) return;
+    let cancel = false;
+    void loadSnapshot(registrar)
+      .then((snapshot) => {
+        if (cancel) return;
+        if (usePqtabsData.getState().registrar.toLowerCase() !== registrar.toLowerCase()) return;
+        usePqtabsData.getState().acceptPortfolio(snapshot);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancel = true;
+    };
+  }, [open, liveId]);
 
   async function copyText(text: string, message: string) {
     try {
@@ -120,22 +141,31 @@ export default function TabDrawer() {
     setClosing(true);
     try {
       const registrar = usePqtabsData.getState().registrar;
-      const { snapshot } = await submitPrepared(registrar, prepared, signature);
+      const { hash, snapshot: first } = await submitPrepared(registrar, prepared, signature);
+      let snapshot = first;
+      let row = snapshot.tabs.find((item) => item.id.toLowerCase() === liveTab.id.toLowerCase());
+      for (let attempt = 0; attempt < 4 && (!row || row.status !== "closed"); attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        if (usePqtabsData.getState().registrar.toLowerCase() !== registrar.toLowerCase()) {
+          throw new Error("The wallet changed. The receipt belongs to the previous wallet.");
+        }
+        snapshot = await loadSnapshot(registrar);
+        row = snapshot.tabs.find((item) => item.id.toLowerCase() === liveTab.id.toLowerCase());
+      }
       const now = usePqtabsData.getState();
       if (now.registrar.toLowerCase() !== registrar.toLowerCase()) {
         throw new Error("The wallet changed. The receipt belongs to the previous wallet.");
       }
-      const row = snapshot.tabs.find((item) => item.id.toLowerCase() === liveTab.id.toLowerCase());
       if (!row || row.status !== "closed") {
         throw new Error("Arc did not show this capability as closed.");
       }
       now.acceptPortfolio(snapshot);
+      setActionReceipt({ hash, label: "Capability close" });
       if (row.needsSweep || row.balanceUsd > 0) {
         toast.message("The capability is closed. USDC is still on it until Return funds succeeds.");
       } else {
         toast.success("Close confirmed on Arc. The remaining USDC is back in root cash.");
       }
-      closeDrawer();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Couldn't close this capability.");
     } finally {
@@ -150,7 +180,7 @@ export default function TabDrawer() {
       const store = usePqtabsData.getState();
       const root = store.snapshot.account.rootAddress;
       if (!root || !store.registrar) throw new Error("The wallet changed. Nothing was submitted.");
-      await productionProvider.reclaimCapability(root, liveTab.id);
+      const hash = await productionProvider.reclaimCapability(root, liveTab.id);
       if (usePqtabsData.getState().registrar.toLowerCase() !== store.registrar.toLowerCase()) {
         throw new Error("The wallet changed. The receipt belongs to the previous wallet.");
       }
@@ -162,9 +192,9 @@ export default function TabDrawer() {
       }
       if (!outcome.settled) throw new Error(outcome.message);
       usePqtabsData.getState().acceptPortfolio(snapshot);
+      setActionReceipt({ hash, label: "Capability reclaim" });
       if (outcome.leftover) toast.message(outcome.message);
       else toast.success(outcome.message);
-      closeDrawer();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Couldn't reclaim this capability.");
     } finally {
@@ -182,6 +212,7 @@ export default function TabDrawer() {
             reclaiming={reclaiming}
             onClose={handleClose}
             onReclaim={handleReclaim}
+            actionReceipt={actionReceipt}
             onCopy={copyText}
           />
         ) : null}
@@ -196,6 +227,7 @@ function TabDrawerBody({
   reclaiming,
   onClose,
   onReclaim,
+  actionReceipt,
   onCopy,
 }: {
   tab: Tab;
@@ -203,6 +235,7 @@ function TabDrawerBody({
   reclaiming: boolean;
   onClose: (prepared: PreparedAction, signature: string) => void;
   onReclaim: () => void;
+  actionReceipt: { hash: string; label: string } | null;
   onCopy: (text: string, message: string) => void;
 }) {
   const agents = useAgents();
@@ -217,6 +250,7 @@ function TabDrawerBody({
   const [closingSig, setClosingSig] = useState(false);
   const [closeReady, setCloseReady] = useState(() => rootUnlocked(usePqtabsData.getState().registrar));
   const [paying, setPaying] = useState(false);
+  const [taskPhase, setTaskPhase] = useState<TaskPhase>("READY");
   const [payLog, setPayLog] = useState<string[]>([]);
   const [shownDecision, setShownDecision] = useState<DecisionRecord | null>(null);
   const payLock = useRef(false);
@@ -611,7 +645,7 @@ function TabDrawerBody({
     const registrar = usePqtabsData.getState().registrar;
     const payment = activity.find((item) => item.tabId === tab.id && item.kind === "payment" && item.status === "completed" && typeof item.txHash === "string" && /^0x[0-9a-fA-F]{64}$/.test(item.txHash));
     if (!registrar || !payment?.txHash) {
-      toast.error("No settled payment is on this capability. Nothing was signed.");
+      toast.error(replayCheckMessage());
       return;
     }
     payLock.current = true;
@@ -723,6 +757,10 @@ function TabDrawerBody({
           Capability {tab.reference} — balance, policy, recipients and spend history.
         </SheetDescription>
       </SheetHeader>
+      <div className="px-5 md:px-6">
+        <TxResult hash={tab.txHash} label="Capability open" amount={`${tab.capUsd} USDC cap`} />
+        {actionReceipt ? <TxResult hash={actionReceipt.hash} label={actionReceipt.label} /> : null}
+      </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
         <div className="space-y-6 px-5 py-5 md:px-6">
@@ -901,7 +939,7 @@ function TabDrawerBody({
         <div className="border-t border-white/[.06] px-5 py-4 md:px-6">
           <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Research agent</p>
           <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-            Pays for external inference when the requested service fits this capability. Enter a question. Run task reads the x402 price and recipient from the service. It pays only when this capability allows the request and the service settles it on Arc. If the price or recipient does not fit, nothing is signed and nothing is sent. If the service rejects the signature, nothing is broadcast.
+            Pays for external inference when the requested service fits this capability. Enter a question. Run paid task reads the x402 price and recipient from the service. It pays only when this capability allows the request and the service settles it on Arc. If the price or recipient does not fit, nothing is signed and nothing is sent. If the service rejects the signature, nothing is broadcast.
           </p>
           <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
             A stolen agent key can spend only this capability&apos;s remaining balance, up to the per-payment limit, to the approved recipient, until expiry. It cannot reach root cash or the wallet.
@@ -915,7 +953,7 @@ function TabDrawerBody({
           />
           <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
             {servicePrice
-              ? `Current service price ${formatRawUsdc(servicePrice.price)} to ${payeeLabel(servicePrice.payee).name} on ${servicePrice.network}. Run task reads this again before any signature.`
+              ? `Current service price ${formatRawUsdc(servicePrice.price)} to ${payeeLabel(servicePrice.payee).name} on ${servicePrice.network}. Remaining capability budget ${usd(tab.balanceUsd)}. Expires ${tab.expiryUnix ? new Date(tab.expiryUnix * 1000).toISOString() : "—"}. Run paid task reads this again before any signature.`
               : servicePriceNote}
           </p>
           {policyNote ? <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{policyNote}</p> : null}
@@ -924,6 +962,13 @@ function TabDrawerBody({
               This browser does not hold this agent's encrypted key, so it cannot sign a payment until you restore the backup.
             </p>
           )}
+          <ol className="mt-3 grid grid-cols-5 gap-1 text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+            {(["Quote", "Policy", "Authorization", "Settlement", "Result"] as const).map((label, index) => (
+              <li key={label} className={index === stepIndex(taskPhase) ? "text-foreground" : undefined}>
+                {label}
+              </li>
+            ))}
+          </ol>
           <Button
             disabled={paying || !canPay || task.trim().length === 0}
             onClick={() => {
@@ -936,14 +981,28 @@ function TabDrawerBody({
               }
               payLock.current = true;
               setPaying(true);
+              setTaskPhase("FETCHING_QUOTE");
               setPayLog(["Agent requested a paid service"]);
               const asked = task.trim();
               let facts: DecisionFacts | null = null;
-              const block = (reason: string) => {
+              let signedLocally = false;
+              const block = (reason: string): never => {
+                setTaskPhase("POLICY_REFUSED");
                 setPayLog((lines) => [...lines, `Payment blocked. ${reason}`]);
                 throw new Error(`Payment blocked. ${reason}`);
               };
-              void requestServicePrice(asked)
+              void loadSnapshot(registrar)
+                .then((fresh) => {
+                  if (usePqtabsData.getState().registrar.toLowerCase() !== registrar.toLowerCase()) {
+                    throw new Error("The wallet changed. Nothing was signed.");
+                  }
+                  usePqtabsData.getState().acceptPortfolio(fresh);
+                  const current = fresh.tabs.find((item) => item.id.toLowerCase() === tab.id.toLowerCase());
+                  if (!current || current.status !== "active") {
+                    throw new Error(`Payment blocked. ${closedCapabilityMessage()}`);
+                  }
+                  return requestServicePrice(asked);
+                })
                 .then((paymentRequired) => {
                   setPayLog((lines) => [...lines, "Price verified"]);
                   return decideServicePrice(tab.id, paymentRequired).then((decision) => ({ paymentRequired, decision }));
@@ -952,12 +1011,11 @@ function TabDrawerBody({
                   facts = decisionFacts(asked, registrar, decision);
                   if (decision.decision !== "ALLOW") {
                     const saved = decisionRecord(facts, new Date().toISOString());
-                    return saveDecision(saved).then(() => {
-                      usePqtabsData.getState().noteDecision();
-                      setShownDecision(saved);
-                      const sentence = paymentReasonSentence(decision.reason[0] ?? "capability_inactive");
-                      block(`${sentence} Nothing was signed. Nothing was broadcast.`);
-                    });
+                    await saveDecision(saved);
+                    usePqtabsData.getState().noteDecision();
+                    setShownDecision(saved);
+                    const sentence = paymentReasonSentence(decision.reason[0] ?? "capability_inactive");
+                    block(`${sentence} Nothing was signed. Nothing was broadcast.`);
                   }
                   if (!isAddress(decision.payee)) {
                     block("The service price had no recipient. Nothing was signed.");
@@ -966,26 +1024,24 @@ function TabDrawerBody({
                   if (!agentCanSign(agentAddress(key), decision.agent)) {
                     facts = { ...facts, decision: "REFUSE", reason: ["wrong_agent"] };
                     const saved = decisionRecord(facts, new Date().toISOString());
-                    return saveDecision(saved).then(() => {
-                      usePqtabsData.getState().noteDecision();
-                      setShownDecision(saved);
-                      block("This device key is not the agent on this capability. Nothing was signed. Nothing was broadcast.");
-                    });
+                    await saveDecision(saved);
+                    usePqtabsData.getState().noteDecision();
+                    setShownDecision(saved);
+                    block("This device key is not the agent on this capability. Nothing was signed. Nothing was broadcast.");
                   }
                   const now = await arcClock();
                   const deadline = paymentDeadline(now, chainExpirySeconds(decision.expiry), serviceTimeoutSeconds(paymentRequired));
                   setPayLog((lines) => [...lines, "Policy approved"]);
-                  return authorizationBlob(key, tab.id, decision.payee, BigInt(decision.price), BigInt(deadline)).then((signed) => ({
-                    paymentRequired,
-                    decision,
-                    signed,
-                    deadline,
-                  }));
+                  setTaskPhase("AUTHORIZING");
+                  const signed = await authorizationBlob(key, tab.id, decision.payee, BigInt(decision.price), BigInt(deadline));
+                  signedLocally = true;
+                  return { paymentRequired, decision, signed, deadline };
                 })
                 .then(({ paymentRequired, decision, signed, deadline }) => {
                   if (usePqtabsData.getState().registrar.toLowerCase() !== registrar.toLowerCase()) {
                     throw new Error("The wallet changed. The payment was not submitted.");
                   }
+                  setTaskPhase("VERIFYING_PAYMENT");
                   return settleService(asked, paymentRequired, {
                     from: tab.id,
                     to: decision.payee,
@@ -1010,6 +1066,7 @@ function TabDrawerBody({
                     toast.message("The wallet changed. The receipt belongs to the previous wallet.");
                     return;
                   }
+                  setTaskPhase("SETTLED");
                   setPayLog((lines) => [...lines, "Arc payment confirmed"]);
                   if (!result) {
                     setPayLog((lines) => [...lines, "Payment blocked. The service result was not usable. No further payment was sent."]);
@@ -1032,10 +1089,12 @@ function TabDrawerBody({
                       toast.message("The decision was not saved on this device.");
                     }
                   }
+                  if (signedLocally) setTaskPhase("FAILED_NO_SETTLEMENT");
+                  else setTaskPhase("POLICY_REFUSED");
                   if (!message.startsWith("Payment blocked")) {
                     setPayLog((lines) => [...lines, `Payment blocked. ${message}`]);
                   }
-                  toast.error(message);
+                  toast.error(signedLocally ? signedRejectionMessage(message) : message);
                 })
                 .finally(() => {
                   payLock.current = false;
@@ -1044,7 +1103,7 @@ function TabDrawerBody({
             }}
             className="mt-3 h-9 bg-gold text-[#171204] hover:bg-[#eec95e]"
           >
-            {paying ? <Loader2 className="size-4 animate-spin" /> : "Run task"}
+            {paying ? <Loader2 className="size-4 animate-spin" /> : "Run paid task"}
           </Button>
           <div className="mt-3 flex flex-wrap gap-2">
             {(

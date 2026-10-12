@@ -93,10 +93,11 @@ test("a per-payment refusal has a plain sentence", () => {
   assert.equal(paymentReasonSentence("facilitator_rejected"), "The facilitator rejected the signature. No Arc transaction was recorded.");
 });
 
-test("an unsettled allow says nothing was broadcast and does not say nothing was signed", () => {
+test("an unsettled allow says a signature was created and nothing was broadcast", () => {
   const record = decisionRecord({ ...facts(), decision: "ALLOW", reason: ["capability_active"] }, "2026-10-08T02:00:00.000Z");
   assert.deepEqual(paymentStatusLines(record.decision, record.txHash), [
     "Payment blocked",
+    "A local signature was created.",
     "No Arc receipt was recorded.",
     "Nothing was broadcast.",
   ]);

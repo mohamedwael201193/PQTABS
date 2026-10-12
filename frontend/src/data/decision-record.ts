@@ -191,7 +191,12 @@ export function paymentStatusLines(decision: string, txHash: string, reasons: re
     return ["Payment blocked", "Nothing was signed.", "Nothing was broadcast."];
   }
   if (decision === "NOT_SETTLED" || !/^0x[0-9a-fA-F]{64}$/.test(txHash)) {
-    return ["Payment blocked", "No Arc receipt was recorded.", "Nothing was broadcast."];
+    return [
+      "Payment blocked",
+      "A local signature was created.",
+      "No Arc receipt was recorded.",
+      "Nothing was broadcast.",
+    ];
   }
   return [];
 }

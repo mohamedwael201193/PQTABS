@@ -747,8 +747,8 @@ export const productionProvider = {
   async rotateAgentKey(): Promise<never> {
     throw new Error(PQ_REQUIRED);
   },
-  async reclaimCapability(root: string, tab: string): Promise<void> {
-    await relay("/v1/relay/reclaim", { root, tab });
+  async reclaimCapability(root: string, tab: string): Promise<string> {
+    return (await relay("/v1/relay/reclaim", { root, tab })).hash;
   },
   async retrySweep(root: string, tab: string): Promise<void> {
     await relay("/v1/relay/retry-sweep", { root, tab });

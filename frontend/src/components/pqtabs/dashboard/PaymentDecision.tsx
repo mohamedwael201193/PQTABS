@@ -2,6 +2,7 @@
 
 import type { DecisionRecord } from "@/data/decision-record";
 import { capabilityRemaining, expiryWhen, orderedReasons, paymentReasonSentence, paymentStatusLines } from "@/data/decision-record";
+import { TxResult } from "@/components/pqtabs/dashboard/TxResult";
 
 function rawUsdc(value: string): string {
   if (!/^[0-9]+$/.test(value)) return "—";
@@ -66,6 +67,13 @@ export function PaymentDecision({ record }: { record: DecisionRecord }) {
           </div>
         ))}
       </dl>
+      <TxResult
+        hash={record.txHash}
+        label="Arc receipt"
+        amount={record.charge ? rawUsdc(record.charge) : rawUsdc(record.price)}
+        recipient={record.payee}
+        status={record.receipt?.status}
+      />
       <div className="mt-3">
         <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Reasons</p>
         <ul className="mt-1 space-y-1">
