@@ -243,7 +243,6 @@ export async function askGroq(task: string, env: NodeJS.ProcessEnv = process.env
         model,
         messages: [{ role: "user", content: task }],
         max_tokens: RESEARCH_MAX_TOKENS,
-        max_completion_tokens: RESEARCH_MAX_TOKENS,
       }),
       signal: controller.signal,
     });
