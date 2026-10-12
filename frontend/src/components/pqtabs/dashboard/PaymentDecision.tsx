@@ -122,7 +122,7 @@ export function PaymentDecision({ record }: { record: DecisionRecord }) {
           <div className="mt-4 rounded-md border border-warning/30 bg-warning/[.06] px-3 py-3">
             <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Not verified</p>
             <p className="mt-2 text-sm leading-6 text-foreground/85">
-              {shown.unverified.map((sentence) => `"${sentence}"`).join(" ")} None of the Arc sources above covers this, so it is not confirmed.
+              {shown.unverified.map((sentence) => `"${sentence}"`).join(" ")} None of the Arc sources linked with this answer covers it, so it is not confirmed.
             </p>
           </div>
         ) : null}
