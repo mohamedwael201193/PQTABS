@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { getAddress } from "viem";
 import {
+  askGroq,
   buildResearchQuote,
   dedicatedPayee,
   oneUsdcTransfer,
@@ -9,6 +10,7 @@ import {
   quoteAgrees,
   researchBodyHash,
   researchDelivery,
+  researchTariff,
 } from "../src/index/research.js";
 import { openQuote, rememberQuote, saveDelivery } from "../src/index/research-store.js";
 import { openMemory } from "../src/index/sql.js";
@@ -49,7 +51,9 @@ test("a barkeep quote names the merchant, the tariff, and not the exact scheme",
   assert.equal(built.paymentRequired.accepts[0].amount, "32");
   assert.equal(built.paymentRequired.accepts[0].payTo, PAYEE);
   assert.equal(built.paymentRequired.accepts[0].extra.tariff, true);
+  assert.equal(built.paymentRequired.accepts[0].extra.provider, "Groq");
   assert.equal(built.paymentRequired.accepts[0].extra.maxTokens, 400);
+  assert.equal(researchTariff({}), 360n);
   const parsed = parseBarkeepPayment(built.paymentRequired);
   assert.equal(parsed?.quoteId, built.id);
   assert.equal(parsed?.price, "32");
@@ -57,9 +61,17 @@ test("a barkeep quote names the merchant, the tariff, and not the exact scheme",
 });
 
 test("the relayer and the zero address are not a merchant", () => {
+  const root = "0x2d0FdFafCC7E46226D3db00Ae976aA8F53996b95";
+  const registrar = "0xd462cc45b06Ae45daCd93F7B3979758C7b4a2cc0";
+  const compromised = "0x18398aA1dFdA63F30529c46E90ac41c1E75F7Ecf";
+  const merchant = "0xf76e6B0920e9332fF4410f6dD53F01722AbC71a3";
   assert.equal(dedicatedPayee(undefined, []), null);
   assert.equal(dedicatedPayee("0x0000000000000000000000000000000000000000", []), null);
   assert.equal(dedicatedPayee(RELAYER, [RELAYER]), null);
+  assert.equal(dedicatedPayee(root, [root, registrar, compromised]), null);
+  assert.equal(dedicatedPayee(registrar, [root, registrar, compromised]), null);
+  assert.equal(dedicatedPayee(compromised, [root, registrar, compromised]), null);
+  assert.equal(dedicatedPayee(merchant, [RELAYER, root, registrar, compromised]), getAddress(merchant));
   assert.equal(dedicatedPayee(PAYEE, [RELAYER]), PAYEE);
 });
 
@@ -98,4 +110,26 @@ test("an empty model response stays pending and the same open quote is reused", 
   const pending = await openQuote(sql, built.bodyHash, NOW + 10);
   assert.equal(pending, null);
   await sql.close();
+});
+
+test("a missing key, a provider error, or an empty completion is not an answer", async () => {
+  let called = 0;
+  const blocked = await askGroq("What is Arc?", {}, async () => {
+    called += 1;
+    return new Response("no");
+  });
+  assert.equal(blocked.text, "");
+  assert.equal(called, 0);
+  const denied = await askGroq("What is Arc?", { GROQ_API_KEY: "present", GROQ_MODEL: "openai/gpt-oss-120b" }, async () => new Response(JSON.stringify({ error: "unauthorized" }), { status: 401 }));
+  assert.equal(denied.text, "");
+  const empty = await askGroq("What is Arc?", { GROQ_API_KEY: "present" }, async () => new Response(JSON.stringify({ choices: [{ message: { content: "  " } }] }), { status: 200 }));
+  assert.equal(empty.text, "");
+  const answered = await askGroq("What is Arc?", { GROQ_API_KEY: "present", GROQ_BASE_URL: "https://api.groq.com/openai/v1" }, async (_url, init) => {
+    const header = new Headers(init?.headers).get("authorization") ?? "";
+    assert.equal(header.startsWith("Bearer "), true);
+    assert.equal(header.includes("present"), true);
+    return new Response(JSON.stringify({ model: "openai/gpt-oss-120b", choices: [{ message: { content: "Arc mainnet is chain 5042." } }] }), { status: 200 });
+  });
+  assert.equal(answered.text, "Arc mainnet is chain 5042.");
+  assert.equal(answered.model, "openai/gpt-oss-120b");
 });

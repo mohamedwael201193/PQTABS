@@ -54,6 +54,8 @@ test("the payment header names the Arc accept and the EIP-3009 method", () => {
     price: "12",
     payee: "0x6Bf001BB5f5E75396d92163325ca01FdEBe2e9A9",
     network: "eip155:5042",
+    provider: "",
+    model: "",
   });
   assert.equal(serviceQuote({ accepts: [quoted.accepts[1]] }), null);
   assert.equal(formatRawUsdc("12"), "0.000012 USDC");
@@ -125,6 +127,8 @@ test("a pqtabs-barkeep quote is the price and an exact row is not that quote", (
     price: "32",
     payee: "0x1111111111111111111111111111111111111111",
     network: "eip155:5042",
+    provider: "",
+    model: "",
   });
   assert.equal(serviceTimeoutSeconds(payment), 600);
   assert.equal(quoteIdOf(payment), id);

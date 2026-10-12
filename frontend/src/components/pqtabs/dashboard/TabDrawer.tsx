@@ -246,7 +246,7 @@ function TabDrawerBody({
   const verifyingKeyText = usePqtabsData((state) => state.snapshot.account.pqVk);
   const [closePrep, setClosePrep] = useState<PreparedAction | null>(null);
   const [task, setTask] = useState("Summarize what Arc mainnet settlement means for an agent payment.");
-  const [servicePrice, setServicePrice] = useState<{ price: string; payee: string; network: string } | null>(null);
+  const [servicePrice, setServicePrice] = useState<{ price: string; payee: string; network: string; provider: string; model: string } | null>(null);
   const [servicePriceNote, setServicePriceNote] = useState("Reading the current service price.");
   const [policyNote, setPolicyNote] = useState("");
   const [closingSig, setClosingSig] = useState(false);
@@ -1024,7 +1024,7 @@ function TabDrawerBody({
               </div>
               <div>
                 <dt className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Answer</dt>
-                <dd className="mt-0.5 text-foreground">Pollinations</dd>
+                <dd className="mt-0.5 text-foreground">{servicePrice.provider && servicePrice.model ? `${servicePrice.provider} / ${servicePrice.model}` : "Groq"}</dd>
               </div>
               <div>
                 <dt className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Network</dt>
@@ -1186,7 +1186,8 @@ function TabDrawerBody({
                 })
                 .then(async ({ transaction, result, model, receipt, charge }) => {
                   if (facts) {
-                    facts = { ...facts, service: model ? `Pollinations / ${model}` : facts.service };
+                    const named = servicePrice?.provider && (model || servicePrice.model) ? `${servicePrice.provider} / ${model || servicePrice.model}` : model ? `Groq / ${model}` : facts.service;
+                    facts = { ...facts, service: named };
                     try {
                       const saved = settledDecision(facts, { txHash: transaction, receipt, result, charge }, new Date().toISOString());
                       await saveDecision(saved);

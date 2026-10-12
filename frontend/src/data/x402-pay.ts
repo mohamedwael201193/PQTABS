@@ -7,6 +7,7 @@ const ARCROUTER_PAYEE = "0x6bf001bb5f5e75396d92163325ca01fdebe2e9a9";
 /** The live ArcRouter payee. Any other address stays an address. */
 export function payeeLabel(payee: string): { name: string; category: "Service" | "Infrastructure" } {
   if (payee.toLowerCase() === ARCROUTER_PAYEE) return { name: "ArcRouter", category: "Service" };
+  if (payee.toLowerCase() === "0xf76e6b0920e9332ff4410f6dd53f01722abc71a3") return { name: "PQTABS merchant", category: "Service" };
   return { name: `${payee.slice(0, 6)}…${payee.slice(-4)}`, category: "Infrastructure" };
 }
 
@@ -55,13 +56,16 @@ export function arcExactAccept(paymentRequired: unknown): Record<string, unknown
   return null;
 }
 
-/** The Arc exact price from a 402. A Base row is not a quote. */
-export function serviceQuote(paymentRequired: unknown): { price: string; payee: string; network: string } | null {
+/** The Arc price from a PQTABS quote or an exact row. A Base row is not a quote. */
+export function serviceQuote(paymentRequired: unknown): { price: string; payee: string; network: string; provider: string; model: string } | null {
   const accepted = pricedAccept(paymentRequired);
   const payee = servicePayee(paymentRequired);
   const price = accepted && typeof accepted.amount === "string" ? accepted.amount : "";
   if (!accepted || !payee || !/^[0-9]+$/.test(price)) return null;
-  return { price, payee, network: ARC };
+  const extra = record(accepted.extra);
+  const provider = extra && typeof extra.provider === "string" ? extra.provider : "";
+  const model = extra && typeof extra.model === "string" ? extra.model : "";
+  return { price, payee, network: ARC, provider, model };
 }
 
 /** 6-decimal USDC raw units. A non-integer is not a price. */

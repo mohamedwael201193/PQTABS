@@ -5,7 +5,13 @@ import { erc20SpendRaw } from "./usdc-event.js";
 export const RESEARCH_SCHEME = "pqtabs-barkeep";
 export const RESEARCH_MAX_TOKENS = 400;
 export const RESEARCH_TTL_SECONDS = 600;
-export const DEFAULT_RESEARCH_TARIFF = 32n;
+/**
+ * Groq lists openai/gpt-oss-120b at $0.15 per 1M input tokens and $0.60 per 1M output tokens.
+ * 800 input tokens are 120 raw USDC. 400 output tokens are 240 raw USDC. 360 raw is that ceiling.
+ * It is not a measured provider invoice, and it does not raise the capability cap.
+ */
+export const DEFAULT_RESEARCH_TARIFF = 360n;
+export const DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b";
 const ARC_NETWORK = "eip155:5042";
 const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 
@@ -39,8 +45,8 @@ type ResearchAccept = {
     quoteId: string;
     bodyHash: Hex;
     service: "Arc Research";
-    provider: "Pollinations";
-    model: "gpt-oss-20b";
+    provider: "Groq";
+    model: string;
     maxTokens: number;
     tariff: true;
     name: "USDC";
@@ -77,7 +83,12 @@ export function dedicatedPayee(raw: string | undefined, forbidden: readonly stri
   return address;
 }
 
-/** The published tariff in raw USDC. This is not a model-provider invoice. */
+export function researchIdentity(env: NodeJS.ProcessEnv = process.env): { provider: "Groq"; model: string } {
+  const model = env.GROQ_MODEL?.trim() || DEFAULT_GROQ_MODEL;
+  return { provider: "Groq", model };
+}
+
+/** The published tariff in raw USDC. This is a bounded ceiling, not a measured Groq invoice. */
 export function researchTariff(env: NodeJS.ProcessEnv = process.env): bigint {
   const raw = env.RESEARCH_PRICE_RAW?.trim() || DEFAULT_RESEARCH_TARIFF.toString();
   if (!/^[1-9][0-9]*$/.test(raw)) return DEFAULT_RESEARCH_TARIFF;
@@ -101,6 +112,7 @@ export function buildResearchQuote(input: {
   if (!task || task.length > 2_000) throw new Error("task_length");
   if (input.price <= 0n) throw new Error("bad_price");
   const price = input.price.toString();
+  const identity = researchIdentity();
   const bodyHash = researchBodyHash(task, price, input.payee, RESEARCH_MAX_TOKENS);
   const expiresAt = input.now + RESEARCH_TTL_SECONDS;
   const accept: ResearchAccept = {
@@ -114,8 +126,8 @@ export function buildResearchQuote(input: {
       quoteId: input.id,
       bodyHash,
       service: "Arc Research",
-      provider: "Pollinations",
-      model: "gpt-oss-20b",
+      provider: identity.provider,
+      model: identity.model,
       maxTokens: RESEARCH_MAX_TOKENS,
       tariff: true,
       name: "USDC",
@@ -215,15 +227,24 @@ export function quoteAgrees(
   return "ok";
 }
 
-/** Pollinations text. An error, timeout, or empty completion is not an answer. */
-export async function askPollinations(task: string, fetchImpl: typeof fetch = fetch): Promise<{ text: string; model: string }> {
+/** Groq text. A missing key, error, timeout, or empty completion is not an answer. The key is never logged. */
+export async function askGroq(task: string, env: NodeJS.ProcessEnv = process.env, fetchImpl: typeof fetch = fetch): Promise<{ text: string; model: string }> {
+  const key = env.GROQ_API_KEY?.trim() ?? "";
+  const model = researchIdentity(env).model;
+  const base = (env.GROQ_BASE_URL?.trim() || "https://api.groq.com/openai/v1").replace(/\/$/, "");
+  if (!key || !model) return { text: "", model: "" };
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 20_000);
   try {
-    const response = await fetchImpl("https://text.pollinations.ai/openai", {
+    const response = await fetchImpl(`${base}/chat/completions`, {
       method: "POST",
-      headers: { "content-type": "application/json", accept: "application/json" },
-      body: JSON.stringify({ model: "openai", messages: [{ role: "user", content: task }], max_tokens: RESEARCH_MAX_TOKENS }),
+      headers: { authorization: `Bearer ${key}`, "content-type": "application/json", accept: "application/json" },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: "user", content: task }],
+        max_tokens: RESEARCH_MAX_TOKENS,
+        max_completion_tokens: RESEARCH_MAX_TOKENS,
+      }),
       signal: controller.signal,
     });
     const payload = await response.json().catch(() => null);
@@ -232,8 +253,8 @@ export async function askPollinations(task: string, fetchImpl: typeof fetch = fe
     if (body.error || !Array.isArray(body.choices) || !body.choices[0]) return { text: "", model: "" };
     const content = body.choices[0].message?.content;
     const text = typeof content === "string" ? content.trim() : "";
-    const model = typeof body.model === "string" ? body.model : "";
-    return { text, model: text ? model : "" };
+    const reported = typeof body.model === "string" && body.model ? body.model : model;
+    return { text, model: text ? reported : "" };
   } catch {
     return { text: "", model: "" };
   } finally {

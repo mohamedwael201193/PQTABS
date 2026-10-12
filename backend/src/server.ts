@@ -8,7 +8,7 @@ import { decideSpend } from "./index/decide.js";
 import { startIngest } from "./index/ingest.js";
 import { indexHealth } from "./index/lane.js";
 import { readIndexedPortfolio } from "./index/portfolio.js";
-import { askPollinations, buildResearchQuote, dedicatedPayee, oneUsdcTransfer, parseBarkeepPayment, quoteAgrees, researchDelivery, researchTariff } from "./index/research.js";
+import { askGroq, buildResearchQuote, dedicatedPayee, oneUsdcTransfer, parseBarkeepPayment, quoteAgrees, researchDelivery, researchTariff } from "./index/research.js";
 import { openQuote, readQuote, rememberQuote, saveDelivery } from "./index/research-store.js";
 import { parseSpendBlob, recoverSpendSigner, sameSpendTerms } from "./index/spend-blob.js";
 import { recallSpend, rememberSpend } from "./index/spend-ledger.js";
@@ -23,6 +23,15 @@ const limits = new RateLimiter();
 
 function clientIp(header: string | undefined): string {
   return header?.split(",")[0]?.trim() || "unknown";
+}
+
+function forbiddenPayees(relayer: string | null): string[] {
+  return [
+    relayer ?? "",
+    "0x2d0FdFafCC7E46226D3db00Ae976aA8F53996b95",
+    "0xd462cc45b06Ae45daCd93F7B3979758C7b4a2cc0",
+    "0x18398aA1dFdA63F30529c46E90ac41c1E75F7Ecf",
+  ];
 }
 
 async function readCapability(clients: Clients, tab: Address) {
@@ -270,7 +279,7 @@ export function createApp(clients: Clients = loadClients(), getIndex?: () => Sql
   app.post("/v1/research/quote", async (c) => {
     const body = await readBody(c);
     const task = typeof body.task === "string" ? body.task : "";
-    const merchant = dedicatedPayee(process.env.MERCHANT_PAYEE, [clients.relayerAddress ?? ""]);
+    const merchant = dedicatedPayee(process.env.MERCHANT_PAYEE, forbiddenPayees(clients.relayerAddress));
     if (!merchant) throw new RequestError(503, "merchant_unconfigured", "The merchant receiving address is not configured.");
     const index = getIndex?.() ?? null;
     if (!index) throw new RequestError(503, "index_unavailable", "The quote store is not open.");
@@ -355,7 +364,7 @@ export function createApp(clients: Clients = loadClients(), getIndex?: () => Sql
       if (!stored) throw new RequestError(400, "policy_refused", "unknown_quote");
       const agreement = quoteAgrees(stored, custom, to, value.toString(), Math.floor(Date.now() / 1000));
       if (agreement !== "ok") throw new RequestError(400, "policy_refused", agreement);
-      const merchant = dedicatedPayee(process.env.MERCHANT_PAYEE, [clients.relayerAddress ?? ""]);
+      const merchant = dedicatedPayee(process.env.MERCHANT_PAYEE, forbiddenPayees(clients.relayerAddress));
       if (!merchant) throw new RequestError(503, "merchant_unconfigured", "The merchant receiving address is not configured.");
       if (merchant.toLowerCase() !== to.toLowerCase()) throw new RequestError(400, "policy_refused", "wrong_payee");
     } else if (!quote) {
@@ -419,7 +428,7 @@ export function createApp(clients: Clients = loadClients(), getIndex?: () => Sql
       { from: tab, to: stored.payee, value: stored.price },
     );
     if (!matched) throw new RequestError(409, "receipt_mismatch", "The Arc receipt is not this quote.");
-    const answered = stored.result ? { text: stored.result, model: stored.model } : await askPollinations(stored.task);
+    const answered = stored.result ? { text: stored.result, model: stored.model } : await askGroq(stored.task);
     const status = researchDelivery(true, answered.text);
     if (status === "unpaid") throw new RequestError(409, "receipt_mismatch", "The Arc receipt is not this quote.");
     await saveDelivery(index, quoteId, txHash, status, answered.text, answered.model);
