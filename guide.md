@@ -75,3 +75,19 @@ The first click of that attempt returned `rate_limited` and broadcast nothing. T
 - Arcus supported kinds: `https://facilitator.arcusnetwork.co/supported`
 - MetaMask security-alert networks: `https://support.metamask.io/configure/wallet/security-alerts/`
 - ERC-1271 and EIP-3009 are the standard names for `isValidSignature` and `transferWithAuthorization`.
+## Balance, spent, and answer rules (2026-10-12)
+
+- One source for capability money. The backend reads each unswept capability's USDC balance from Arc, and the frontend displays `balanceUsd`, `balanceKnown`, `spentUsd`, and `spentKnown` from `/v1/roots/:address/portfolio`. Card, drawer, closed list, and receipt must read those fields. Do not derive spent from a stored balance, a receipt, or a cap minus a stored value.
+- Spent while open is cap minus the live balance. Spent once closed is the sum of verified `spend` payments whose payee is not the root. A failed or rate-limited read is unknown. Show "Spent not confirmed" or "-" and do not show zero. Never fall back to the stored `usdc_balance` for a capability.
+- Available means the live capability balance. Agent reachable is the sum of available balances on open capabilities. Root cash is the root's own USDC and is not reachable by an agent.
+- A closed capability shows its verified spent amount `of` the cap. The cap alone is not a balance.
+- Answers render as GitHub-flavoured Markdown. The page needs `remark-gfm`, or pipe tables print as text. Keep the `pqtabs-barkeep` scheme name and `standardExact: false`. Do not call the payment standard x402 `exact`, and do not claim an ArcRouter `PAYMENT-RESPONSE`.
+- An answer that stops mid-sentence is labelled incomplete. A factual correction of the model text carries a source link. Do not replace a model claim with a generalization that has no source.
+- Changing `max_tokens` changes the quote body hash, so it changes every quote. Change it only with a new quote flow and a test.
+
+## Payment economics (measured, not yet approved for change)
+
+- Gas comes from chain receipts: fee in raw 6-decimal units is gasUsed x effectiveGasPrice / 1e12. Measured on 2026-10-12: spend about 2,112 raw, open about 12,738 raw, close about 9,724 raw. The relayer pays this gas, so it is a demo subsidy and not a price.
+- The research tariff is 360 raw. Net per task before overhead is negative at that price (about -1,786 to -2,112 raw). Break-even before overhead is about 2,146 to 2,472 raw.
+- Per-capability overhead is about 22,462 raw, divided across the payments in that capability. A one-payment capability cannot be sustainable at this price.
+- A price or cap change is a product decision. Do not apply it, and do not claim profitability, without an explicit user approval and fresh receipts. The HISTORY entry for 2026-10-12 has the working figures.
