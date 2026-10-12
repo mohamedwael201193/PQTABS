@@ -118,6 +118,14 @@ export function PaymentDecision({ record }: { record: DecisionRecord }) {
             </ul>
           </div>
         ) : null}
+        {shown.unverified.length > 0 ? (
+          <div className="mt-4 rounded-md border border-warning/30 bg-warning/[.06] px-3 py-3">
+            <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Not verified</p>
+            <p className="mt-2 text-sm leading-6 text-foreground/85">
+              {shown.unverified.map((sentence) => `"${sentence}"`).join(" ")} None of the Arc sources above covers this, so it is not confirmed.
+            </p>
+          </div>
+        ) : null}
         {shown.sources.length > 0 ? (
           <ul className="mt-4 space-y-1">
             {shown.sources.map((source) => (

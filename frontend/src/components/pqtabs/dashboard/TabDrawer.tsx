@@ -348,7 +348,7 @@ function TabDrawerBody({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [task, tab.id, tab.status, tab.expiryUnix]);
+  }, [task, tab.id, tab.status, tab.expiryUnix, tab.balanceRaw]);
 
   async function runBlockedCheck(name: ProbeName | "malformed_signature") {
     if (!tab || payLock.current) return;
@@ -1220,6 +1220,8 @@ function TabDrawerBody({
                     return;
                   }
                   setTaskPhase("SETTLED");
+                  // The quote note was written before this charge. It is cleared, and the price check re-runs against the new balance.
+                  setPolicyNote("");
                   setPayLog((lines) => [...lines, "Arc receipt matched"]);
                   setPayLog((lines) => [...lines, "Service response received"]);
                   setPayNotice("");

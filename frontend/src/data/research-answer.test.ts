@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { presentAnswer, researchAnswer } from "./research-answer.ts";
+import { presentAnswer, researchAnswer, unverifiedSentences } from "./research-answer.ts";
 
 test("a model response keeps the answer and the model name", () => {
   const parsed = researchAnswer({
@@ -23,7 +23,28 @@ test("a stale mainnet launch sentence is not the answer", () => {
 });
 
 test("an empty model response stays empty", () => {
-  assert.deepEqual(presentAnswer("Summarize Arc mainnet settlement", ""), { text: "", sources: [], replacedStale: false, corrections: [] });
+  assert.deepEqual(presentAnswer("Summarize Arc mainnet settlement", ""), { text: "", sources: [], replacedStale: false, corrections: [], unverified: [] });
+});
+
+test("the roadmap sentence about Stablecoin Services and the Privacy Sector is flagged, and the text is kept", () => {
+  const answer = [
+    "Arc deterministic finality means a committed block is final.",
+    "Future features such as Stablecoin Services or the Privacy Sector may expand payment options, but they are not live yet.",
+  ].join(" ");
+  const shown = presentAnswer("Summarize what Arc mainnet settlement means for an agent payment.", answer);
+  assert.equal(shown.text, answer);
+  assert.deepEqual(shown.unverified, [
+    "Future features such as Stablecoin Services or the Privacy Sector may expand payment options, but they are not live yet.",
+  ]);
+});
+
+test("a sentence without a roadmap name is not flagged", () => {
+  assert.deepEqual(unverifiedSentences("Finality is deterministic. Gas is paid in USDC."), []);
+});
+
+test("a flagged sentence is not returned for a non-Arc answer", () => {
+  const shown = presentAnswer("Summarize a privacy sector report", "The privacy sector is growing.");
+  assert.deepEqual(shown.unverified, []);
 });
 
 /** The stored answer for receipt 0x74ce7b557f8e5156af8fca701b40d833651ff1d206442f0a3ef4c801698f1b15, with its table and its two wrong claims. */

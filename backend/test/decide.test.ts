@@ -23,6 +23,10 @@ test("a valid spend is allowed only from the real inputs", () => {
   assert.equal(allowed.decision, "ALLOW");
   assert.equal(decideSpend({ ...base(), amount: 11n }).reason.includes("max_per_call"), true);
   assert.equal(decideSpend({ ...base(), amount: 21n }).reason.includes("balance"), true);
+  // After a settled payment the balance is 0. A second run for the same price is refused before any signing.
+  const drained = decideSpend({ ...base(), balance: 0n });
+  assert.equal(drained.decision, "REFUSE");
+  assert.equal(drained.reason.includes("balance"), true);
   assert.equal(decideSpend({ ...base(), payee: "0x0000000000000000000000000000000000000001" }).reason.includes("wrong_payee"), true);
   assert.equal(decideSpend({ ...base(), now: 200n }).reason.includes("expired"), true);
   assert.equal(decideSpend({ ...base(), signer: "0x0000000000000000000000000000000000000002" }).reason.includes("wrong_agent"), true);
