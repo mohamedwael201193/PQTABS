@@ -241,8 +241,10 @@ export default function TabsView() {
                     {agentName(tab.agentId)}
                   </span>
                   <StatusChip status={tab.status} />
-                  <span className="ml-auto w-[76px] shrink-0 text-right font-mono text-xs tabular text-muted-foreground">
-                    {usd(tab.capUsd)}
+                  <span className="ml-auto max-w-[220px] shrink-0 truncate text-right font-mono text-xs tabular text-muted-foreground">
+                    {tab.spentKnown === true
+                      ? `${usd(Math.max(0, tab.spentUsd ?? 0))} spent of ${usd(tab.capUsd)}`
+                      : "spent not confirmed"}
                   </span>
                   <span className="w-[108px] shrink-0 text-right font-mono text-[11px] tabular text-muted-foreground">
                     {historyWhen(tab)}
