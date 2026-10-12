@@ -26,9 +26,10 @@ test("a transaction link exists only for a 32-byte hash", () => {
 });
 
 test("a facilitator rejection names the signature and the absence of a transaction", () => {
-  const message = signedRejectionMessage("invalid_exact_evm_signature");
-  assert.match(message, /A local signature was created/);
+  const message = signedRejectionMessage("The service did not settle the payment (invalid_exact_evm_signature). No Arc transaction was recorded.");
+  assert.match(message, /Signature rejected before broadcast/);
   assert.match(message, /invalid_exact_evm_signature/);
-  assert.match(message, /No Arc transaction was recorded/);
-  assert.equal(message.includes("0x"), false);
+  assert.match(message, /A local signature was created/);
+  assert.match(message, /No transaction was sent/);
+  assert.equal(message.includes("No Arc transaction was recorded. No Arc"), false);
 });

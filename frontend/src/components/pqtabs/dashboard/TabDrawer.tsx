@@ -45,7 +45,7 @@ import { cn } from "@/lib/utils";
 import { ActivityRow } from "./shared/ActivityRow";
 
 const SHEET_CLASS =
-  "w-full gap-0 border-l border-white/[.08] bg-[#0a0b0d] p-0 sm:w-[480px] sm:max-w-[480px]";
+  "w-full gap-0 overflow-hidden border-l border-white/[.08] bg-[#0a0b0d] p-0 sm:w-[480px] sm:max-w-[480px]";
 
 function quotedDecision(value: string): QuotedDecision {
   if (value === "ALLOW" || value === "REFUSE" || value === "NO_PAYMENT") return value;
@@ -251,6 +251,7 @@ function TabDrawerBody({
   const [closeReady, setCloseReady] = useState(() => rootUnlocked(usePqtabsData.getState().registrar));
   const [paying, setPaying] = useState(false);
   const [taskPhase, setTaskPhase] = useState<TaskPhase>("READY");
+  const [payNotice, setPayNotice] = useState("");
   const [payLog, setPayLog] = useState<string[]>([]);
   const [shownDecision, setShownDecision] = useState<DecisionRecord | null>(null);
   const payLock = useRef(false);
@@ -757,13 +758,13 @@ function TabDrawerBody({
           Capability {tab.reference} — balance, policy, recipients and spend history.
         </SheetDescription>
       </SheetHeader>
-      <div className="px-5 md:px-6">
-        <TxResult hash={tab.txHash} label="Capability open" amount={`${tab.capUsd} USDC cap`} />
-        {actionReceipt ? <TxResult hash={actionReceipt.hash} label={actionReceipt.label} /> : null}
-      </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
         <div className="space-y-6 px-5 py-5 md:px-6">
+          <div className="space-y-2">
+            <TxResult hash={tab.txHash} label="Open" amount={`${tab.capUsd} USDC cap`} />
+            {actionReceipt ? <TxResult hash={actionReceipt.hash} label={actionReceipt.label} /> : null}
+          </div>
           {/* Holder */}
           <div className="flex items-center justify-between gap-3 rounded-lg border border-white/[.06] bg-white/[.02] px-4 py-3">
             <div className="min-w-0">
@@ -932,43 +933,61 @@ function TabDrawerBody({
               </ul>
             </div>
           </section>
-        </div>
-      </div>
 
-      {tab.status === "active" && tab.expiryUnix && (
-        <div className="border-t border-white/[.06] px-5 py-4 md:px-6">
+          {tab.status === "active" && tab.expiryUnix && (
+        <section className="space-y-3 border-t border-white/[.06] pt-5">
           <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Research agent</p>
-          <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-            Pays for external inference when the requested service fits this capability. Enter a question. Run paid task reads the x402 price and recipient from the service. It pays only when this capability allows the request and the service settles it on Arc. If the price or recipient does not fit, nothing is signed and nothing is sent. If the service rejects the signature, nothing is broadcast.
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            Enter a question. The agent pays only when this capability allows the quote and Arc settles it.
           </p>
-          <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-            A stolen agent key can spend only this capability&apos;s remaining balance, up to the per-payment limit, to the approved recipient, until expiry. It cannot reach root cash or the wallet.
-          </p>
-          <input
+          <textarea
             value={task}
             onChange={(event) => setTask(event.target.value)}
             aria-label="Research question"
             placeholder="Enter a research question"
-            className="mt-3 h-9 w-full rounded-lg border border-white/10 bg-transparent px-3 text-sm text-foreground outline-none"
+            rows={3}
+            className="w-full resize-none rounded-lg border border-white/10 bg-transparent px-3 py-2 text-sm leading-5 text-foreground outline-none"
           />
-          <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-            {servicePrice
-              ? `Current service price ${formatRawUsdc(servicePrice.price)} to ${payeeLabel(servicePrice.payee).name} on ${servicePrice.network}. Remaining capability budget ${usd(tab.balanceUsd)}. Expires ${tab.expiryUnix ? new Date(tab.expiryUnix * 1000).toISOString() : "—"}. Run paid task reads this again before any signature.`
-              : servicePriceNote}
-          </p>
+          {servicePrice ? (
+            <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+              <div>
+                <dt className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Price ceiling</dt>
+                <dd className="mt-0.5 text-foreground">{formatRawUsdc(servicePrice.price)}</dd>
+              </div>
+              <div>
+                <dt className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Service</dt>
+                <dd className="mt-0.5 text-foreground">{payeeLabel(servicePrice.payee).name}</dd>
+              </div>
+              <div>
+                <dt className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Network</dt>
+                <dd className="mt-0.5 text-foreground">{servicePrice.network}</dd>
+              </div>
+              <div>
+                <dt className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Remaining</dt>
+                <dd className="mt-0.5 text-foreground">{usd(tab.balanceUsd)}</dd>
+              </div>
+              <div className="col-span-2">
+                <dt className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Expires</dt>
+                <dd className="mt-0.5 text-foreground">{expiryWhen(String(tab.expiryUnix))}</dd>
+              </div>
+            </dl>
+          ) : (
+            <p className="text-xs text-muted-foreground">{servicePriceNote}</p>
+          )}
           {policyNote ? <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{policyNote}</p> : null}
           {!canPay && (
             <p className="mt-2 text-xs text-muted-foreground">
               This browser does not hold this agent's encrypted key, so it cannot sign a payment until you restore the backup.
             </p>
           )}
-          <ol className="mt-3 grid grid-cols-5 gap-1 text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
-            {(["Quote", "Policy", "Authorization", "Settlement", "Result"] as const).map((label, index) => (
-              <li key={label} className={index === stepIndex(taskPhase) ? "text-foreground" : undefined}>
+          <ol className="flex gap-3 overflow-x-auto text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
+            {(["Quote", "Policy", "Sign", "Settle", "Result"] as const).map((label, index) => (
+              <li key={label} className={index === stepIndex(taskPhase) ? "shrink-0 text-foreground" : "shrink-0"}>
                 {label}
               </li>
             ))}
           </ol>
+          {payNotice ? <p className="text-xs leading-relaxed text-foreground">{payNotice}</p> : null}
           <Button
             disabled={paying || !canPay || task.trim().length === 0}
             onClick={() => {
@@ -981,6 +1000,7 @@ function TabDrawerBody({
               }
               payLock.current = true;
               setPaying(true);
+              setPayNotice("");
               setTaskPhase("FETCHING_QUOTE");
               setPayLog(["Agent requested a paid service"]);
               const asked = task.trim();
@@ -1094,7 +1114,9 @@ function TabDrawerBody({
                   if (!message.startsWith("Payment blocked")) {
                     setPayLog((lines) => [...lines, `Payment blocked. ${message}`]);
                   }
-                  toast.error(signedLocally ? signedRejectionMessage(message) : message);
+                  const notice = signedLocally ? signedRejectionMessage(message) : message;
+                  setPayNotice(notice);
+                  toast.error(signedLocally ? "Signature rejected before broadcast." : "Payment blocked.");
                 })
                 .finally(() => {
                   payLock.current = false;
@@ -1105,6 +1127,8 @@ function TabDrawerBody({
           >
             {paying ? <Loader2 className="size-4 animate-spin" /> : "Run paid task"}
           </Button>
+          <details className="text-xs text-muted-foreground">
+            <summary className="cursor-pointer">Payment checks</summary>
           <div className="mt-3 flex flex-wrap gap-2">
             {(
               [
@@ -1158,16 +1182,19 @@ function TabDrawerBody({
               Expired capability
             </Button>
           </div>
+          </details>
           {shownDecision ? <div className="mt-3"><PaymentDecision record={shownDecision} /></div> : null}
           {payLog.length > 0 && (
-            <ul className="mt-3 space-y-1" aria-live="polite">
+            <ul className="space-y-1" aria-live="polite">
               {payLog.map((line) => (
                 <li key={line} className="text-xs text-muted-foreground">{line}</li>
               ))}
             </ul>
           )}
-        </div>
+        </section>
       )}
+        </div>
+      </div>
 
       {/* Actions */}
       <div className="shrink-0 border-t border-white/[.06] bg-[#0a0b0d]/95 px-5 py-4 backdrop-blur md:px-6">

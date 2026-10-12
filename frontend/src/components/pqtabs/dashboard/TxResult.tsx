@@ -1,5 +1,6 @@
 "use client";
 
+import { Copy } from "lucide-react";
 import { EXPLORER_URL } from "@/data/production";
 import { explorerTxUrl } from "@/data/task-phase";
 
@@ -16,30 +17,31 @@ export function TxResult({
   recipient?: string;
   status?: string;
 }) {
-  if (!hash || !explorerTxUrl(EXPLORER_URL, hash)) return null;
-  const href = explorerTxUrl(EXPLORER_URL, hash)!;
-  const short = `${hash.slice(0, 10)}…${hash.slice(-6)}`;
+  const href = hash ? explorerTxUrl(EXPLORER_URL, hash) : null;
+  if (!hash || !href) return null;
+  const short = `${hash.slice(0, 8)}…${hash.slice(-4)}`;
   return (
-    <article className="mt-3 rounded-lg border border-white/[.08] px-3 py-3">
-      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">{label}</p>
+    <article className="flex min-w-0 items-center gap-2 rounded-lg border border-white/[.08] px-3 py-2">
+      <p className="shrink-0 font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">{label}</p>
       <a
         href={href}
         target="_blank"
         rel="noreferrer"
-        className="mt-1 block break-all font-mono text-sm text-foreground underline-offset-2 hover:underline"
+        className="min-w-0 truncate font-mono text-xs text-foreground underline-offset-2 hover:underline"
       >
         {short}
       </a>
       <button
         type="button"
-        className="mt-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground"
+        aria-label="Copy hash"
+        className="shrink-0 text-muted-foreground hover:text-foreground"
         onClick={() => void navigator.clipboard.writeText(hash)}
       >
-        Copy hash
+        <Copy className="size-3.5" strokeWidth={1.75} />
       </button>
-      {amount ? <p className="mt-2 text-sm text-foreground">{amount}</p> : null}
-      {recipient ? <p className="break-all text-sm text-muted-foreground">{recipient}</p> : null}
-      {status ? <p className="text-sm text-muted-foreground">{status}</p> : null}
+      {amount ? <p className="ml-auto shrink-0 text-xs text-foreground">{amount}</p> : null}
+      {recipient ? <p className="sr-only">{recipient}</p> : null}
+      {status ? <p className="sr-only">{status}</p> : null}
     </article>
   );
 }

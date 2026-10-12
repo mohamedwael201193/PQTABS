@@ -45,7 +45,13 @@ export function explorerTxUrl(explorer: string, hash: string): string | null {
   return `${explorer.replace(/\/$/, "")}/tx/${hash}`;
 }
 
+export function facilitatorCode(message: string): string {
+  const match = /\(([^)]+)\)/.exec(message);
+  const code = match?.[1]?.trim();
+  return code || message.trim() || "invalid signature";
+}
+
 export function signedRejectionMessage(reason: string): string {
-  const detail = reason.trim() || "the facilitator rejected the signature";
-  return `A local signature was created. ${detail}. No Arc transaction was recorded. Nothing was broadcast.`;
+  const detail = facilitatorCode(reason);
+  return `Signature rejected before broadcast (${detail}). A local signature was created. No transaction was sent.`;
 }
