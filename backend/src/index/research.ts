@@ -1,5 +1,6 @@
 import { type Address, getAddress, type Hex, keccak256, toBytes } from "viem";
 import { USDC } from "../constants.js";
+import { ARC_FACTS, sanitizeAnswer } from "./answer-quality.js";
 import { erc20SpendRaw } from "./usdc-event.js";
 
 export const RESEARCH_SCHEME = "pqtabs-barkeep";
@@ -228,21 +229,20 @@ export function quoteAgrees(
 }
 
 /**
- * Facts the model must use when it answers about Arc. Each one is taken from Arc's docs (docs.arc.io).
- * Anything outside these facts must be marked as uncertain rather than stated.
+ * The model answers only from ARC_FACTS, each cited by its id. Its output is passed through sanitizeAnswer,
+ * which removes any sentence that is uncited, dated, launch-timed, or names a product no Arc page uses.
  */
 export const RESEARCH_SYSTEM_PROMPT = [
   "You answer questions about the Arc blockchain for a paid research desk.",
-  "Answer the question asked, in at most 150 words. Use Markdown: short paragraphs, a numbered list for steps, or a table only for a comparison. Finish every sentence.",
-  "Use only these verified facts about Arc unless you are certain of something else and say so:",
-  "1. Arc mainnet is live. Chain ID 5042.",
-  "2. Arc is an EVM-compatible Layer-1 blockchain.",
-  "3. Consensus today is Malachite, a Tendermint-style Byzantine fault tolerant protocol, run by a permissioned Proof-of-Authority validator set. It is not proof-of-stake and not a DAG. A proof-of-stake launch is planned for later, not live.",
-  "4. Finality is deterministic and under one second.",
-  "5. USDC is the native gas token. Gas is paid in USDC.",
-  "6. Paying gas in other stablecoins (Stablecoin Services) is planned, not live.",
-  "7. Arc Privacy Sector is planned, not live.",
-  "If the question needs a fact outside this list, say you are not certain. Do not invent prices, fees, dates, or validator counts.",
+  "Answer only from the numbered facts below. Cite the fact id for every factual claim, like [S3]. Do not state anything that is not in these facts.",
+  "Facts:",
+  ...ARC_FACTS.map((fact) => `[${fact.id}] (${fact.status === "live" ? "live" : "NOT live"}) ${fact.text}`),
+  "Rules:",
+  "- A fact marked NOT live must be described as not live. Never give a date for it.",
+  "- Never state a launch date, a year, a quarter, or a future feature as if it were live.",
+  "- If the question needs something outside these facts, say: \"The Arc sources I have do not cover this.\" Do not guess prices, fees, dates, or validator counts.",
+  "- Do not name products or features that are not in these facts.",
+  "Format: at most 150 words. Short paragraphs, or a numbered list for steps. Use a table only for a comparison. Finish every sentence.",
 ].join("\n");
 
 /** Groq text. A missing key, error, timeout, or empty completion is not an answer. The key is never logged. */
@@ -275,7 +275,8 @@ export async function askGroq(task: string, env: NodeJS.ProcessEnv = process.env
     const content = body.choices[0].message?.content;
     const text = typeof content === "string" ? content.trim() : "";
     const reported = typeof body.model === "string" && body.model ? body.model : model;
-    return { text, model: text ? reported : "" };
+    if (!text) return { text: "", model: "" };
+    return { text: sanitizeAnswer(text), model: reported };
   } catch {
     return { text: "", model: "" };
   } finally {

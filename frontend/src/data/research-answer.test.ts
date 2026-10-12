@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { presentAnswer, researchAnswer, unverifiedSentences } from "./research-answer.ts";
+import { linkCitations, presentAnswer, removeUnsourcedSentences, researchAnswer } from "./research-answer.ts";
 
 test("a model response keeps the answer and the model name", () => {
   const parsed = researchAnswer({
@@ -23,28 +23,49 @@ test("a stale mainnet launch sentence is not the answer", () => {
 });
 
 test("an empty model response stays empty", () => {
-  assert.deepEqual(presentAnswer("Summarize Arc mainnet settlement", ""), { text: "", sources: [], replacedStale: false, corrections: [], unverified: [] });
+  assert.deepEqual(presentAnswer("Summarize Arc mainnet settlement", ""), { text: "", sources: [], replacedStale: false, corrections: [], removed: [] });
 });
 
-test("the roadmap sentence about Stablecoin Services and the Privacy Sector is flagged, and the text is kept", () => {
+test("an uncited roadmap sentence about Stablecoin Services and the Privacy Sector is removed, and its removal is reported", () => {
   const answer = [
     "Arc deterministic finality means a committed block is final.",
     "Future features such as Stablecoin Services or the Privacy Sector may expand payment options, but they are not live yet.",
   ].join(" ");
   const shown = presentAnswer("Summarize what Arc mainnet settlement means for an agent payment.", answer);
-  assert.equal(shown.text, answer);
-  assert.deepEqual(shown.unverified, [
+  assert.equal(shown.text.includes("Stablecoin Services"), false);
+  assert.equal(shown.text.includes("Arc deterministic finality means a committed block is final."), true);
+  assert.deepEqual(shown.removed, [
     "Future features such as Stablecoin Services or the Privacy Sector may expand payment options, but they are not live yet.",
   ]);
 });
 
-test("a sentence without a roadmap name is not flagged", () => {
-  assert.deepEqual(unverifiedSentences("Finality is deterministic. Gas is paid in USDC."), []);
+test("a cited roadmap sentence is kept, and its marker links to the official page", () => {
+  const shown = presentAnswer(
+    "Summarize Arc settlement.",
+    "Stablecoin Services will expand payment options [S5]. Arc Privacy Sector is on the roadmap and is not yet available [S9].",
+  );
+  assert.equal(shown.removed.length, 0);
+  assert.equal(shown.text.includes("[S9](https://docs.arc.io/arc/concepts/opt-in-privacy)"), true);
 });
 
-test("a flagged sentence is not returned for a non-Arc answer", () => {
+test("a sentence without a roadmap name is not removed", () => {
+  assert.deepEqual(removeUnsourcedSentences("Finality is deterministic. Gas is paid in USDC.").removed, []);
+});
+
+test("a removed sentence is not reported for a non-Arc answer", () => {
   const shown = presentAnswer("Summarize a privacy sector report", "The privacy sector is growing.");
-  assert.deepEqual(shown.unverified, []);
+  assert.deepEqual(shown.removed, []);
+  assert.equal(shown.text, "The privacy sector is growing.");
+});
+
+test("when every sentence is removed, the answer says the sources do not cover it", () => {
+  const shown = presentAnswer("Summarize Arc settlement.", "Stablecoin Services will expand payment options.");
+  assert.match(shown.text, /do not cover this question, so no answer is given/);
+  assert.equal(shown.removed.length, 1);
+});
+
+test("linkCitations leaves an unknown marker as text", () => {
+  assert.equal(linkCitations("Gas is USDC [S5] and [S99]."), "Gas is USDC [S5](https://docs.arc.io/arc/concepts/stablecoin-native-model) and [S99].");
 });
 
 /** The stored answer for receipt 0x74ce7b557f8e5156af8fca701b40d833651ff1d206442f0a3ef4c801698f1b15, with its table and its two wrong claims. */

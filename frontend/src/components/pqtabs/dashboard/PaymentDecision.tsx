@@ -118,11 +118,13 @@ export function PaymentDecision({ record }: { record: DecisionRecord }) {
             </ul>
           </div>
         ) : null}
-        {shown.unverified.length > 0 ? (
+        {shown.removed.length > 0 ? (
           <div className="mt-4 rounded-md border border-warning/30 bg-warning/[.06] px-3 py-3">
-            <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Not verified</p>
+            <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+              Removed {shown.removed.length === 1 ? "1 sentence" : `${shown.removed.length} sentences`}
+            </p>
             <p className="mt-2 text-sm leading-6 text-foreground/85">
-              {shown.unverified.map((sentence) => `"${sentence}"`).join(" ")} None of the Arc sources linked with this answer covers it, so it is not confirmed.
+              {shown.removed.map((sentence) => `"${sentence}"`).join(" ")} No cited Arc source covers this, so it is not shown as an answer.
             </p>
           </div>
         ) : null}

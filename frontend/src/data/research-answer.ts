@@ -10,16 +10,49 @@ const STALE_MAINNET = /mainnet goes live|once the arc mainnet|when the arc mainn
 
 export type Correction = { text: string; href: string };
 
-/** Future products that none of the ARC_SOURCES pages covers. */
-const UNSOURCED_CLAIM = /stablecoin services|privacy sector|privacy features/i;
+/** Product names that no official Arc page uses. A sentence that names one is removed unless it cites a fact. */
+const UNSOURCED_CLAIM = /stablecoin services?|privacy sector|privacy features/i;
+const CITED = /\[S\d+\]/;
 
-/** Sentences that name something the cited Arc sources do not cover. The model text is kept, and these are flagged. */
-export function unverifiedSentences(text: string): string[] {
-  return text
-    .split(/(?<=[.!?])\s+/)
-    .map((sentence) => sentence.trim())
-    .filter((sentence) => UNSOURCED_CLAIM.test(sentence));
+/** Official page for each [S#] marker the research model writes. Keep in step with backend ARC_FACTS. */
+const FACT_LINKS: Record<string, string> = {
+  S1: "https://docs.arc.io/arc/references/rpc-endpoints",
+  S2: "https://docs.arc.io/arc-chain.md",
+  S3: "https://docs.arc.io/arc/concepts/deterministic-finality",
+  S4: "https://docs.arc.io/arc/concepts/consensus-layer",
+  S5: "https://docs.arc.io/arc/concepts/stablecoin-native-model",
+  S6: "https://docs.arc.io/arc/references/contract-addresses",
+  S7: "https://docs.arc.io/arc/concepts/post-quantum-security",
+  S8: "https://docs.arc.io/arc/concepts/consensus-layer",
+  S9: "https://docs.arc.io/arc/concepts/opt-in-privacy",
+  S10: "https://docs.arc.io/arc/concepts/post-quantum-security",
+  S11: "https://docs.arc.io/arc/concepts/stablecoin-native-model",
+};
+
+/** Turns each [S#] marker into a link to its official page. A marker with no known page is left as text. */
+export function linkCitations(text: string): string {
+  return text.replace(/\[(S\d+)\]/g, (marker, id: string) => (FACT_LINKS[id] ? `[${marker.slice(1, -1)}](${FACT_LINKS[id]})` : marker));
 }
+
+/**
+ * Removes each sentence that names a product no cited Arc source covers. Line breaks and list markers are kept.
+ * Returns the cleaned text and the sentences that were removed, so the reader can see what was taken out.
+ */
+export function removeUnsourcedSentences(text: string): { text: string; removed: string[] } {
+  const removed: string[] = [];
+  const lines = text.split(/\r?\n/).flatMap((line) => {
+    if (!line.trim()) return [line];
+    const kept = line.split(/(?<=[.!?])\s+/).filter((sentence) => {
+      const drop = UNSOURCED_CLAIM.test(sentence) && !CITED.test(sentence);
+      if (drop) removed.push(sentence.trim());
+      return !drop;
+    });
+    return kept.length > 0 ? [kept.join(" ")] : [];
+  });
+  return { text: lines.join("\n").replace(/\n{3,}/g, "\n\n").trim(), removed };
+}
+
+const NO_SOURCED_ANSWER = "The Arc sources available to this service do not cover this question, so no answer is given.";
 
 export function arcFactQuestion(task: string): boolean {
   return /\barc\b/i.test(task) && /mainnet|settlement|settle/i.test(task);
@@ -61,26 +94,31 @@ export function presentAnswer(
   sources: { title: string; href: string }[];
   replacedStale: boolean;
   corrections: Correction[];
-  unverified: string[];
+  /** Sentences removed because no cited Arc source covers them. */
+  removed: string[];
 } {
   const text = modelText.trim();
-  if (!text) return { text: "", sources: [], replacedStale: false, corrections: [], unverified: [] };
+  if (!text) return { text: "", sources: [], replacedStale: false, corrections: [], removed: [] };
   if (arcFactQuestion(task) && STALE_MAINNET.test(text)) {
     return {
       replacedStale: true,
       sources: [...ARC_SOURCES],
       corrections: [],
-      unverified: [],
+      removed: [],
       text: "Arc mainnet is already live on chain id 5042. A capability payment settles when the USDC transfer is included, and finality is that inclusion. The transfer is public on the Arc explorer. This is not a future launch.",
     };
   }
   const aboutArc = arcFactQuestion(task) || /\bArc\b/.test(text);
+  if (!aboutArc) {
+    return { text, sources: [], replacedStale: false, corrections: [], removed: [] };
+  }
+  const cleaned = removeUnsourcedSentences(text);
   return {
-    text,
-    sources: aboutArc ? [...ARC_SOURCES] : [],
+    text: cleaned.text ? linkCitations(cleaned.text) : NO_SOURCED_ANSWER,
+    sources: [...ARC_SOURCES],
     replacedStale: false,
-    corrections: aboutArc ? arcCorrections(text) : [],
-    unverified: aboutArc ? unverifiedSentences(text) : [],
+    corrections: arcCorrections(cleaned.text),
+    removed: cleaned.removed,
   };
 }
 

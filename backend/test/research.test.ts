@@ -129,9 +129,9 @@ test("a missing key, a provider error, or an empty completion is not an answer",
     const header = new Headers(init?.headers).get("authorization") ?? "";
     assert.equal(header.startsWith("Bearer "), true);
     assert.equal(header.includes("present"), true);
-    return new Response(JSON.stringify({ model: "openai/gpt-oss-120b", choices: [{ message: { content: "Arc mainnet is chain 5042." } }] }), { status: 200 });
+    return new Response(JSON.stringify({ model: "openai/gpt-oss-120b", choices: [{ message: { content: "Arc mainnet chain ID is 5042 [S1]." } }] }), { status: 200 });
   });
-  assert.equal(answered.text, "Arc mainnet is chain 5042.");
+  assert.equal(answered.text, "Arc mainnet chain ID is 5042 [S1].");
   assert.equal(answered.model, "openai/gpt-oss-120b");
 });
 
@@ -139,7 +139,7 @@ test("the Groq request carries the verified Arc facts, the user task, the token 
   const sent: { messages: { role: string; content: string }[]; max_tokens: number; reasoning_effort: string; model: string }[] = [];
   await askGroq("Is Arc proof of stake?", { GROQ_API_KEY: "present" }, async (_url, init) => {
     sent.push(JSON.parse(String(init?.body)));
-    return new Response(JSON.stringify({ choices: [{ message: { content: "No. Arc uses Malachite BFT." } }] }), { status: 200 });
+    return new Response(JSON.stringify({ choices: [{ message: { content: "No. Arc uses Malachite BFT [S4]." } }] }), { status: 200 });
   });
   assert.equal(sent.length, 1);
   const body = sent[0];
@@ -147,7 +147,8 @@ test("the Groq request carries the verified Arc facts, the user task, the token 
   assert.equal(body.messages[0].role, "system");
   assert.equal(body.messages[0].content, RESEARCH_SYSTEM_PROMPT);
   assert.match(body.messages[0].content, /Malachite/);
-  assert.match(body.messages[0].content, /not proof-of-stake/);
+  assert.match(body.messages[0].content, /Proof-of-Authority validator set/);
+  assert.match(body.messages[0].content, /\[S8\] \(NOT live\)/);
   assert.match(body.messages[0].content, /USDC is the native gas token/);
   assert.equal(body.messages[1].role, "user");
   assert.equal(body.messages[1].content, "Is Arc proof of stake?");
