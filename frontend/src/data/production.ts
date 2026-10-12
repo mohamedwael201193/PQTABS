@@ -3,6 +3,7 @@ import { priceCheckFailure } from "./price-check-failure";
 import { rootSignatureBlock } from "./root-sign-check";
 import { spendKind } from "./spend-kind";
 import { usd } from "./formatters";
+import { researchAnswer, RESEARCH_URL } from "./research-answer";
 import { paymentSignatureHeader, payeeLabel, quotedCharge, receiptSettlesSpend, serviceAnswer, settlementFailure, transactionFromPaymentResponse, type SpendAuthorization } from "./x402-pay";
 import { arcClient } from "./wallet";
 import type { Hex } from "viem";
@@ -621,6 +622,88 @@ export async function submitSpend(input: {
     paymentRequired: input.paymentRequired,
   });
   return { hash: result.hash, snapshot: await loadSnapshot(input.registrar) };
+}
+
+export class SettlementPending extends Error {
+  constructor(readonly hash: string) {
+    super("The transaction was submitted. The receipt is not confirmed yet.");
+    this.name = "SettlementPending";
+  }
+}
+
+/** Settle the capability authorization on Arc, then ask the model with the same question. */
+export async function settleResearch(input: {
+  task: string;
+  tab: string;
+  to: string;
+  value: string;
+  validBefore: string;
+  nonce: string;
+  signature: string;
+  paymentRequired: unknown;
+}): Promise<{ transaction: string; result: string; model: string; receipt: { status: string; blockNumber: string }; charge: string }> {
+  const response = await fetch(`${BACKEND_URL}/v1/relay/spend`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      tab: input.tab,
+      to: input.to,
+      value: input.value,
+      validAfter: "0",
+      validBefore: input.validBefore,
+      nonce: input.nonce,
+      signature: input.signature,
+      paymentRequired: input.paymentRequired,
+    }),
+  });
+  const payload = (await readBody(response)) as { hash?: string; error?: string; detail?: string };
+  if (!response.ok || !payload.hash || !/^0x[0-9a-fA-F]{64}$/.test(payload.hash)) {
+    throw new Error(readableError(payload.detail || payload.error, "Arc did not accept this authorization. Nothing was broadcast."));
+  }
+  let receipt;
+  try {
+    receipt = await arcClient().waitForTransactionReceipt({ hash: payload.hash as Hex, timeout: 90_000 });
+  } catch {
+    throw new SettlementPending(payload.hash);
+  }
+  const proof = {
+    status: receipt.status,
+    logs: receipt.logs.map((log) => ({
+      address: log.address,
+      topics: log.topics,
+      data: log.data,
+    })),
+  };
+  if (!receiptSettlesSpend(proof, { from: input.tab, to: input.to, value: input.value })) {
+    throw new Error(`Arc included ${payload.hash}, and that receipt is not this payment.`);
+  }
+  const answered = await askResearch(input.task);
+  return {
+    transaction: payload.hash,
+    result: answered.text,
+    model: answered.model,
+    receipt: { status: receipt.status, blockNumber: receipt.blockNumber.toString() },
+    charge: input.value,
+  };
+}
+
+async function askResearch(task: string): Promise<{ text: string; model: string }> {
+  try {
+    const response = await fetch(RESEARCH_URL, {
+      method: "POST",
+      headers: { "content-type": "application/json", accept: "application/json" },
+      body: JSON.stringify({
+        model: "openai",
+        messages: [{ role: "user", content: task }],
+        max_tokens: 400,
+      }),
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) return { text: "", model: "" };
+    return researchAnswer(payload);
+  } catch {
+    return { text: "", model: "" };
+  }
 }
 
 export const SERVICE_URL = "https://arcrouter.co/v1/chat/completions";

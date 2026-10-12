@@ -28,7 +28,7 @@ import { relFuture, usd } from "@/data/formatters";
 import { isAddress } from "@/data/actions";
 import { decisionRecord, expiryWhen, orderedReasons, paymentReasonSentence, settledDecision, settlementReasons, type DecisionFacts, type DecisionRecord, type QuotedDecision } from "@/data/decision-record";
 import { saveDecision } from "@/data/decision-store";
-import { arcClock, BACKEND_URL, confirmRootSignature, describeReturn, decideServicePrice, loadSnapshot, prepareClose, productionProvider, requestServicePrice, settleService, submitPrepared, type PreparedAction, type ServiceDecision } from "@/data/production";
+import { arcClock, BACKEND_URL, confirmRootSignature, describeReturn, decideServicePrice, loadSnapshot, prepareClose, productionProvider, requestServicePrice, settleResearch, SettlementPending, submitPrepared, type PreparedAction, type ServiceDecision } from "@/data/production";
 import { probeAmount, probePayment, probeRefusal, replayRefusal, spentAuthorization, UNAVAILABLE_SERVICE_URL, unavailableServiceRefusal, capabilityPayment, expiredRefusal, expiryStillOpen, type ProbeName } from "@/data/refusal-probe";
 import { agentAddress, authorizationBlob, recallAgentKey, USDC } from "@/data/spend";
 import { arcClient } from "@/data/wallet";
@@ -938,7 +938,7 @@ function TabDrawerBody({
         <section className="space-y-3 border-t border-white/[.06] pt-5">
           <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Research agent</p>
           <p className="text-xs leading-relaxed text-muted-foreground">
-            Enter a question. The agent pays only when this capability allows the quote and Arc settles it.
+            The quote names the approved recipient. Arc settles that transfer, then the model answers this question.
           </p>
           <textarea
             value={task}
@@ -1062,17 +1062,20 @@ function TabDrawerBody({
                     throw new Error("The wallet changed. The payment was not submitted.");
                   }
                   setTaskPhase("VERIFYING_PAYMENT");
-                  return settleService(asked, paymentRequired, {
-                    from: tab.id,
+                  return settleResearch({
+                    task: asked,
+                    tab: tab.id,
                     to: decision.payee,
                     value: decision.price,
-                    validAfter: "0",
                     validBefore: String(deadline),
                     nonce: signed.nonce,
-                  }, signed.blob);
+                    signature: signed.blob,
+                    paymentRequired,
+                  });
                 })
-                .then(async ({ transaction, result, receipt, charge }) => {
+                .then(async ({ transaction, result, model, receipt, charge }) => {
                   if (facts) {
+                    facts = { ...facts, service: model ? `Pollinations / ${model}` : facts.service };
                     try {
                       const saved = settledDecision(facts, { txHash: transaction, receipt, result, charge }, new Date().toISOString());
                       await saveDecision(saved);
@@ -1094,9 +1097,16 @@ function TabDrawerBody({
                     return;
                   }
                   setPayLog((lines) => [...lines, "Service response received"]);
-                  toast.success(result);
+                  setPayNotice("");
+                  toast.success("Paid. The answer is in the decision below.");
                 })
                 .catch(async (error: unknown) => {
+                  if (error instanceof SettlementPending) {
+                    setTaskPhase("SETTLEMENT_PENDING");
+                    setPayNotice(`Transaction submitted. Receipt pending. ${error.hash}`);
+                    toast.message("Transaction submitted. Receipt pending.");
+                    return;
+                  }
                   const message = error instanceof Error ? error.message : "The payment was rejected.";
                   if (facts?.decision === "ALLOW") {
                     try {
