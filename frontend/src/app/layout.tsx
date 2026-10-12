@@ -21,9 +21,9 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "PQTABS — An agent can spend. It cannot reach your treasury.",
+  title: "PQTABS — Give agents spending power. Never give them your treasury.",
   description:
-    "PQTABS lets an agent spend real USDC without giving that agent control of the treasury. A post-quantum root opens a small capability. That capability is the only balance the agent can reach. If a paid request fits, the agent pays. If it does not, nothing is signed and nothing is sent.",
+    "Open a bounded USDC capability on Arc: a cap, an expiry, and one payee. Agents spend only inside it. A post-quantum root controls the treasury.",
   keywords: [
     "PQTABS",
     "post-quantum",

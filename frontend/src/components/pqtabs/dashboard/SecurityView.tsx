@@ -34,7 +34,7 @@ const SECURITY_EVENT_KINDS: ActivityKind[] = ["key_rotated"];
 const ENFORCEMENT_ROWS = [
   { statement: "UI displays policy", note: "What you see" },
   { statement: "Backend relays activity", note: "What you watch" },
-  { statement: "Blockchain enforces policy", note: "What guarantees it" },
+  { statement: "Arc settles approved payments", note: "What settles it" },
 ] as const;
 
 function PostureTile({

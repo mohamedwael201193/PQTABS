@@ -356,7 +356,7 @@ export default function CapabilityFlow({
               <tspan fill={GOLD}>{"  ·  "}</tspan>
               <tspan fill="rgba(154,160,168,0.85)">BACKEND RELAYS ACTIVITY</tspan>
               <tspan fill={GOLD}>{"  ·  "}</tspan>
-              <tspan fill="rgba(154,160,168,0.85)">BLOCKCHAIN ENFORCES POLICY</tspan>
+              <tspan fill="rgba(154,160,168,0.85)">ARC SETTLES APPROVED PAYMENTS</tspan>
             </text>
           </motion.g>
         </svg>
