@@ -46,11 +46,6 @@ export function liveReadsPaused(): boolean {
   return ingestActive > 0 || Date.now() < livePausedUntil;
 }
 
-/** True only inside the window after Arc refused a read. Indexer activity alone does not block a balance read. */
-export function readsRateLimited(): boolean {
-  return Date.now() < livePausedUntil;
-}
-
 /** True when stored logs already include recent heads. Absence of a row is then meaningful. */
 export function indexCoversHead(maxLag = 30n): boolean {
   if (indexedBlock == null || chainHead == null) return false;

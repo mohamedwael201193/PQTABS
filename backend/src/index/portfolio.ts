@@ -4,7 +4,7 @@ import { assertOurRoot, rootAbi, tabAbi, usdcAbi, withRpcRetry } from "../chain.
 import { USDC } from "../constants.js";
 import { RequestError } from "../validate.js";
 import { readCursor } from "./apply.js";
-import { indexHealth, noteIndexError, noteRateLimit, readsRateLimited } from "./lane.js";
+import { indexHealth, noteIndexError, noteRateLimit } from "./lane.js";
 import type { Sql } from "./sql.js";
 
 export type Freshness = "live" | "recent" | "indexing" | "degraded";
@@ -147,13 +147,17 @@ function withFigures(
   };
 }
 
-/** One batched read of each unswept capability's USDC balance. A failed row is absent, so it stays unknown. */
+/**
+ * One batched read of each unswept capability's USDC balance. A failed row is absent, so it stays unknown.
+ * The read does not wait for the indexer's back-off window and does not open it. A background 429 would otherwise
+ * blank every balance for 15 seconds, and the indexer keeps the window busy.
+ */
 async function readLiveBalances(client: PublicClient, rows: readonly CapabilityRow[]): Promise<Map<string, bigint>> {
   const live = new Map<string, bigint>();
   const pending = rows.filter((row) => row.swept !== true);
-  if (pending.length === 0 || readsRateLimited()) return live;
+  if (pending.length === 0) return live;
   try {
-    // Three attempts absorb a brief Arc 429 shared with the indexer. A read that still fails is unknown, not stored.
+    // Three attempts absorb a brief Arc 429. A read that still fails is unknown, never a stored value.
     const results = (await withRpcRetry(
       () =>
         client.multicall({
@@ -172,8 +176,8 @@ async function readLiveBalances(client: PublicClient, rows: readonly CapabilityR
         live.set(pending[index].tab.toLowerCase(), result.result);
       }
     });
-  } catch (error) {
-    if (isRateLimit(error)) noteRateLimit();
+  } catch {
+    // Every row stays unknown. The stored balance is not used in its place.
   }
   return live;
 }
