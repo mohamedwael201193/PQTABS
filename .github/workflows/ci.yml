@@ -80,8 +80,6 @@ jobs:
     defaults:
       run:
         working-directory: packages/pqtabs-signer
-    env:
-      PQTABS_SIGNER_DIR: ${{ runner.temp }}\pqtabs-signer-keys
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -92,6 +90,9 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm test
+        env:
+          # Isolated key directory for the test run. runner.temp is not available at job level.
+          PQTABS_SIGNER_DIR: ${{ runner.temp }}\pqtabs-signer-keys
 
   pins-and-secrets:
     runs-on: ubuntu-latest
