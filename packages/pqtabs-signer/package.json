@@ -1,0 +1,37 @@
+{
+  "name": "pqtabs-signer",
+  "version": "0.1.0",
+  "description": "Local agent signer for PQTABS. Stores the agent key protected by the operating system, verifies its address, and signs only Arc USDC transfer authorizations for Barkeep.",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "pqtabs-signer": "./dist/src/cli.js"
+  },
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js"
+    }
+  },
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome check src test",
+    "test": "npm run build && node --test --test-timeout=60000 dist/test/unit/*.test.js",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "dependencies": {
+    "viem": "^2.57.4"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.2.4",
+    "@types/node": "24.7.2",
+    "typescript": "5.9.3"
+  }
+}
