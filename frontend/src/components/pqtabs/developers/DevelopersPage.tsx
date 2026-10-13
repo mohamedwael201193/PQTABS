@@ -2,10 +2,11 @@
 import { Logo, Reveal, SectionShell } from "@/components/pqtabs/shared";
 import { Button } from "@/components/ui/button";
 import { CopyBlock } from "./CopyBlock";
+import { OnboardingSteps } from "./OnboardingSteps";
 
 /**
  * /developers: how to use the published PQTABS SDK and MCP server.
- * Every command, package name, env name, and config shape here is taken from the published 0.1.0 packages
+ * Every command, package name, env name, and config shape here is taken from the published 0.1.1 packages
  * and from each host's documentation. Nothing on this page moves money; the page only describes the tools.
  */
 
@@ -26,10 +27,15 @@ const portfolio = await pqtabs.read.portfolio("<your root address>");
 
 console.log(config.chainId, chainId, portfolio.tabs.filter((tab) => tab.open).length);`;
 
-const EXAMPLE_PAID = `import { PqtabsClient, privateKeySigner } from "pqtabs-sdk";
+const EXAMPLE_PAID = `import { PqtabsClient, externalSigner } from "pqtabs-sdk";
 
 // Spends USDC. Only for a capability your root has already opened.
-const signer = privateKeySigner(process.env.PQTABS_AGENT_PRIVATE_KEY as \`0x\${string}\`);
+// signTypedData calls YOUR signer (hardware wallet, KMS, enclave, or local signer) and returns the 65-byte signature.
+// The agent key never enters this process.
+const signer = externalSigner({
+  address: "<agent address the root opened>",
+  signTypedData: (typedData) => mySigner.signTypedData(typedData),
+});
 
 const outcome = await new PqtabsClient().spend.research({
   tab: "<open capability address>",
@@ -74,7 +80,7 @@ const SETUP_PROMPT = `You are configuring the PQTABS MCP server on this machine.
 Rules you must follow:
 - Never ask me for a root backup phrase, a post-quantum private key, or any private key in this chat.
 - Do not create or open a capability, close one, change a cap, limit, or payee, rotate a root, fund a wallet, or broadcast a transaction.
-- Do not set PQTABS_AGENT_PRIVATE_KEY unless I explicitly ask you to enable paid research and point you to my secret store. Never print a key.
+- Do not set PQTABS_AGENT_PRIVATE_KEY, PQTABS_SIGNER_CLI, or PQTABS_SIGNER_AGENT unless I explicitly ask you to enable paid research and point you to my secret store or signer. Never print a key or a signer secret.
 - Do not call a paid tool or spend USDC during setup.
 - If a check fails, report the error code and stop. Do not work around it by changing limits, keys, or the payee.`;
 
@@ -86,14 +92,16 @@ const TOOLS = [
   { name: "pqtabs_create_research_quote", kind: "quote only", effect: "Prices a question and creates a quote record. Signs nothing." },
   { name: "pqtabs_check_spend_policy", kind: "quote only", effect: "Returns ALLOW or REFUSE with reasons. Creates a quote record. Signs nothing." },
   { name: "pqtabs_recover_result", kind: "no payment", effect: "Fetches the answer for a quote that already settled. Never relays, signs, or charges." },
-  { name: "pqtabs_run_paid_research", kind: "spends USDC", effect: "Pays one capability inside its limits. Listed only when PQTABS_AGENT_PRIVATE_KEY is set. Requires confirmSpend true." },
+  { name: "pqtabs_run_paid_research", kind: "spends USDC", effect: "Pays one capability inside its limits. Listed only when a signer is configured. Requires confirmSpend true and maxPriceRaw." },
 ] as const;
 
 const ENV_VARS = [
   { name: "PQTABS_BACKEND_URL", def: "https://pqtabs.onrender.com", note: "Backend. Plain http is allowed only for localhost." },
   { name: "PQTABS_RPC_URL", def: "https://rpc.mainnet.arc.io", note: "Arc RPC for chain checks and receipts." },
   { name: "PQTABS_STATE_DIR", def: "~/.pqtabs", note: "Stores spend attempts so a retry never signs twice." },
-  { name: "PQTABS_AGENT_PRIVATE_KEY", def: "unset", note: "Optional. Enables paid research. Keep it in a secret store, never in a shared file." },
+  { name: "PQTABS_SIGNER_CLI", def: "unset", note: "Repository build. Path to the pqtabs-signer CLI. The MCP asks it for one signature per approved payment and never holds the key." },
+  { name: "PQTABS_SIGNER_AGENT", def: "unset", note: "Repository build. The public agent address. It must match the address the signer stores." },
+  { name: "PQTABS_AGENT_PRIVATE_KEY", def: "unset", note: "Legacy, pqtabs-mcp 0.1.1. The raw key sits in the server process. Prefer a local signer. Unset it to run read-only." },
 ] as const;
 
 const STATUSES = [
@@ -150,12 +158,17 @@ const TROUBLESHOOTING = [
     fix: "The value is malformed. The server prints no key. Fix the value in your secret store, or unset the variable to run read-only.",
   },
   {
+    problem: "signer_unavailable or signer_mismatch",
+    fix: "The local signer did not sign for this agent. Run pqtabs-signer status --agent with the address, and check that PQTABS_SIGNER_AGENT is the address the root opened. Nothing was broadcast.",
+  },
+  {
     problem: "plain http is refused for a remote backend",
     fix: "Use an https backend URL. Plain http is allowed only for localhost during development.",
   },
 ] as const;
 
 const SECTION_LINKS = [
+  { label: "Onboarding", href: "#onboarding" },
   { label: "Packages", href: "#packages" },
   { label: "SDK", href: "#sdk" },
   { label: "MCP", href: "#mcp" },
@@ -220,8 +233,22 @@ export default function DevelopersPage() {
           </Reveal>
         </section>
 
-        {/* 01 Packages */}
-        <SectionShell id="packages" index="01" label="Packages">
+        {/* 01 Onboarding */}
+        <SectionShell id="onboarding" index="01" label="Onboarding">
+          <div className="space-y-8">
+            <div className="max-w-3xl space-y-4">
+              <h2 className="font-display text-3xl font-semibold tracking-tight md:text-4xl">Connect an agent, step by step</h2>
+              <p className="text-base leading-relaxed text-muted-foreground">
+                Each step is a check you can run yourself. The root authorizes the agent, the local signer holds the agent key, and
+                the MCP server asks the signer for one signature per approved payment. Nothing on this page signs or spends.
+              </p>
+            </div>
+            <OnboardingSteps />
+          </div>
+        </SectionShell>
+
+        {/* 02 Packages */}
+        <SectionShell id="packages" index="02" label="Packages">
           <div className="grid gap-5 md:grid-cols-2">
             <article className="rounded-2xl border border-white/[.08] bg-white/[.02] p-6">
               <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">TypeScript SDK</p>
@@ -240,7 +267,7 @@ export default function DevelopersPage() {
               <h2 className="mt-3 font-display text-2xl font-semibold tracking-tight">pqtabs-mcp {MCP_VERSION}</h2>
               <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
                 A local stdio server for MCP hosts. Seven read and quote tools are always available. A paid tool is offered
-                only when an agent key for an already-authorized capability is set.
+                only when a signer is configured for an already-authorized capability.
               </p>
               <div className="mt-5 flex flex-wrap gap-3 font-mono text-[11px] uppercase tracking-[0.14em]">
                 <a className="focus-ring rounded-sm text-gold hover:underline" href="https://www.npmjs.com/package/pqtabs-mcp">npm</a>
@@ -251,7 +278,7 @@ export default function DevelopersPage() {
         </SectionShell>
 
         {/* 02 Install and example */}
-        <SectionShell id="sdk" index="02" label="SDK">
+        <SectionShell id="sdk" index="03" label="SDK">
           <div className="grid gap-6 lg:grid-cols-2">
             <div className="space-y-4">
               <h2 className="font-display text-3xl font-semibold tracking-tight md:text-4xl">Install and read in one minute</h2>
@@ -283,7 +310,7 @@ export default function DevelopersPage() {
         </SectionShell>
 
         {/* 03 MCP */}
-        <SectionShell id="mcp" index="03" label="MCP hosts">
+        <SectionShell id="mcp" index="04" label="MCP hosts">
           <div className="space-y-6">
             <div className="max-w-3xl space-y-4">
               <h2 className="font-display text-3xl font-semibold tracking-tight md:text-4xl">Connect an MCP host</h2>
@@ -329,21 +356,23 @@ export default function DevelopersPage() {
             <div className="rounded-2xl border border-white/[.08] bg-white/[.02] p-5 text-sm leading-relaxed text-muted-foreground">
               <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-foreground">Before you configure paid research</p>
               <p className="mt-2">
-                The entries above are read-only. Paid research needs <code className="font-mono">PQTABS_AGENT_PRIVATE_KEY</code>
-                {" "}in that server&apos;s <code className="font-mono">env</code> block, from a secret store. Do not paste a root
-                backup phrase or a root private key into any configuration.
+                The entries above are read-only. Paid research needs a signer for an agent your root has already authorized. The
+                repository build uses <code className="font-mono">PQTABS_SIGNER_CLI</code> and{" "}
+                <code className="font-mono">PQTABS_SIGNER_AGENT</code>, so the MCP process never holds the key. The published 0.1.1
+                package reads <code className="font-mono">PQTABS_AGENT_PRIVATE_KEY</code> instead. That is a legacy path, because
+                the key sits in the server process. Do not paste a root backup phrase or a root private key into any configuration.
               </p>
             </div>
           </div>
         </SectionShell>
 
         {/* 04 Tools */}
-        <SectionShell id="tools" index="04" label="Tools">
+        <SectionShell id="tools" index="05" label="Tools">
           <div className="space-y-8">
             <div className="max-w-3xl space-y-4">
               <h2 className="font-display text-3xl font-semibold tracking-tight md:text-4xl">Read-only tools and paid tools</h2>
               <p className="text-base leading-relaxed text-muted-foreground">
-                Only one tool can move USDC, and it is listed only with a key. Every tool reads the live backend or Arc. None
+                Only one tool can move USDC, and it is listed only when a signer is configured. Every tool reads the live backend or Arc. None
                 returns a mock balance or a success the chain did not confirm.
               </p>
             </div>
@@ -410,7 +439,7 @@ export default function DevelopersPage() {
         </SectionShell>
 
         {/* 05 Boundary and config */}
-        <SectionShell id="boundary" index="05" label="Boundary and configuration">
+        <SectionShell id="boundary" index="06" label="Boundary and configuration">
           <div className="grid gap-8 lg:grid-cols-2">
             <div className="space-y-4">
               <h2 className="font-display text-3xl font-semibold tracking-tight md:text-4xl">The signing boundary</h2>
@@ -445,14 +474,14 @@ export default function DevelopersPage() {
                 </table>
               </div>
               <p className="font-mono text-[11px] text-muted-foreground">
-                Chain 5042 Â· RPC https://rpc.mainnet.arc.io Â· Explorer https://explorer.arc.io
+                Chain 5042 · RPC https://rpc.mainnet.arc.io · Explorer https://explorer.arc.io
               </p>
             </div>
           </div>
         </SectionShell>
 
         {/* 06 Agent setup prompt */}
-        <SectionShell id="agent-prompt" index="06" label="Setup prompt for an agent">
+        <SectionShell id="agent-prompt" index="07" label="Setup prompt for an agent">
           <div className="grid gap-8 lg:grid-cols-[1fr_1.3fr]">
             <div className="space-y-4">
               <h2 className="font-display text-3xl font-semibold tracking-tight md:text-4xl">Ask your agent to set it up</h2>
@@ -471,7 +500,7 @@ export default function DevelopersPage() {
         </SectionShell>
 
         {/* 07 Troubleshooting */}
-        <SectionShell id="troubleshooting" index="07" label="Troubleshooting">
+        <SectionShell id="troubleshooting" index="08" label="Troubleshooting">
           <div className="space-y-8">
             <div className="max-w-3xl space-y-4">
               <h2 className="font-display text-3xl font-semibold tracking-tight md:text-4xl">When something does not connect</h2>
@@ -492,7 +521,7 @@ export default function DevelopersPage() {
         </SectionShell>
 
         {/* 08 Verify without spending */}
-        <SectionShell id="verify" index="08" label="Verify without spending">
+        <SectionShell id="verify" index="09" label="Verify without spending">
           <div className="grid gap-8 lg:grid-cols-2">
             <div className="space-y-4">
               <h2 className="font-display text-3xl font-semibold tracking-tight md:text-4xl">Check the connection first</h2>

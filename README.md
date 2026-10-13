@@ -112,7 +112,9 @@ The addresses are taken from `deployments/mainnet.json` and `backend/src/constan
 - **Exposure ceiling.** Each root is created with a `maxOpenExposure` ceiling (`RootFactory.createRoot`). Opening a capability cannot push open exposure above it.
 - **Capability limits.** A capability holds a fixed cap, an expiry, and a payee. The backend refuses a spend when the balance is empty or the price exceeds what remains (reason `balance`) before any signing.
 - **Agent key.** The agent signs spend requests with an ECDSA key held in the browser. The backend never receives the root key. The app never asks for a private key or a signature paste.
+- **Local signer (Windows).** `pqtabs-signer` keeps an agent key encrypted with Windows DPAPI for the current user, under `%LOCALAPPDATA%\pqtabs-signer\keys`. The MCP server starts the signer as a child process and receives only the 65-byte signature for each approved authorization. On this path the MCP process never holds the raw key. DPAPI does not protect against code that already runs as the same user.
 - **Relayer.** The relayer pays gas and broadcasts transactions. Root actions need the post-quantum signature, which the relayer does not hold.
+- **Circle wallets.** Circle's agent wallet from the CLI is a smart contract account. Barkeep's tab accepts only an ECDSA signature from an externally owned account, so that wallet cannot be the agent. A Circle developer-controlled EOA on ARC has a signer adapter (`circleDeveloperSigner` in `pqtabs-sdk`) that is tested with known vectors. It has not been run against Circle's live API, and it needs your own Circle credentials.
 - **Replay and quotes.** A research quote binds the task, price, payee, and max tokens by hash (`researchBodyHash`) and expires after 600 seconds.
 - **Failure states.** A matched receipt with a missing answer is reported as `result_pending`, not as complete. A refused spend says why. Read traffic and relay traffic use separate rate-limit buckets, and the relay bucket is limited to a fixed number of requests per minute (the suite checks the ninth request inside one minute is refused).
 
@@ -120,20 +122,26 @@ Known limits, stated plainly:
 
 - Arc's public RPC rate-limits reads. The backend retries rate-limited calls. A `429` from `/v1/x402/decide` is usually a read limit, not a refusal of the payment.
 - Closing a capability needs the root's security-key unlock in the browser.
+- The published `pqtabs-mcp` 0.1.1 reads `PQTABS_AGENT_PRIVATE_KEY` from its environment, which puts the key in the server process. The local-signer configuration (`PQTABS_SIGNER_CLI`, `PQTABS_SIGNER_AGENT`) is in the repository build and is not on npm yet.
 - A capability with a zero balance still counts its cap toward open exposure until it is closed.
 
 ## Test totals
 
-Verified on 2026-10-12 from this repository at commit `6299974` (research answer quality).
+Rows marked **today** were run on 2026-10-13 from the working tree that includes the local signer, the Circle adapter, and the Developer Page onboarding. Other rows are from 2026-10-12 at commit `6299974` (research answer quality).
 
 | Suite | Command | Result |
 |---|---|---|
-| Backend unit and integration | `npm test` in `backend/` | 63 passed, 0 failed, exit 0 |
-| Backend lint | `npm run lint` in `backend/` | exit 0 |
+| Backend unit and integration | `npm test` in `backend/` | 82 passed, 0 failed, exit 0 (today) |
+| Backend lint | `npm run lint` in `backend/` | exit 0 (today) |
+| SDK unit tests | `npm test` in `packages/pqtabs-sdk/` | 61 passed, 0 failed, exit 0 (today). Includes the Circle adapter vectors |
+| MCP unit tests | `npm test` in `packages/pqtabs-mcp/` | 19 passed, 0 failed, exit 0 (today). Includes the local signer boundary |
+| SDK and MCP lint | `npx biome check src test` | exit 0 (today) |
+| Frontend typecheck | `npx tsc --noEmit` in `frontend/` | 0 errors (today) |
+| Frontend lint | `npx eslint .` in `frontend/` | 25 errors and 2 warnings, all react-hooks rules in existing dashboard and other files (today). CI does not run frontend lint. Not changed in this pass |
 | Frontend node tests | `node --experimental-strip-types --test` over the 21 `frontend/src/**/*.test.ts` files | 69 passed, 0 failed, exit 0 |
 | Signer (Rust) | `cargo test --manifest-path signer/Cargo.toml` | 8 passed (5 + 3), exit 0 |
 | Contracts (Foundry) | `forge test` | 17 test functions in 2 files (grep count). Foundry is not installed locally; the CI `contracts` job passed. |
-| Pins and secrets | `python scripts/check_pins.py`, `python scripts/secret_scan.py` | pass |
+| Pins and secrets | `python scripts/check_pins.py`, `python scripts/secret_scan.py` | pass (today). The secret scan matches env-style assignments only (`NAME=value` at line start), so ordinary code such as `const token = ...` is no longer flagged. 357 files scanned |
 | CI | GitHub Actions `ci` | the latest completed run on `23f3d26` passed all five jobs: contracts, signer, backend, pins-and-secrets, slither |
 
 ## Quick start
@@ -180,6 +188,9 @@ Set these in your shell or in a `.env` file that is never committed. Only the na
 | `NEXT_PUBLIC_BACKEND_URL` | frontend | backend base URL |
 | `NEXT_PUBLIC_CHAIN_ID` | frontend | `5042` |
 | `NEXT_PUBLIC_EXPLORER_URL` | frontend | explorer base URL |
+| `PQTABS_SIGNER_CLI` | MCP (repository build) | path to the `pqtabs-signer` CLI. The MCP asks it for one signature per approved payment |
+| `PQTABS_SIGNER_AGENT` | MCP (repository build) | public agent address. Must match the address the signer stores |
+| `PQTABS_AGENT_PRIVATE_KEY` | MCP 0.1.1 (legacy) | raw agent key in the server process (secret). Prefer a local signer |
 
 Never put private keys, API keys, or encrypted backups in a commit. The repository's secret scan runs in CI.
 
@@ -209,11 +220,16 @@ Worked example: the research payment `0x41496d26…76ae` has one ERC-20 `Transfe
 |---|---|---|
 | `429` from `/v1/x402/decide` | Arc RPC read limit | Wait a few seconds and retry once |
 | `eth_getLogs` error `-32012` | Block range over 10,000 | Page in ranges of 9,999 blocks or fewer |
-| `eth_getLogs` error `-32014` | Load-balanced RPC node near the head | Retry with backoff |
+| `eth_getLogs` error `-32014` | Load-balanced RPC node near the head | The backend retries with backoff, then returns `503 rpc_unavailable`. Nothing is decided from that read |
+| `signer_unavailable` or `signer_mismatch` | Local signer missing, locked, or holding a different agent | Run `pqtabs-signer status --agent <address>`. Nothing is broadcast when signing is refused |
 | Refused with reason `balance` | Capability balance is zero or below the price | Check the capability's remaining balance; a capability with a zero balance still counts its cap toward exposure until it is closed |
 | `503` `merchant_unconfigured` on quote | `MERCHANT_PAYEE` is not set | Set the variable on the backend |
 | Answer says the sources do not cover a question | Model answer had no cited Arc fact | Ask a question covered by the cited facts. The payment is still a real receipt. |
 | Local test fails on `dist/` files | Build step skipped | Run `npm test` from `backend/`, which compiles first |
+
+## Developers
+
+The Developer Page (`/developers` in the app) covers install, MCP setup, tools, and onboarding. The onboarding steps take a public agent address only and refuse anything that looks like a private key. They show an MCP configuration with no key. They do not create a capability, sign, or spend. Opening a capability is a root action in the PQTABS app.
 
 ## Official Arc documentation
 
@@ -250,6 +266,7 @@ Only items marked **Live** run in production today.
 | `backend/` | Hono API, indexer, policy checks, relayer, research pipeline |
 | `frontend/` | Next.js app and landing page |
 | `deployments/mainnet.json` | deployed addresses and transaction hashes |
+| `packages/` | `pqtabs-sdk` (TypeScript client), `pqtabs-mcp` (stdio MCP server), `pqtabs-signer` (Windows local signer CLI) |
 | `scripts/` | pins check and secret scan |
 
 ## License and contact

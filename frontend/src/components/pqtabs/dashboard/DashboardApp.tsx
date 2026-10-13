@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactElement } from "react";
+import Link from "next/link";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   Activity as ActivityIcon,
   ArrowLeft,
   Bot,
+  Code,
   Command,
   LayoutDashboard,
   Plus,
@@ -430,6 +432,18 @@ function Sidebar({ onExit, onDisconnect, loading }: { onExit: () => void; onDisc
             </TooltipTrigger>
             <TooltipContent side="top">Settings</TooltipContent>
           </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Link
+                href="/developers"
+                aria-label="Developers"
+                className="focus-ring flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-white/[.05] hover:text-foreground"
+              >
+                <Code className="h-4 w-4" strokeWidth={1.75} />
+              </Link>
+            </TooltipTrigger>
+            <TooltipContent side="top">Developers</TooltipContent>
+          </Tooltip>
         </div>
 
         <a
@@ -501,6 +515,11 @@ function MobileTopBar({ onExit }: { onExit: () => void }) {
           className="h-9 w-9 text-muted-foreground hover:text-foreground"
         >
           <Settings className="size-4" strokeWidth={1.75} />
+        </Button>
+        <Button asChild variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-foreground">
+          <Link href="/developers" aria-label="Developers">
+            <Code className="size-4" strokeWidth={1.75} />
+          </Link>
         </Button>
         <Button
           size="icon"
