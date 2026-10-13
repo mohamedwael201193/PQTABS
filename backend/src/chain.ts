@@ -199,6 +199,16 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * Arc's load-balanced RPC returns -32014 for a block that the serving backend has not imported yet.
+ * The Arc RPC reference says to back off briefly and retry. Any other error is not retried here.
+ */
+export function isTransientRpc(error: unknown): boolean {
+  const record = error && typeof error === "object" ? (error as { code?: unknown; cause?: { code?: unknown } }) : null;
+  if (record && (record.code === -32014 || record.cause?.code === -32014)) return true;
+  return /-32014/.test(error instanceof Error ? error.message : String(error));
+}
+
 export async function withRpcRetry<T>(read: () => Promise<T>, attempts = 8): Promise<T> {
   let pause = 750;
   const tries = Math.max(1, attempts);
@@ -208,9 +218,11 @@ export async function withRpcRetry<T>(read: () => Promise<T>, attempts = 8): Pro
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       const limited = message.includes("429") || message.includes("rate limit");
-      if (!limited || attempt === tries - 1) {
+      const transient = isTransientRpc(error);
+      if (!limited && !transient) throw error;
+      if (attempt === tries - 1) {
         if (limited) throw new RequestError(429, "rate_limited", "Arc is rate limiting reads. Try again in a moment.");
-        throw error;
+        throw new RequestError(503, "rpc_unavailable", "Arc's RPC node is catching up. Try again in a moment. Nothing was decided from this read.");
       }
       await sleep(pause);
       pause = Math.min(pause * 2, 8_000);
@@ -227,7 +239,7 @@ function errorText(error: unknown): string {
 
 function isRangeError(error: unknown): boolean {
   if (error instanceof RequestError) return false;
-  return /range too large|block range|too many|exceed|query returned more|10000|50000|response size/i.test(errorText(error));
+  return /-32012|range too large|block range|too many|exceed|query returned more|10000|50000|response size/i.test(errorText(error));
 }
 
 async function windows<T>(
