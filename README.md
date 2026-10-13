@@ -150,7 +150,7 @@ Rows marked **today** were run on 2026-10-13 from the working tree that includes
 | Contracts (Foundry) | `forge test` | 17 test functions in 2 files (grep count). Foundry is not installed locally; the CI `contracts` job passed. |
 | Pins and secrets | `python scripts/check_pins.py`, `python scripts/secret_scan.py` | pass (today). The secret scan matches env-style assignments only (`NAME=value` at line start), so ordinary code such as `const token = ...` is no longer flagged. 370 tracked files scanned (today, before the release commit) |
 | Published MCP clean-consumer smoke | `packages/scripts/clean-consumer-smoke.mjs` against the npm package `pqtabs-mcp` 0.1.2 | `SMOKE_OK`, including the local-signer step that lists the paid tool and reports `paidResearchEnabled` with no spend (today) |
-| CI | GitHub Actions `ci` | the latest completed run on `23f3d26` passed all five jobs: contracts, signer, backend, pins-and-secrets, slither |
+| CI | GitHub Actions `ci` | the runs on `81ded30` and `6f0a39c` (today) completed with conclusion success: contracts, signer, backend, pins-and-secrets, slither |
 
 ## Quick start
 
