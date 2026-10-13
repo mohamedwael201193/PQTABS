@@ -4,6 +4,18 @@
  * Read-only methods never move money. `spend.research` moves USDC only inside a capability that the
  * root already authorized, and only after every check passes. The agent key stays in your AgentSigner.
  */
+
+export {
+  CIRCLE_ARC_MAINNET,
+  type CircleSignerOptions,
+  type CircleSignTypedData,
+  type CircleSignTypedDataRequest,
+  circleDeveloperSigner,
+  circleTypedDataDigest,
+  fromCircleTypedDataJson,
+  normalizeSignature,
+  toCircleTypedDataJson,
+} from "./circle-signer.js";
 export { type CallOptions, type PaidResearchInput, type PolicyResult, PqtabsClient, type PqtabsClientOptions, type QuoteResult, type ReceiptCheck, type ResearchOutcome, type SpendStep } from "./client.js";
 export {
   ARC_CHAIN_ID,

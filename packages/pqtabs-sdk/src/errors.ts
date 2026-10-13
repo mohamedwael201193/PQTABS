@@ -13,6 +13,7 @@ export type PqtabsErrorCode =
   | "exceeds_max_price"
   | "policy_refused"
   | "signer_mismatch"
+  | "signer_unavailable"
   | "authorization_expired"
   | "settlement_unknown"
   | "receipt_mismatch"
