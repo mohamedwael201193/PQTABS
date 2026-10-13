@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { Address, PublicClient } from "viem";
+import { type Address, ContractFunctionExecutionError, ContractFunctionZeroDataError, type PublicClient } from "viem";
 import { type Clients, PORTFOLIO_TTL_MS, portfolioClock, readPortfolio } from "../src/chain.js";
 import { FACTORY_BLOCK, USDC } from "../src/constants.js";
 import { noteRateLimit } from "../src/index/lane.js";
@@ -269,6 +269,27 @@ test("a failed scan is not stored, so the next read scans the same blocks again"
   chain.calls.getLogs.length = 0;
   await readPortfolio(clients, root);
   assert.equal(lowestFromBlock(chain), FACTORY_BLOCK + 301n, "the failed range is retried, not skipped");
+});
+
+test("an address with no contract code is refused as unknown_root, not as a server error", async () => {
+  const root = rootFor(7);
+  const { clients } = fakeArc();
+  const client = clients.public as unknown as { readContract: (args: { address: string; functionName: string }) => Promise<unknown> };
+  const read = client.readContract.bind(client);
+  client.readContract = async (args) => {
+    if (args.functionName === "factory" && args.address.toLowerCase() === root.toLowerCase()) {
+      throw new ContractFunctionExecutionError(new ContractFunctionZeroDataError({ functionName: "factory" }), {
+        abi: [],
+        contractAddress: root,
+        functionName: "factory",
+      });
+    }
+    return read(args);
+  };
+  await assert.rejects(
+    () => readPortfolio(clients, root),
+    (error: unknown) => error instanceof RequestError && error.status === 400 && error.code === "unknown_root",
+  );
 });
 
 test("while Arc is rate limiting, the live fallback refuses without making any Arc call", async () => {

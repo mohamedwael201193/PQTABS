@@ -107,12 +107,34 @@ export async function fee(client: PublicClient): Promise<{ maxFeePerGas: bigint;
   return { maxFeePerGas, maxPriorityFeePerGas };
 }
 
+/**
+ * True when a read came back with no data. That is what an address without contract code returns, so it means
+ * "not a root", not an RPC failure. Transient and rate-limit errors are not matched here and keep their retry path.
+ */
+function isNoCodeRead(error: unknown): boolean {
+  let node: unknown = error;
+  for (let depth = 0; node && typeof node === "object" && depth < 6; depth++) {
+    if ((node as { name?: unknown }).name === "ContractFunctionZeroDataError") return true;
+    node = (node as { cause?: unknown }).cause;
+  }
+  return false;
+}
+
 export async function assertOurRoot(clients: Clients, root: Address, attempts = 8): Promise<void> {
   const [registrar, factory] = await Promise.all([
     withRpcRetry(() => clients.public.readContract({ address: clients.factory, abi: factoryAbi, functionName: "registrarOf", args: [root] }), attempts),
-    withRpcRetry(() => clients.public.readContract({ address: root, abi: rootAbi, functionName: "factory" }), attempts),
+    withRpcRetry(
+      () =>
+        clients.public
+          .readContract({ address: root, abi: rootAbi, functionName: "factory" })
+          .catch((error: unknown) => {
+            if (isNoCodeRead(error)) return null;
+            throw error;
+          }),
+      attempts,
+    ),
   ]);
-  if (registrar === "0x0000000000000000000000000000000000000000" || factory.toLowerCase() !== clients.factory.toLowerCase()) {
+  if (registrar === "0x0000000000000000000000000000000000000000" || factory === null || factory.toLowerCase() !== clients.factory.toLowerCase()) {
     throw new RequestError(400, "unknown_root", "that address is not a root of this factory");
   }
 }
