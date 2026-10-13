@@ -9,7 +9,8 @@ ROOT = Path(__file__).resolve().parents[1]
 TRACKED = subprocess.check_output(["git", "ls-files", "--cached", "--others", "--exclude-standard"], cwd=ROOT, text=True).splitlines()
 TOKEN = re.compile(r"(ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|rnd_[A-Za-z0-9]{20,})")
 SIGNING_KEY = re.compile(r'"signing_key_hex"\s*:\s*"[0-9a-fA-F]{16,}"')
-ENV_VALUE = re.compile(r"(?i)(PRIVATE_KEY|API_KEY|TOKEN)\s*=\s*\S+")
+# Env-style assignments only (UPPER_CASE NAME = value at line start). Ordinary code such as `const token = ...` is not a secret.
+ENV_VALUE = re.compile(r"^\s*(?:export\s+)?[A-Z0-9_]*(?:PRIVATE_KEY|API_KEY|TOKEN)\s*=\s*\S+", re.MULTILINE)
 failures = []
 
 for rel in TRACKED:
