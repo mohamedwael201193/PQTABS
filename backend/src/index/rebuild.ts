@@ -21,7 +21,8 @@ export async function rebuildFromZero(): Promise<{ indexedThrough: string; head:
     const from = cursor == null ? FACTORY_BLOCK : cursor + 1n;
     if (from > head) break;
     const to = from + PAGE - 1n > head ? head : from + PAGE - 1n;
-    await indexWindow(sql, clients.public, clients.factory, from, to, times);
+    const factories = [clients.factory, ...(clients.factoryNext ? [clients.factoryNext] : [])];
+    await indexWindow(sql, clients.public, factories, from, to, times);
   }
   const through = await readCursor(sql);
   await sql.close();

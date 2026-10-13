@@ -32,7 +32,7 @@ type RawLog = {
   transactionHash: Hex | null;
 };
 
-export function startIngest(sql: Sql, client: PublicClient, factory: Address): void {
+export function startIngest(sql: Sql, client: PublicClient, factories: readonly Address[]): void {
   const times = new Map<string, string>();
   let waitingForNextHead = false;
   startHeadFeed(process.env.ARC_RPC_URL || RPC_URL, (number, timestamp) => {
@@ -64,7 +64,7 @@ export function startIngest(sql: Sql, client: PublicClient, factory: Address): v
         }
         waitingForNextHead = false;
         const to = from + PAGE - 1n > headNumber ? headNumber : from + PAGE - 1n;
-        await indexWindow(sql, client, factory, from, to, times);
+        await indexWindow(sql, client, factories, from, to, times);
         noteIndexCursor(to);
         await reconcileVolatile(sql, client);
         await sleep(2_000);
@@ -85,12 +85,12 @@ let ingestTail: Promise<unknown> = Promise.resolve();
 export async function indexWindow(
   sql: Sql,
   client: PublicClient,
-  factory: Address,
+  factories: readonly Address[],
   from: bigint,
   to: bigint,
   times: Map<string, string>,
 ): Promise<void> {
-  const run = ingestTail.then(() => indexWindowBody(sql, client, factory, from, to, times));
+  const run = ingestTail.then(() => indexWindowBody(sql, client, factories, from, to, times));
   ingestTail = run.then(
     () => undefined,
     () => undefined,
@@ -101,12 +101,13 @@ export async function indexWindow(
 async function indexWindowBody(
   sql: Sql,
   client: PublicClient,
-  factory: Address,
+  factories: readonly Address[],
   from: bigint,
   to: bigint,
   times: Map<string, string>,
 ): Promise<void> {
-  const factoryLogs = await ingestRead(() => withRpcRetry(() => client.getLogs({ address: factory, fromBlock: from, toBlock: to }), 1));
+  const watched = factories.length === 1 ? factories[0] : [...factories];
+  const factoryLogs = await ingestRead(() => withRpcRetry(() => client.getLogs({ address: watched, fromBlock: from, toBlock: to }), 1));
   const created = decodeLogs(factoryLogs);
   const knownRoots = await sql.query<{ address: string }>("SELECT address FROM roots");
   const roots = uniqueAddresses([...knownRoots.map((row) => row.address as Address), ...created.flatMap((event) => (event.kind === "root" ? [event.root] : []))]);
@@ -133,7 +134,7 @@ async function indexWindowBody(
         logIndex: log.logIndex,
         tx: log.transactionHash,
         timestamp: "",
-        root: factory,
+        root: factories[0],
         kind: "spend" as const,
         tab: log.args.from,
         payee: log.args.to,

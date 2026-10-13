@@ -92,12 +92,27 @@ export const barkeepAcceptSchema = z.looseObject({
   }),
 });
 
+export const exactAcceptSchema = z.looseObject({
+  scheme: z.literal("exact"),
+  network: z.literal("eip155:5042"),
+  asset: addressSchema,
+  amount: uintSchema,
+  payTo: addressSchema,
+  maxTimeoutSeconds: z.number().int().min(7).max(3600),
+  extra: z.looseObject({
+    name: z.string(),
+    version: z.string(),
+    quoteId: uuidSchema,
+    bodyHash: hash32Schema,
+  }),
+});
+
 export const paymentRequiredSchema = z.looseObject({
   x402Version: z.literal(2),
   scheme: z.literal("pqtabs-barkeep"),
   standardExact: z.literal(false),
   resource: z.looseObject({ url: z.string(), description: z.string().optional() }),
-  accepts: z.array(barkeepAcceptSchema).min(1),
+  accepts: z.array(z.union([barkeepAcceptSchema, exactAcceptSchema])).min(1),
 });
 
 export const quoteResponseSchema = z.looseObject({

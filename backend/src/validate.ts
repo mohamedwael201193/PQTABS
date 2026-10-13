@@ -1,7 +1,7 @@
 import { type Address, encodeFunctionData, type Hex, isAddress } from "viem";
 import { SIG_LEN, SPEND_BLOB_LEN } from "./constants.js";
 
-export type HttpStatus = 400 | 409 | 413 | 429 | 500 | 503;
+export type HttpStatus = 400 | 402 | 409 | 413 | 429 | 500 | 503;
 
 export class RequestError extends Error {
   constructor(

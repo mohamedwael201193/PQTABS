@@ -4,9 +4,9 @@ pragma solidity 0.8.30;
 import {Test} from "forge-std/Test.sol";
 import {PQRootNext} from "../contracts/PQRootNext.sol";
 import {RootFactoryNext} from "../contracts/RootFactoryNext.sol";
-import {MockPQ, MockUSDC, MockBarkeep, MockTab} from "./mocks/Mocks.sol";
+import {MockPQ, MockUSDC, MockBarkeep, MockTab, MockVault} from "./mocks/Mocks.sol";
 
-/// PQRootNext is not deployed. These tests are the recovery and tab-readback spec.
+/// Recovery, tab read-back, and the pinned vault.
 contract RecoveryTest is Test {
     address internal constant USDC = 0x3600000000000000000000000000000000000000;
     address internal constant PQ = 0x1800000000000000000000000000000000000004;
@@ -25,7 +25,7 @@ contract RecoveryTest is Test {
         vm.etch(USDC, type(MockUSDC).runtimeCode);
         vm.etch(PQ, type(MockPQ).runtimeCode);
         vm.etch(BARKEEP, type(MockBarkeep).runtimeCode);
-        factory = new RootFactoryNext();
+        factory = new RootFactoryNext(address(new MockVault()));
     }
 
     function test_spending_key_recovery_waits_and_then_replaces_the_key() public {
@@ -164,6 +164,42 @@ contract RecoveryTest is Test {
         root.reclaim(tab);
         assertEq(root.openExposure(), 0);
         assertEq(MockUSDC(USDC).balanceOf(tab), 0);
+    }
+
+    function test_deposit_and_withdraw_round_trip_idle_usdc() public {
+        PQRootNext root = _root(bytes32(0));
+        MockUSDC(USDC).mint(address(root), 1_000_000);
+        _exec(root, abi.encode(uint8(8), uint256(250_000)));
+        assertEq(MockUSDC(USDC).balanceOf(address(root)), 750_000);
+        assertEq(MockVault(factory.vault()).sharesOf(address(root)), 250_000);
+        _exec(root, abi.encode(uint8(9), uint256(100_000)));
+        assertEq(MockUSDC(USDC).balanceOf(address(root)), 850_000);
+        assertEq(MockVault(factory.vault()).sharesOf(address(root)), 150_000);
+    }
+
+    function test_deposit_rejects_more_than_the_vault_will_take() public {
+        PQRootNext root = _root(bytes32(0));
+        MockUSDC(USDC).mint(address(root), 1_000_000);
+        MockVault(factory.vault()).setMax(10);
+        bytes memory action = abi.encode(uint8(8), uint256(11));
+        uint64 nonce = root.nextNonce();
+        bytes memory sig = _sig(root.pqVk(), root.digestFor(action, nonce, _soon()), true);
+        vm.expectRevert(PQRootNext.VaultRejected.selector);
+        root.execute(action, nonce, _soon(), sig);
+        assertEq(MockUSDC(USDC).balanceOf(address(root)), 1_000_000);
+    }
+
+    function test_yield_pauses_while_recovery_is_pending() public {
+        PQRootNext root = _root(bytes32(0));
+        MockUSDC(USDC).mint(address(root), 1_000_000);
+        _exec(root, abi.encode(uint8(8), uint256(100)));
+        _request(root, nextKey);
+        bytes memory action = abi.encode(uint8(9), uint256(100));
+        uint64 nonce = root.nextNonce();
+        bytes memory sig = _sig(root.pqVk(), root.digestFor(action, nonce, _soon()), true);
+        vm.expectRevert(PQRootNext.TransfersPaused.selector);
+        root.execute(action, nonce, _soon(), sig);
+        assertEq(MockVault(factory.vault()).sharesOf(address(root)), 100);
     }
 
     function test_both_keys_lost_cannot_start_recovery() public {

@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity 0.8.30;
 
-/// Next treasury. Not deployed. Live roots stay on PQRoot (PQTABS_V2).
+/// Next treasury. Live roots stay on PQRoot (PQTABS_V2). This contract does not move them.
 /// A key change waits RECOVERY_DELAY. The requester cannot cancel their own request
 /// when a second PQ key is set. Losing every registered key still locks the treasury.
+/// Idle USDC can be deposited into the vault the factory pinned. The vault cannot be changed.
 contract PQRootNext {
     uint256 internal constant SIG_LEN = 7856;
     uint256 internal constant MAX_PAYEES = 20;
@@ -27,6 +28,8 @@ contract PQRootNext {
 
     /// Shared by every clone. Set once, when the implementation is constructed.
     address public immutable factory;
+    /// ERC-4626 vault pinned by the factory. Shares stay in this root.
+    address public immutable vault;
 
     bytes32 public pqVk;
     bytes32 public recoveryVk;
@@ -53,6 +56,8 @@ contract PQRootNext {
     event RecoveryRequested(bytes32 indexed newVk, uint8 indexed source, uint64 readyAt);
     event RecoveryCancelled(uint8 indexed source);
     event RecoveryExecuted(bytes32 indexed newVk);
+    event YieldDeposited(uint256 assets, uint256 shares);
+    event YieldWithdrawn(uint256 assets, uint256 shares);
 
     error NotInitialized();
     error AlreadyInitialized();
@@ -88,10 +93,12 @@ contract PQRootNext {
     error CancelNotAllowed();
     error RotateDisabled();
     error TransfersPaused();
+    error VaultRejected();
 
-    constructor(address factory_) {
-        if (factory_ == address(0)) revert ZeroAddress();
+    constructor(address factory_, address vault_) {
+        if (factory_ == address(0) || vault_ == address(0)) revert ZeroAddress();
         factory = factory_;
+        vault = vault_;
         initialized = true;
         locked = 1;
     }
@@ -104,6 +111,7 @@ contract PQRootNext {
         recoveryVk = recoveryKey;
         if (IBarkeepFactoryNext(BARKEEP_ADDR).IMPLEMENTATION() != TAB_IMPL) revert FactoryMismatch();
         if (IBarkeepFactoryNext(BARKEEP_ADDR).USDC() != USDC_ADDR) revert FactoryMismatch();
+        if (IVaultNext(vault).asset() != USDC_ADDR) revert FactoryMismatch();
         initialized = true;
         locked = 1;
         pqVk = vk;
@@ -138,6 +146,8 @@ contract PQRootNext {
         else if (kind == 5) _setExposure(action);
         else if (kind == 6) _requestBySpending(action);
         else if (kind == 7) _cancelBySpending();
+        else if (kind == 8) _deposit(action);
+        else if (kind == 9) _withdraw(action);
         else revert ActionUnknown();
 
         emit RootExecuted(nonce, kind, keccak256(action), msg.sender);
@@ -304,6 +314,27 @@ contract PQRootNext {
         if (deadline > block.timestamp + MAX_DEADLINE) revert DeadlineTooFar();
     }
 
+    function _deposit(bytes calldata action) internal {
+        if (pendingVk != bytes32(0)) revert TransfersPaused();
+        (, uint256 assets) = abi.decode(action, (uint8, uint256));
+        if (assets == 0) revert AmountZero();
+        if (IVaultNext(vault).maxDeposit(address(this)) < assets) revert VaultRejected();
+        if (!IUSDCNext(USDC_ADDR).approve(vault, assets)) revert ApproveFailed();
+        uint256 shares = IVaultNext(vault).deposit(assets, address(this));
+        if (shares == 0) revert VaultRejected();
+        if (!IUSDCNext(USDC_ADDR).approve(vault, 0)) revert ApproveFailed();
+        emit YieldDeposited(assets, shares);
+    }
+
+    function _withdraw(bytes calldata action) internal {
+        if (pendingVk != bytes32(0)) revert TransfersPaused();
+        (, uint256 assets) = abi.decode(action, (uint8, uint256));
+        if (assets == 0) revert AmountZero();
+        uint256 shares = IVaultNext(vault).withdraw(assets, address(this), address(this));
+        if (shares == 0) revert VaultRejected();
+        emit YieldWithdrawn(assets, shares);
+    }
+
     function _setExposure(bytes calldata action) internal {
         if (pendingVk != bytes32(0)) revert TransfersPaused();
         (, uint256 newMax) = abi.decode(action, (uint8, uint256));
@@ -385,6 +416,13 @@ interface IBarkeepFactoryNext {
         uint64 expiry,
         bytes32 salt
     ) external view returns (address);
+}
+
+interface IVaultNext {
+    function asset() external view returns (address);
+    function maxDeposit(address receiver) external view returns (uint256);
+    function deposit(uint256 assets, address receiver) external returns (uint256 shares);
+    function withdraw(uint256 assets, address receiver, address owner) external returns (uint256 shares);
 }
 
 interface ITabNext {

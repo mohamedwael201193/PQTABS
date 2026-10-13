@@ -12,7 +12,8 @@ export const arc = defineChain({
   blockExplorers: { default: { name: "Arc Explorer", url: "https://explorer.arc.io" } },
 });
 
-const FACTORY = "0x05545F026b75f03aE9Cf1eA8a8373473c94ed323" as const;
+const FACTORY_LEGACY = "0x05545F026b75f03aE9Cf1eA8a8373473c94ed323" as const;
+const FACTORY = "0x909AF4dFeEcDf8B72eaf918f185Cd89d460b0E63" as const;
 const USDC = "0x3600000000000000000000000000000000000000" as const;
 
 type EthereumProvider = {
@@ -118,6 +119,7 @@ const factoryAbi = [
     stateMutability: "nonpayable",
     inputs: [
       { name: "vk", type: "bytes32" },
+      { name: "recoveryVk", type: "bytes32" },
       { name: "maxOpenExposure", type: "uint256" },
       { name: "userSalt", type: "bytes32" },
     ],
@@ -146,7 +148,13 @@ const usdcAbi = [
 ] as const;
 
 /** The connected wallet is the registrar. It creates the root. It is not the PQ authority. */
-export async function createSecurityDomain(vk: Hex, maxOpenExposure: bigint, userSalt: Hex, registrar: Address): Promise<Hex> {
+export async function createSecurityDomain(
+  vk: Hex,
+  maxOpenExposure: bigint,
+  userSalt: Hex,
+  registrar: Address,
+  recoveryVk: Hex = "0x0000000000000000000000000000000000000000000000000000000000000000",
+): Promise<Hex> {
   const account = await existingAccount();
   if (!account) throw new Error("Connect a wallet before creating a security domain.");
   if (account.toLowerCase() !== registrar.toLowerCase()) {
@@ -160,7 +168,7 @@ export async function createSecurityDomain(vk: Hex, maxOpenExposure: bigint, use
   const delegated = createRootAccountRefusal(code ?? "0x");
   if (delegated) throw new Error(delegated);
   const [fee, balance] = await Promise.all([
-    estimateCreateRootFee(account, vk, maxOpenExposure, userSalt),
+    estimateCreateRootFee(account, vk, maxOpenExposure, userSalt, recoveryVk),
     reader.getBalance({ address: account }),
   ]);
   const refusal = createRootFeeRefusal(balance, fee);
@@ -170,7 +178,7 @@ export async function createSecurityDomain(vk: Hex, maxOpenExposure: bigint, use
     address: FACTORY,
     abi: factoryAbi,
     functionName: "createRoot",
-    args: [vk, maxOpenExposure, userSalt],
+    args: [vk, recoveryVk, maxOpenExposure, userSalt],
     chain: arc,
   });
 }
@@ -179,7 +187,8 @@ export async function waitForRoot(hash: Hex): Promise<Address> {
   // A missing or transient receipt throws ReceiptPendingError. It is not a rejection.
   const receipt = await awaitReceipt(arcClient(), hash);
   if (receipt.status !== "success") throw new Error("Arc rejected the security domain.");
-  const log = receipt.logs.find((item) => item.address.toLowerCase() === FACTORY.toLowerCase() && item.topics[2]);
+  const homes = new Set([FACTORY.toLowerCase(), FACTORY_LEGACY.toLowerCase()]);
+  const log = receipt.logs.find((item) => homes.has(item.address.toLowerCase()) && item.topics[2]);
   if (!log?.topics[2]) throw new Error("The receipt did not include a root.");
   return getAddress(`0x${log.topics[2].slice(-40)}`);
 }
@@ -224,6 +233,7 @@ export async function estimateCreateRootFee(
   vk: Hex,
   maxOpenExposure: bigint,
   userSalt: Hex = "0x0000000000000000000000000000000000000000000000000000000000000000",
+  recoveryVk: Hex = "0x0000000000000000000000000000000000000000000000000000000000000000",
 ): Promise<bigint> {
   const client = arcClient();
   const gas = await client.estimateContractGas({
@@ -231,7 +241,7 @@ export async function estimateCreateRootFee(
     address: FACTORY,
     abi: factoryAbi,
     functionName: "createRoot",
-    args: [vk, maxOpenExposure, userSalt],
+    args: [vk, recoveryVk, maxOpenExposure, userSalt],
   });
   const price = await client.getGasPrice();
   return quotedCreateRootFee(gas, price);

@@ -10,8 +10,11 @@ export type ExactAccept = {
   amount: string;
   payTo: string;
   maxTimeoutSeconds: number;
-  extra: { name: "USDC"; version: "2"; quoteId: string; bodyHash: string };
+  extra: { name: "USDC"; version: "2"; quoteId: string; bodyHash: string; assetTransferMethod: "eip3009" };
 };
+
+/** Arclight settled an unmodified EIP-3009 payload on Arc. Arcus rejected that same signature. */
+export const DEFAULT_EXACT_FACILITATOR = "https://x402.arclight.finance";
 
 export type SettlementReport = {
   status: string;
@@ -27,10 +30,7 @@ export type SettlementVerdict =
   | { ok: true }
   | { ok: false; reason: "failed" | "wrong_network" | "wrong_asset" | "wrong_payee" | "underpayment" | "wrong_quote" | "expired" | "replay" | "bad_tx" };
 
-/**
- * The standard exact row for one research quote. The live quote builder does not append this
- * until a facilitator settlement has been shown with an unmodified client.
- */
+/** The standard exact row for one research quote. */
 export function exactAccept(input: {
   id: string;
   bodyHash: string;
@@ -45,7 +45,7 @@ export function exactAccept(input: {
     amount: input.price,
     payTo: input.payee,
     maxTimeoutSeconds: input.ttlSeconds,
-    extra: { name: "USDC", version: "2", quoteId: input.id, bodyHash: input.bodyHash },
+    extra: { name: "USDC", version: "2", quoteId: input.id, bodyHash: input.bodyHash, assetTransferMethod: "eip3009" },
   };
 }
 
@@ -67,4 +67,58 @@ export function checkSettlement(
   if (!/^0x[0-9a-fA-F]{64}$/.test(report.txHash)) return { ok: false, reason: "bad_tx" };
   if (seen.has(report.txHash.toLowerCase())) return { ok: false, reason: "replay" };
   return { ok: true };
+}
+
+export function exactFacilitator(env: NodeJS.ProcessEnv = process.env): string {
+  const raw = env.X402_EXACT_FACILITATOR?.trim() || DEFAULT_EXACT_FACILITATOR;
+  if (!/^https:\/\/[a-z0-9.-]+$/i.test(raw)) return DEFAULT_EXACT_FACILITATOR;
+  return raw.replace(/\/$/, "");
+}
+
+export type FacilitatorSettlement =
+  | { ok: true; transaction: string; payer: string }
+  | { ok: false; reason: string };
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+/** The payer in an exact payload, when that payload pays this quote. */
+export function exactPayer(paymentPayload: unknown, requirements: ExactAccept): string | null {
+  const body = asRecord(paymentPayload);
+  const payload = asRecord(body?.payload);
+  const authorization = asRecord(payload?.authorization);
+  if (!authorization) return null;
+  const from = typeof authorization.from === "string" ? authorization.from : "";
+  const to = typeof authorization.to === "string" ? authorization.to : "";
+  const value = typeof authorization.value === "string" ? authorization.value : "";
+  if (!/^0x[0-9a-fA-F]{40}$/.test(from) || !/^0x[0-9a-fA-F]{40}$/.test(to)) return null;
+  if (to.toLowerCase() !== requirements.payTo.toLowerCase()) return null;
+  if (value !== requirements.amount) return null;
+  return from;
+}
+
+/** POST the client's exact payload to the facilitator. A verify response is not a payment. */
+export async function settleWithFacilitator(
+  requirements: ExactAccept,
+  paymentPayload: unknown,
+  fetchImpl: typeof fetch = fetch,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<FacilitatorSettlement> {
+  const base = exactFacilitator(env);
+  const body = JSON.stringify({ x402Version: 2, paymentPayload, paymentRequirements: requirements });
+  const headers = { "content-type": "application/json", accept: "application/json" };
+  const verified = await fetchImpl(`${base}/verify`, { method: "POST", headers, body });
+  const verifyBody = (await verified.json().catch(() => null)) as { isValid?: boolean; invalidReason?: string } | null;
+  if (!verified.ok || verifyBody?.isValid !== true) {
+    return { ok: false, reason: verifyBody?.invalidReason || "verify_rejected" };
+  }
+  const settled = await fetchImpl(`${base}/settle`, { method: "POST", headers, body });
+  const settleBody = (await settled.json().catch(() => null)) as { success?: boolean; transaction?: string; payer?: string; errorReason?: string } | null;
+  const tx = settleBody?.transaction ?? "";
+  if (!settled.ok || settleBody?.success !== true || !/^0x[0-9a-fA-F]{64}$/.test(tx)) {
+    return { ok: false, reason: settleBody?.errorReason || "not_settled" };
+  }
+  return { ok: true, transaction: tx, payer: typeof settleBody?.payer === "string" ? settleBody.payer : "" };
 }

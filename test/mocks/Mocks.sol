@@ -120,6 +120,38 @@ contract MockTab {
     }
 }
 
+contract MockVault {
+    address internal constant USDC_ADDR = 0x3600000000000000000000000000000000000000;
+    mapping(address => uint256) public sharesOf;
+    uint256 public maxIn = type(uint256).max;
+
+    function asset() external pure returns (address) {
+        return USDC_ADDR;
+    }
+
+    function maxDeposit(address) external view returns (uint256) {
+        return maxIn;
+    }
+
+    function setMax(uint256 next) external {
+        maxIn = next;
+    }
+
+    function deposit(uint256 assets, address receiver) external returns (uint256 shares) {
+        if (assets == 0 || assets > maxIn) revert();
+        require(MockUSDC(USDC_ADDR).transferFrom(msg.sender, address(this), assets), "pull");
+        shares = assets;
+        sharesOf[receiver] += shares;
+    }
+
+    function withdraw(uint256 assets, address receiver, address owner) external returns (uint256 shares) {
+        if (assets == 0 || sharesOf[owner] < assets) revert();
+        sharesOf[owner] -= assets;
+        require(MockUSDC(USDC_ADDR).transfer(receiver, assets), "push");
+        shares = assets;
+    }
+}
+
 contract MockBarkeep {
     address internal constant USDC_ADDR = 0x3600000000000000000000000000000000000000;
     bytes public attackCalldata;

@@ -125,13 +125,13 @@ The live root `0x2d0F…6b95` is a 45-byte clone of the matched PQRoot implement
 
 PQTABS enforces the post-quantum authorization, the nonce, the deadline, the exposure ceiling, and the open and close accounting. Those rules are in the Sourcify-matched `PQRoot` source.
 
-Barkeep enforces the capability's agent, payee list, per-call maximum, expiry, and the check that a spend signature recovers to that agent. That bytecode is on mainnet and is not source-verified. The tests use a mock of it. The deployed `PQRoot` does not read `agent()`, `payees()`, or `maxPerCall()` back after opening. `PQRootNext` does, and it is not deployed.
+Barkeep enforces the capability's agent, payee list, per-call maximum, expiry, and the check that a spend signature recovers to that agent. That bytecode is on mainnet and is not source-verified. The tests use a mock of it. The deployed `PQRoot` does not read `agent()`, `payees()`, or `maxPerCall()` back after opening. New roots from `RootFactoryNext` use `PQRootNext`, which does. Existing clones stay on `PQRoot`.
 
 ## If the post-quantum key is lost
 
 The deployed root has one verifying key. `execute` accepts only a signature under that key. There is no admin, no ECDSA override, and no upgrade path on an existing clone. A lost key cannot authorize a replacement. The USDC in that root stays there.
 
-`PQRootNext` (not deployed) is a separate implementation with a 7-day delayed rotation:
+`PQRootNext` is deployed at `0xBc597CDC7c822fC198Da14A134353ad0eCC16758` behind factory `0x909AF4dFeEcDf8B72eaf918f185Cd89d460b0E63`. Existing roots are not migrated. It uses a 7-day delayed rotation:
 
 - The spending key can schedule a new key. If a backup PQ key was set at creation, only that backup key can cancel the schedule. Transfers and new capabilities pause while it is pending.
 - The backup key can schedule a new spending key. Only the current spending key can cancel that schedule. This is the path when the spending key is lost and the backup key is not.
@@ -140,13 +140,13 @@ The deployed root has one verifying key. `execute` accepts only a signature unde
 
 ## Standard x402
 
-The live research quote advertises only `pqtabs-barkeep`. It is not the standard `exact` scheme, and a stock x402 client cannot pay it.
+The live research quote keeps `pqtabs-barkeep` as the first accept and also offers standard `exact` on `eip155:5042`. A stock x402 client can pay the exact row. The Barkeep row is unchanged.
 
-Circle's facilitator documentation lists Arc mainnet as `eip155:5042` with this USDC contract for the `exact` scheme: https://developers.circle.com/facilitator-service/supported-networks . That page was read on 2026-10-13. PQTABS does not call that facilitator. `backend/src/index/exact-settlement.ts` builds an `exact` accept and checks a settlement report (network, asset, payee, amount, quote, expiry, replay, failed status). Those checks are unit-tested. The live quote does not include the row, because no unmodified client has settled a PQTABS quote through a facilitator.
+Arclight (`https://x402.arclight.finance`) verified and settled an EIP-3009 authorization of 360 raw USDC from `0x5C7a54eEaF29310E758Fc6f010eCE827897D183e` to `0xf76e6B0920e9332fF4410f6dD53F01722AbC71a3`. The Arc receipt is `0x9598e26dc991600971af4a18b05943ca72ae74752581bcb8432ef5714b2673db` (status success, block 25,793,534, one USDC transfer of 360 raw). The same payload recovered locally to the payer and was rejected by `https://facilitator.arcusnetwork.co` with `invalid_exact_evm_signature`. The server calls Arclight. Circle's facilitator lists Arc, and this deployment does not call it because `CIRCLE_API_KEY` is empty.
 
 ## Idle treasury
 
-No yield integration is deployed. The address `0x8E357432CC12ff425c36432F312968aEb16112AF` has bytecode on Arc (21,808 bytes) and no Sourcify verification. PQTABS does not send treasury there. Unallocated root USDC earns nothing. Funds inside an open capability are reserved by `openExposure` and are not available to a strategy.
+`PQRootNext` can deposit and withdraw idle USDC through the Galaxy USDC vault `0x8E357432CC12ff425c36432F312968aEb16112AF`. On 2026-10-13 that contract's `asset()` was Arc USDC, its name was Galaxy USDC, and `maxDeposit` was 0, so a deposit reverts until the vault takes more assets. The vault source is not on Sourcify. No USDC has been deposited. Existing roots cannot call these functions. Open-capability funds stay inside the capability and are not deposited.
 
 ## Circle signing
 
@@ -167,7 +167,7 @@ Rows marked **today** were run on 2026-10-13 after the verification pass: the Ci
 
 | Suite | Command | Result |
 |---|---|---|
-| Backend unit and integration | `npm test` in `backend/` | 95 passed, 0 failed, on 2026-10-13 locally. Includes the exact-settlement checks. CI on `6bd578a` was 92, before that file. |
+| Backend unit and integration | `npm test` in `backend/` | 96 passed, 0 failed, on 2026-10-13 locally. Includes the exact-settlement checks and the Arclight settle client. |
 | Backend lint | `npm run lint` in `backend/` | exit 0 (today) |
 | SDK unit tests | `npm test` in `packages/pqtabs-sdk/` | 63 passed, 0 failed, exit 0 (today). Includes the Circle adapter vectors and two offline known vectors from the mined Arc spend `0x5358ec04…65b5` (the adapter digest recovers to the agent that Barkeep accepted) |
 | MCP unit tests | `npm test` in `packages/pqtabs-mcp/` | 19 passed, 0 failed, exit 0 (today). Includes the local signer boundary |
@@ -181,7 +181,7 @@ Rows marked **today** were run on 2026-10-13 after the verification pass: the Ci
 | Frontend lint ratchet | `npm run lint:ratchet` in `frontend/` | Passes (today). The 25 existing errors (17 `react-hooks/refs`, 8 `react-hooks/set-state-in-effect`) and 2 generated-file warnings are recorded in `frontend/lint-baseline.json`. The ratchet fails on any new or increased problem. The baseline is not a claim that these are safe; fixing them is open work |
 | Frontend node tests | `npm test` in `frontend/` (runs all 25 `src/**/*.test.ts` files) | 93 passed, 0 failed, exit 0 (today) |
 | Signer (Rust) | `cargo test --manifest-path signer/Cargo.toml` | 8 passed (5 + 3), exit 0 |
-| Contracts (Foundry) | `forge test` | 30 passed, 0 failed, on 2026-10-13 locally (`PQRoot` 17 including the Rust digest check, `Recovery` 12, exposure invariant 1). `PQRootNext` is not deployed. |
+| Contracts (Foundry) | `forge test` | 33 passed, 0 failed, on 2026-10-13 locally (`PQRoot` 17 including the Rust digest check, `Recovery` 15 including the vault round trip, exposure invariant 1). |
 | Pins and secrets | `python scripts/check_pins.py`, `python scripts/secret_scan.py` | pass (today). The secret scan matches env-style assignments only (`NAME=value` at line start), so ordinary code such as `const token = ...` is no longer flagged. 370 tracked files scanned (today, before the release commit) |
 | Published MCP clean-consumer smoke | `packages/scripts/clean-consumer-smoke.mjs` against the npm package `pqtabs-mcp` 0.1.2 | `SMOKE_OK`, including the local-signer step that lists the paid tool and reports `paidResearchEnabled` with no spend (today) |
 | CI | GitHub Actions `ci` | jobs: contracts, signer (Rust), backend (test and lint), sdk-and-mcp (lint, typecheck, test on Ubuntu), frontend (`tsc --noEmit`, lint ratchet, node tests on Ubuntu), pqtabs-signer (lint and test on Windows, isolated key directory), pins-and-secrets, slither. The status of the latest run is on the [ci workflow page](https://github.com/mohamedwael201193/PQTABS/actions/workflows/ci.yml) |
@@ -343,9 +343,9 @@ Only items marked **Live** run in production today.
 | Proof-of-stake validator set | Potential future transition, not live | Arc docs: consensus layer |
 | Gas paid in other stablecoins | Not supported at launch | Arc docs: stablecoin-native model |
 | Services beyond Arc research | Not built | This repository has one paid service |
-| Delayed PQ recovery (`PQRootNext`) | Implemented and tested. Not deployed | Existing clones cannot be upgraded |
-| Standard x402 `exact` settlement | Checked in unit tests. Not on the live quote | Circle documents Arc support. No live client settlement has been run |
-| Idle-treasury yield | Not integrated | Cited vault has bytecode and no Sourcify match |
+| Delayed PQ recovery (`PQRootNext`) | Live for new roots | Factory `0x909AF4dFeEcDf8B72eaf918f185Cd89d460b0E63`. Existing roots stay on the original factory |
+| Standard x402 `exact` settlement | Live on the research quote | Arclight settlement `0x9598e26d…73db` for 360 raw USDC |
+| Idle-treasury yield | Wired on `PQRootNext` only | Galaxy vault `maxDeposit` was 0 on 2026-10-13. No deposit has been sent |
 
 ## Repository layout
 

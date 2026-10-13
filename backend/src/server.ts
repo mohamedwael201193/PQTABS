@@ -1,11 +1,12 @@
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import type { Address, Hex } from "viem";
-import { assertOurRoot, type Clients, factoryAbi, loadClients, readPortfolio, relay, rootAbi, tabAbi, usdcAbi, withRpcRetry } from "./chain.js";
-import { BARKEEP, CHAIN_ID, EXPLORER, MAX_BODY_BYTES, USDC } from "./constants.js";
+import { assertOurRoot, type Clients, listFactoryRoots, loadClients, readPortfolio, relay, rootAbi, tabAbi, usdcAbi, withRpcRetry } from "./chain.js";
+import { BARKEEP, CHAIN_ID, EXPLORER, MAX_BODY_BYTES, PQROOT_NEXT, USDC, YIELD_VAULT } from "./constants.js";
 import { allowedOrigins, authenticate, createChallenge, createSession, DevAuthError, ensureDevTables, revokeSession, SqlDevStore } from "./dev/session.js";
 import { readRegistrarRoots, readRootState } from "./index/account.js";
 import { decideSpend } from "./index/decide.js";
+import { exactAccept, exactPayer, settleWithFacilitator } from "./index/exact-settlement.js";
 import { startIngest } from "./index/ingest.js";
 import { indexHealth } from "./index/lane.js";
 import { readIndexedPortfolio } from "./index/portfolio.js";
@@ -137,7 +138,10 @@ export function createApp(clients: Clients = loadClients(), getIndex?: () => Sql
     const chainId = await clients.public.getChainId();
     const code = await clients.public.getCode({ address: clients.factory });
     const ready = chainId === CHAIN_ID && !!code && code !== "0x";
-    return c.json({ ok: ready, chainId, factory: clients.factory, relayer: clients.relayerAddress !== null }, ready ? 200 : 503);
+    return c.json(
+      { ok: ready, chainId, factory: clients.factory, factoryNext: clients.factoryNext ?? null, relayer: clients.relayerAddress !== null },
+      ready ? 200 : 503,
+    );
   });
 
   app.get("/v1/config", (c) =>
@@ -145,6 +149,9 @@ export function createApp(clients: Clients = loadClients(), getIndex?: () => Sql
       chainId: CHAIN_ID,
       rpc: process.env.ARC_RPC_URL || "https://rpc.mainnet.arc.io",
       factory: clients.factory,
+      factoryNext: clients.factoryNext ?? null,
+      implementationNext: PQROOT_NEXT,
+      yieldVault: YIELD_VAULT,
       usdc: USDC,
       barkeep: BARKEEP,
       explorer: EXPLORER,
@@ -154,28 +161,17 @@ export function createApp(clients: Clients = loadClients(), getIndex?: () => Sql
   app.get("/v1/registrars/:address/roots", async (c) => {
     const registrar = asAddress(c.req.param("address"), "registrar");
     const index = getIndex?.() ?? null;
-    if (index) {
-      const roots = await readRegistrarRoots(index, clients.public, clients.factory, registrar);
-      return c.json({ registrar, count: roots.length.toString(), roots });
+    const factories = [clients.factory, ...(clients.factoryNext ? [clients.factoryNext] : [])];
+    const indexed = index ? await readRegistrarRoots(index, clients.public, clients.factory, registrar) : [];
+    const onChain = await listFactoryRoots(clients.public, factories, registrar);
+    const seen = new Set(indexed.map((root) => root.toLowerCase()));
+    const roots = [...indexed];
+    for (const root of onChain) {
+      if (seen.has(root.toLowerCase())) continue;
+      seen.add(root.toLowerCase());
+      roots.push(root);
     }
-    const count = await clients.public.readContract({
-      address: clients.factory,
-      abi: factoryAbi,
-      functionName: "rootCount",
-      args: [registrar],
-    });
-    const roots: Address[] = [];
-    for (let i = 0n; i < count; i++) {
-      roots.push(
-        await clients.public.readContract({
-          address: clients.factory,
-          abi: factoryAbi,
-          functionName: "rootAt",
-          args: [registrar, i],
-        }),
-      );
-    }
-    return c.json({ registrar, count: count.toString(), roots });
+    return c.json({ registrar, count: roots.length.toString(), roots });
   });
 
   app.get("/v1/time", async (c) => {
@@ -423,10 +419,46 @@ export function createApp(clients: Clients = loadClients(), getIndex?: () => Sql
         now: Number(existing.expires_at) - 600,
         resourceUrl: "https://pqtabs.onrender.com/v1/research",
       });
-      return c.json({ paymentRequired: again.paymentRequired, quoteId: existing.id, scheme: "pqtabs-barkeep", standardExact: false, replayed: true });
+      return c.json({ paymentRequired: again.paymentRequired, quoteId: existing.id, scheme: "pqtabs-barkeep", standardExact: false, exact: true, replayed: true });
     }
     await rememberQuote(index, draft);
-    return c.json({ paymentRequired: draft.paymentRequired, quoteId: draft.id, scheme: "pqtabs-barkeep", standardExact: false, replayed: false });
+    return c.json({ paymentRequired: draft.paymentRequired, quoteId: draft.id, scheme: "pqtabs-barkeep", standardExact: false, exact: true, replayed: false });
+  });
+
+  app.post("/v1/research/exact", async (c) => {
+    const body = await readBody(c);
+    const quoteId = typeof body.quoteId === "string" ? body.quoteId : "";
+    const index = getIndex?.() ?? null;
+    const stored = await readQuote(index, quoteId);
+    if (!stored) throw new RequestError(400, "unknown_quote", "That quote is not stored.");
+    if (stored.tx_hash && stored.status === "complete" && stored.result) {
+      return c.json({ status: "complete", result: stored.result, model: stored.model, txHash: stored.tx_hash, scheme: "exact", standardExact: true, replayed: true });
+    }
+    if (Number(stored.expires_at) <= Math.floor(Date.now() / 1000)) {
+      throw new RequestError(400, "quote_expired", "That quote has expired. Nothing was settled.");
+    }
+    const requirements = exactAccept({
+      id: stored.id,
+      bodyHash: stored.body_hash,
+      price: stored.price,
+      payee: stored.payee,
+      ttlSeconds: 600,
+    });
+    const payer = exactPayer(body.paymentPayload, requirements);
+    if (!payer) throw new RequestError(400, "bad_payload", "The exact payload does not match this quote.");
+    const settled = await settleWithFacilitator(requirements, body.paymentPayload);
+    if (!settled.ok) throw new RequestError(402, "not_settled", settled.reason);
+    const receipt = await withRpcRetry(() => clients.public.getTransactionReceipt({ hash: settled.transaction as Hex }), 1);
+    const matched = oneUsdcTransfer(
+      { status: receipt.status, logs: receipt.logs.map((entry) => ({ address: entry.address, topics: entry.topics, data: entry.data })) },
+      { from: payer, to: stored.payee, value: stored.price },
+    );
+    if (!matched) throw new RequestError(409, "receipt_mismatch", "The facilitator transaction is not this quote.");
+    const answered = stored.result ? { text: stored.result, model: stored.model } : await askGroq(stored.task);
+    const status = researchDelivery(true, answered.text);
+    if (status === "unpaid") throw new RequestError(409, "receipt_mismatch", "The facilitator transaction is not this quote.");
+    await saveDelivery(index, quoteId, settled.transaction, status, answered.text, answered.model);
+    return c.json({ status, result: answered.text, model: answered.model, txHash: settled.transaction, scheme: "exact", standardExact: true, replayed: false });
   });
 
   app.post("/v1/x402/decide", async (c) => {
@@ -583,7 +615,7 @@ if (entry?.endsWith("/src/server.js")) {
     openIndex()
       .then((index) => {
         holder.sql = index;
-        startIngest(index, clients.public, clients.factory);
+        startIngest(index, clients.public, [clients.factory, ...(clients.factoryNext ? [clients.factoryNext] : [])]);
         log({ route: "index", result: "ready" });
       })
       .catch((error: unknown) => {

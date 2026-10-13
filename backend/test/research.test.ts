@@ -44,7 +44,7 @@ function log(from: string, to: string, value: bigint, address = "0x3600000000000
   };
 }
 
-test("a barkeep quote names the merchant, the tariff, and not the exact scheme", () => {
+test("a research quote keeps the barkeep row and also offers exact", () => {
   const built = quote();
   assert.equal(built.paymentRequired.scheme, "pqtabs-barkeep");
   assert.equal(built.paymentRequired.standardExact, false);
@@ -54,6 +54,11 @@ test("a barkeep quote names the merchant, the tariff, and not the exact scheme",
   assert.equal(built.paymentRequired.accepts[0].extra.tariff, true);
   assert.equal(built.paymentRequired.accepts[0].extra.provider, "Groq");
   assert.equal(built.paymentRequired.accepts[0].extra.maxTokens, 400);
+  assert.equal(built.paymentRequired.accepts[1].scheme, "exact");
+  assert.equal(built.paymentRequired.accepts[1].network, "eip155:5042");
+  assert.equal(built.paymentRequired.accepts[1].amount, "32");
+  assert.equal(built.paymentRequired.accepts[1].payTo, PAYEE);
+  assert.equal(built.paymentRequired.accepts[1].extra.assetTransferMethod, "eip3009");
   assert.equal(researchTariff({}), 360n);
   const parsed = parseBarkeepPayment(built.paymentRequired);
   assert.equal(parsed?.quoteId, built.id);

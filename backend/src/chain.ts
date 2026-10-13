@@ -10,7 +10,7 @@ import {
   type WalletClient,
 } from "viem";
 import { type PrivateKeyAccount, privateKeyToAccount } from "viem/accounts";
-import { CHAIN_ID, FACTORY, FACTORY_BLOCK, MIN_FEE, RPC_URL, USDC } from "./constants.js";
+import { CHAIN_ID, FACTORY, FACTORY_BLOCK, FACTORY_NEXT, MIN_FEE, RPC_URL, USDC } from "./constants.js";
 import { liveReadsPaused, noteRateLimit } from "./index/lane.js";
 import { erc20SpendRaw } from "./index/usdc-event.js";
 import { RequestError } from "./validate.js";
@@ -77,11 +77,14 @@ export type Clients = {
   relayer: WalletClient | null;
   relayerAddress: Address | null;
   factory: Address;
+  /** Null only in tests that build a partial client. Production always sets it. */
+  factoryNext?: Address | null;
 };
 
 export function loadClients(env: NodeJS.ProcessEnv = process.env, signal?: AbortSignal): Clients {
   const rpc = env.ARC_RPC_URL || RPC_URL;
   const factory = (env.FACTORY_ADDRESS || FACTORY) as Address;
+  const factoryNext = (env.FACTORY_NEXT_ADDRESS || FACTORY_NEXT) as Address;
   const publicClient = createPublicClient({
     chain: arc,
     transport: http(rpc, {
@@ -93,11 +96,11 @@ export function loadClients(env: NodeJS.ProcessEnv = process.env, signal?: Abort
   });
   const key = env.RELAYER_PRIVATE_KEY;
   if (!key) {
-    return { public: publicClient, relayer: null, relayerAddress: null, factory };
+    return { public: publicClient, relayer: null, relayerAddress: null, factory, factoryNext };
   }
   const account = privateKeyToAccount((key.startsWith("0x") ? key : `0x${key}`) as Hex);
   const relayer = createWalletClient({ account, chain: arc, transport: http(rpc) });
-  return { public: publicClient, relayer, relayerAddress: account.address, factory };
+  return { public: publicClient, relayer, relayerAddress: account.address, factory, factoryNext };
 }
 
 export async function fee(client: PublicClient): Promise<{ maxFeePerGas: bigint; maxPriorityFeePerGas: bigint }> {
@@ -120,21 +123,46 @@ function isNoCodeRead(error: unknown): boolean {
   return false;
 }
 
+export async function listFactoryRoots(client: PublicClient, factories: readonly Address[], registrar: Address): Promise<Address[]> {
+  const roots: Address[] = [];
+  const seen = new Set<string>();
+  for (const factory of factories) {
+    const count = await client.readContract({ address: factory, abi: factoryAbi, functionName: "rootCount", args: [registrar] });
+    for (let index = 0n; index < count; index++) {
+      const root = await client.readContract({ address: factory, abi: factoryAbi, functionName: "rootAt", args: [registrar, index] });
+      const key = root.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      roots.push(root);
+    }
+  }
+  return roots;
+}
+
+function knownFactories(clients: Clients): Address[] {
+  const next = clients.factoryNext;
+  return next ? [clients.factory, next] : [clients.factory];
+}
+
 export async function assertOurRoot(clients: Clients, root: Address, attempts = 8): Promise<void> {
-  const [registrar, factory] = await Promise.all([
-    withRpcRetry(() => clients.public.readContract({ address: clients.factory, abi: factoryAbi, functionName: "registrarOf", args: [root] }), attempts),
-    withRpcRetry(
-      () =>
-        clients.public
-          .readContract({ address: root, abi: rootAbi, functionName: "factory" })
-          .catch((error: unknown) => {
-            if (isNoCodeRead(error)) return null;
-            throw error;
-          }),
-      attempts,
-    ),
-  ]);
-  if (registrar === "0x0000000000000000000000000000000000000000" || factory === null || factory.toLowerCase() !== clients.factory.toLowerCase()) {
+  const home = await withRpcRetry(
+    () =>
+      clients.public
+        .readContract({ address: root, abi: rootAbi, functionName: "factory" })
+        .catch((error: unknown) => {
+          if (isNoCodeRead(error)) return null;
+          throw error;
+        }),
+    attempts,
+  );
+  const recorded = typeof home === "string" ? home : null;
+  const factory = recorded && knownFactories(clients).find((item) => item.toLowerCase() === recorded.toLowerCase());
+  if (!factory) throw new RequestError(400, "unknown_root", "that address is not a root of this factory");
+  const registrar = await withRpcRetry(
+    () => clients.public.readContract({ address: factory, abi: factoryAbi, functionName: "registrarOf", args: [root] }),
+    attempts,
+  );
+  if (registrar === "0x0000000000000000000000000000000000000000") {
     throw new RequestError(400, "unknown_root", "that address is not a root of this factory");
   }
 }

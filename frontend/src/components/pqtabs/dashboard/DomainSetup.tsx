@@ -269,7 +269,7 @@ export function DomainSetup({ onExit, onReady }: { onExit: () => void; onReady: 
                   <details className="mt-3">
                     <summary className="cursor-pointer text-muted-foreground">Technical details</summary>
                     <p className="mt-2 font-mono text-[11px] leading-relaxed text-muted-foreground">
-                      chainId 5042 · createRoot(bytes32,uint256,bytes32) · value 0 · 0x05545F026b75f03aE9Cf1eA8a8373473c94ed323
+                      chainId 5042 · createRoot(bytes32,bytes32,uint256,bytes32) · value 0 · 0x909AF4dFeEcDf8B72eaf918f185Cd89d460b0E63
                     </p>
                   </details>
                 </div>

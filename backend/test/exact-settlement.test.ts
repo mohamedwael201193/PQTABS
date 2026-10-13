@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { USDC } from "../src/constants.js";
-import { checkSettlement, exactAccept, type SettlementReport } from "../src/index/exact-settlement.js";
+import { checkSettlement, exactAccept, exactPayer, type SettlementReport, settleWithFacilitator } from "../src/index/exact-settlement.js";
 
 const expected = {
   quoteId: "11111111-1111-4111-8111-111111111111",
@@ -18,7 +18,7 @@ function report(over: Partial<SettlementReport> = {}): SettlementReport {
     asset: USDC,
     payee: expected.payee,
     amount: "360",
-    txHash: "0x" + "ab".repeat(32),
+    txHash: `0x${"ab".repeat(32)}`,
     quoteId: expected.quoteId,
     ...over,
   };
@@ -37,6 +37,42 @@ test("an exact accept names Arc mainnet, USDC, and the quote", () => {
   assert.equal(row.asset, USDC);
   assert.equal(row.amount, "360");
   assert.equal(row.extra.quoteId, expected.quoteId);
+  assert.equal(row.extra.assetTransferMethod, "eip3009");
+  const payload = {
+    x402Version: 2,
+    payload: { authorization: { from: "0x5C7a54eEaF29310E758Fc6f010eCE827897D183e", to: row.payTo, value: row.amount } },
+  };
+  assert.equal(exactPayer(payload, row), "0x5C7a54eEaF29310E758Fc6f010eCE827897D183e");
+  assert.equal(exactPayer(payload, { ...row, amount: "1" }), null);
+});
+
+test("settle posts verify and then settle, and a rejected verify does not settle", async () => {
+  const row = exactAccept({
+    id: expected.quoteId,
+    bodyHash: `0x${"11".repeat(32)}`,
+    price: "360",
+    payee: expected.payee,
+    ttlSeconds: 600,
+  });
+  const calls: string[] = [];
+  const fetchImpl: typeof fetch = async (input) => {
+    const url = String(input);
+    calls.push(url);
+    if (url.endsWith("/verify")) {
+      return new Response(JSON.stringify({ isValid: true, payer: "0x5C7a54eEaF29310E758Fc6f010eCE827897D183e" }), { status: 200 });
+    }
+    return new Response(JSON.stringify({ success: true, transaction: `0x${"ab".repeat(32)}`, payer: "0xabc" }), { status: 200 });
+  };
+  const settled = await settleWithFacilitator(row, { payload: {} }, fetchImpl, { X402_EXACT_FACILITATOR: "https://facilitator.example" });
+  assert.equal(settled.ok, true);
+  assert.deepEqual(calls, ["https://facilitator.example/verify", "https://facilitator.example/settle"]);
+  const refused = await settleWithFacilitator(
+    row,
+    { payload: {} },
+    async () => new Response(JSON.stringify({ isValid: false, invalidReason: "invalid_exact_evm_signature" }), { status: 200 }),
+    { X402_EXACT_FACILITATOR: "https://facilitator.example" },
+  );
+  assert.deepEqual(refused, { ok: false, reason: "invalid_exact_evm_signature" });
 });
 
 test("a matching settlement is accepted once", () => {

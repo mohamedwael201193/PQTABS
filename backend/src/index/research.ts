@@ -1,6 +1,7 @@
 import { type Address, getAddress, type Hex, keccak256, toBytes } from "viem";
 import { USDC } from "../constants.js";
 import { ARC_FACTS, sanitizeAnswer } from "./answer-quality.js";
+import { type ExactAccept, exactAccept } from "./exact-settlement.js";
 import { erc20SpendRaw } from "./usdc-event.js";
 
 export const RESEARCH_SCHEME = "pqtabs-barkeep";
@@ -32,7 +33,7 @@ export type ResearchPayment = {
   scheme: typeof RESEARCH_SCHEME;
   standardExact: false;
   resource: { url: string; description: string };
-  accepts: [ResearchAccept];
+  accepts: [ResearchAccept, ExactAccept];
 };
 
 type ResearchAccept = {
@@ -148,7 +149,7 @@ export function buildResearchQuote(input: {
       scheme: RESEARCH_SCHEME,
       standardExact: false,
       resource: { url: input.resourceUrl, description: "Arc Research answer" },
-      accepts: [accept],
+      accepts: [accept, exactAccept({ id: input.id, bodyHash, price, payee: input.payee, ttlSeconds: RESEARCH_TTL_SECONDS })],
     },
   };
 }

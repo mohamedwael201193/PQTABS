@@ -3,9 +3,10 @@ pragma solidity 0.8.30;
 
 import {PQRootNext} from "./PQRootNext.sol";
 
-/// Deploys PQRootNext clones. Not deployed. Live roots stay on RootFactory.
+/// Deploys PQRootNext clones. Live roots stay on RootFactory.
 contract RootFactoryNext {
     address public immutable implementation;
+    address public immutable vault;
 
     mapping(address => address[]) private _roots;
     mapping(address => address) public registrarOf;
@@ -15,8 +16,10 @@ contract RootFactoryNext {
     error Zero();
     error CreateFailed();
 
-    constructor() {
-        implementation = address(new PQRootNext(address(this)));
+    constructor(address vault_) {
+        if (vault_ == address(0)) revert Zero();
+        vault = vault_;
+        implementation = address(new PQRootNext(address(this), vault_));
     }
 
     function createRoot(bytes32 vk, bytes32 recoveryVk, uint256 maxOpenExposure, bytes32 userSalt)

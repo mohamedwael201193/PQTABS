@@ -234,5 +234,25 @@
       "before": { "root_a": 139999 },
       "after": { "root_a": 139998 }
     }
-  ]
+  ],
+  "next": {
+    "factory": "0x909AF4dFeEcDf8B72eaf918f185Cd89d460b0E63",
+    "implementation": "0xBc597CDC7c822fC198Da14A134353ad0eCC16758",
+    "vault": "0x8E357432CC12ff425c36432F312968aEb16112AF",
+    "deploy_tx": "0x68c7ce22eb265bdedbeeab2820fe4f17c6c4f8abce44aa457315a09da84080f1",
+    "deploy_block": 25790508,
+    "deploy_gas": 2812477,
+    "sourcify": "match",
+    "note": "Does not migrate roots of the factory above. Moving an existing treasury still needs that root's post-quantum key.",
+    "exact_settlement": {
+      "facilitator": "https://x402.arclight.finance",
+      "tx": "0x9598e26dc991600971af4a18b05943ca72ae74752581bcb8432ef5714b2673db",
+      "block": 25793534,
+      "gas_used": 91649,
+      "from": "0x5C7a54eEaF29310E758Fc6f010eCE827897D183e",
+      "to": "0xf76e6B0920e9332fF4410f6dD53F01722AbC71a3",
+      "amount_raw6": 360,
+      "status": "success"
+    }
+  }
 }
