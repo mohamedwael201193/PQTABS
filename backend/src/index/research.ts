@@ -276,6 +276,18 @@ export async function askGroq(task: string, env: NodeJS.ProcessEnv = process.env
     const text = typeof content === "string" ? content.trim() : "";
     const reported = typeof body.model === "string" && body.model ? body.model : model;
     if (!text) return { text: "", model: "" };
+    // Token counts only. The task text, the answer, and the key are never logged.
+    const usage = record((payload as { usage?: unknown }).usage);
+    if (usage) {
+      const details = record(usage.completion_tokens_details);
+      console.info(JSON.stringify({
+        event: "research_usage",
+        model: reported,
+        prompt_tokens: usage.prompt_tokens ?? null,
+        completion_tokens: usage.completion_tokens ?? null,
+        reasoning_tokens: details?.reasoning_tokens ?? null,
+      }));
+    }
     return { text: sanitizeAnswer(text), model: reported };
   } catch {
     return { text: "", model: "" };

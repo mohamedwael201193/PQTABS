@@ -1,0 +1,33 @@
+{
+  "src/components/pqtabs/dashboard/AgentDrawer.tsx": {
+    "error:react-hooks/refs": 3
+  },
+  "src/components/pqtabs/dashboard/DashboardApp.tsx": {
+    "error:react-hooks/refs": 11
+  },
+  "src/components/pqtabs/dashboard/DomainSetup.tsx": {
+    "error:react-hooks/set-state-in-effect": 1
+  },
+  "src/components/pqtabs/dashboard/TabDrawer.tsx": {
+    "error:react-hooks/refs": 3,
+    "error:react-hooks/set-state-in-effect": 2
+  },
+  "src/components/pqtabs/shared/CountUp.tsx": {
+    "error:react-hooks/set-state-in-effect": 1
+  },
+  "src/components/ui/carousel.tsx": {
+    "error:react-hooks/set-state-in-effect": 1
+  },
+  "src/hooks/use-account-data.ts": {
+    "error:react-hooks/set-state-in-effect": 2
+  },
+  "src/hooks/use-mobile.ts": {
+    "error:react-hooks/set-state-in-effect": 1
+  },
+  "src/lib/pq/pqtabs_sign_wasm.d.ts": {
+    "warning:fatal": 1
+  },
+  "src/lib/pq/pqtabs_sign_wasm_bg.wasm.d.ts": {
+    "warning:fatal": 1
+  }
+}

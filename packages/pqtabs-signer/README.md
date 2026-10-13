@@ -2,7 +2,40 @@
 
 Local agent signer for PQTABS on Arc. It keeps the agent key on this machine, protected by the operating system, and signs one Arc USDC authorization at a time for Barkeep. The key is never printed, sent to the backend, placed in the frontend, stored in a database, or returned to MCP.
 
-Status: private package, version 0.1.0, not published. Windows only in this version. Other platforms fail closed.
+Status: private package, version 0.1.0, not published to npm. Windows only in this version. Other platforms fail closed.
+
+## Install on Windows
+
+Requirements: Windows 10 or 11, Windows PowerShell 5.1 or PowerShell 7, Node.js 22 or newer.
+
+```powershell
+cd packages\pqtabs-signer
+powershell -ExecutionPolicy Bypass -File scripts\install-windows.ps1
+```
+
+The script runs `npm ci` from the committed lockfile, builds the CLI, runs the 43 signer tests (including real DPAPI round-trips), checks that the machine reports `windows-dpapi-user`, and prints the CLI path and the two MCP settings. It creates, imports, and prints no key. Add `-SkipTests` to skip the tests. A clean copy of this package was installed and tested this way on 2026-10-13.
+
+Then choose one of these, in an interactive terminal (the passphrase is read with echo off):
+
+```powershell
+node dist\src\cli.js create                                   # a new agent key on this machine
+node dist\src\cli.js import-backup backup.json --agent 0x...  # an existing PQTABS-AGENT-1 backup
+node dist\src\cli.js status --agent 0x...                     # prints whether it unlocks, never the key
+```
+
+Put the printed `PQTABS_SIGNER_CLI` (absolute path to `dist\src\cli.js`) and `PQTABS_SIGNER_AGENT` (the public address) in the `pqtabs` entry of your MCP configuration. Do not set `PQTABS_AGENT_PRIVATE_KEY` as well: the MCP refuses to start with both.
+
+## Other operating systems
+
+macOS and Linux are not supported yet. `platform`, `create`, `import-backup`, `status`, `list`, `forget`, and `sign` all stop with `unsupported_platform` and store nothing. This is deliberate: no key is written to a file that the operating system does not protect.
+
+To add a platform, implement a `Protector` in `src/protect.ts` (`protect` and `unprotect`, both failing closed) backed by that system's own store, for example the macOS Keychain with an access-control item, or the Linux Secret Service. Then:
+
+1. Add tests that run on that platform, including a round-trip, a wrong-user or missing-item refusal, and a corrupt-store refusal.
+2. Add a CI job on that platform's runner, next to the `pqtabs-signer` Windows job in `.github/workflows/ci.yml`.
+3. Add its install script next to `scripts/install-windows.ps1` and update this section.
+
+Until then, a developer on macOS or Linux can use the MCP without a local signer (read tools only), or pair from a machine that runs Windows.
 
 ## Commands
 
@@ -41,6 +74,6 @@ The `sign` input is:
 
 ```
 npm run build
-npm test          # 34 unit tests, including real DPAPI round-trips on Windows
+npm test          # 43 unit tests, including real DPAPI round-trips on Windows (CI: windows-latest)
 npm run lint      # Biome
 ```

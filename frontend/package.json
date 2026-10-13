@@ -7,6 +7,8 @@
     "build": "next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/",
     "start": "NODE_ENV=production bun .next/standalone/server.js 2>&1 | tee server.log",
     "lint": "eslint .",
+    "lint:ratchet": "node scripts/lint-ratchet.mjs",
+    "test": "node scripts/run-node-tests.mjs",
     "test:agent-vault": "node --experimental-strip-types --test src/data/agent-vault.test.ts",
     "test:receipt": "node --experimental-strip-types --test src/data/receipt.test.ts",
     "db:push": "prisma db push --accept-data-loss",

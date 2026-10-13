@@ -111,7 +111,7 @@ The addresses are taken from `deployments/mainnet.json` and `backend/src/constan
 - **Root authority.** Root actions carry a nonce and a deadline inside the signed digest (`PQRoot.digestFor`). `PQRoot.execute` checks the SLH-DSA-SHA2-128s signature on chain and is guarded by `nonReentrant`.
 - **Exposure ceiling.** Each root is created with a `maxOpenExposure` ceiling (`RootFactory.createRoot`). Opening a capability cannot push open exposure above it.
 - **Capability limits.** A capability holds a fixed cap, an expiry, and a payee. The backend refuses a spend when the balance is empty or the price exceeds what remains (reason `balance`) before any signing.
-- **Agent key.** The agent signs spend requests with a classical ECDSA key, which is separate from the post-quantum root. The key lives in one of two places: the browser vault (AES-GCM encrypted with a non-extractable device key in IndexedDB) or the local signer on Windows (DPAPI). The backend never receives the agent or root key. The app never asks for a private key or a signature paste.
+- **Agent key.** The agent signs spend requests with a classical ECDSA key, which is separate from the post-quantum root. The key lives in one of two places: the browser vault (AES-GCM encrypted with a non-extractable device key in IndexedDB) or the local signer on Windows (DPAPI). The backend never receives the agent or root key. The app never asks for a private key. The one signature it asks you to paste is the Developer Page pairing signature, which proves control of the address and authorizes nothing.
 - **Local signer (Windows).** `pqtabs-signer` keeps an agent key encrypted with Windows DPAPI for the current user, under `%LOCALAPPDATA%\pqtabs-signer\keys`. The MCP server starts the signer as a child process and receives only the 65-byte signature for each approved authorization. On this path the MCP process never holds the raw key. DPAPI does not protect against code that already runs as the same user.
 - **Relayer.** The relayer pays gas and broadcasts transactions. Root actions need the post-quantum signature, which the relayer does not hold.
 - **Circle wallets.** Circle's agent wallet from the CLI is a smart contract account. Barkeep's tab accepts only an ECDSA signature from an externally owned account, so that wallet cannot be the agent. Circle's docs list only `ARC-TESTNET` in the Wallets and CCTP tables, so the mainnet chain code `ARC` used by the adapter is unverified. A Circle developer-controlled EOA has a signer adapter (`circleDeveloperSigner` in `pqtabs-sdk`). Its digest reproduces the signer that Barkeep accepted for a mined Arc spend (an offline known vector). A live Circle signature has not been produced, so the compatibility of Circle's live signing is not proven. It needs your own Circle credentials and an approved test.
@@ -122,14 +122,14 @@ Known limits, stated plainly:
 
 - Arc's public RPC rate-limits reads. The backend retries rate-limited calls. A `429` from `/v1/x402/decide` is usually a read limit, not a refusal of the payment.
 - Closing a capability needs the root's security-key unlock in the browser.
-- `pqtabs-mcp` 0.1.2 on npm starts the local signer when `PQTABS_SIGNER_CLI` and `PQTABS_SIGNER_AGENT` are set, so the MCP process never holds the key. Versions 0.1.1 and earlier read `PQTABS_AGENT_PRIVATE_KEY` from their environment, which puts the key in the server process. The signer itself is Windows-only (DPAPI) and is not published to npm. The MCP configuration points at its built CLI.
+- `pqtabs-mcp` 0.1.2 on npm starts the local signer when `PQTABS_SIGNER_CLI` and `PQTABS_SIGNER_AGENT` are set, so the MCP process never holds the key. Versions 0.1.1 and earlier read `PQTABS_AGENT_PRIVATE_KEY` from their environment, which puts the key in the server process. The signer itself is Windows-only (DPAPI) and is not published to npm. Install and check it with `packages/pqtabs-signer/scripts/install-windows.ps1`. macOS and Linux fail closed: no key is stored there. The signer README lists what a store for another platform must provide. The MCP configuration points at the built CLI.
 - A receipt that Arc has not returned yet is shown as pending, not failed. The frontend waits up to 90 seconds with bounded backoff on `-32014`, then tells you to check the explorer before you retry. Only a `success` or `reverted` receipt is treated as a result.
 - Portfolio reads scan each root only from the last scanned block, not from the factory deploy block. A fresh read is cached for 10 seconds, and a live scan is refused with `503` while the RPC is rate-limiting.
-- A capability with a zero balance still counts its cap toward open exposure until it is closed.
+- A capability with a zero balance still counts its cap toward open exposure until it is closed. `PQRoot` adds the cap to `openExposure` on open and subtracts it only on close. Closing needs a root-signed close, or, after the capability's expiry, anyone can call `reclaim(tab)`, which is permissionless and costs gas. On the mainnet root `0x2d0F…6b95`, `maxOpenExposure` is 10,000 raw USDC (0.01 USDC), so one 360-raw capability uses 3.6% of the ceiling until it is closed. The ceiling is a root setting and changing it needs a root action.
 
 ## Test totals
 
-Rows marked **today** were run on 2026-10-13 from the working tree that includes the local signer, the Circle adapter, and the Developer Page onboarding. Other rows are from 2026-10-12 at commit `6299974` (research answer quality).
+Rows marked **today** were run on 2026-10-13 after the verification pass: the Circle known vectors, single-use pairing (commit `215c72b`), and the CI, lint, signer-install, and usage-measurement changes that follow it. Other rows are older runs and say so.
 
 | Suite | Command | Result |
 |---|---|---|
@@ -144,13 +144,13 @@ Rows marked **today** were run on 2026-10-13 from the working tree that includes
 | Receipt wait | `npm run test:receipt` in `frontend/` | 9 passed, 0 failed, exit 0 (today). A timeout or transient RPC error is pending, never failed |
 | Developer address field | `node --experimental-strip-types --test src/components/pqtabs/developers/agent-address.test.ts` | 3 passed, 0 failed, exit 0 (today). Refuses key-shaped input |
 | Developer pairing and session | `node --experimental-strip-types --test` on `pairing.test.ts` and `developer-session.test.ts` | 6 and 6 passed, 0 failed, exit 0 (today). The pairing vector matches the signer, and a lowercase address pairs as its checksum form |
-| Frontend lint | `npx eslint .` in `frontend/` | 25 errors and 2 warnings, all react-hooks rules in existing dashboard and other files (today). CI does not run frontend lint. Not changed in this pass |
-| Frontend node tests | `node --experimental-strip-types --test` over the 25 `frontend/src/**/*.test.ts` files | 92 passed, 0 failed, exit 0 (today) |
+| Frontend lint ratchet | `npm run lint:ratchet` in `frontend/` | Passes (today). The 25 existing errors (17 `react-hooks/refs`, 8 `react-hooks/set-state-in-effect`) and 2 generated-file warnings are recorded in `frontend/lint-baseline.json`. The ratchet fails on any new or increased problem. The baseline is not a claim that these are safe; fixing them is open work |
+| Frontend node tests | `npm test` in `frontend/` (runs all 25 `src/**/*.test.ts` files) | 93 passed, 0 failed, exit 0 (today) |
 | Signer (Rust) | `cargo test --manifest-path signer/Cargo.toml` | 8 passed (5 + 3), exit 0 |
 | Contracts (Foundry) | `forge test` | 17 test functions in 2 files (grep count). Foundry is not installed locally; the CI `contracts` job passed. |
 | Pins and secrets | `python scripts/check_pins.py`, `python scripts/secret_scan.py` | pass (today). The secret scan matches env-style assignments only (`NAME=value` at line start), so ordinary code such as `const token = ...` is no longer flagged. 370 tracked files scanned (today, before the release commit) |
 | Published MCP clean-consumer smoke | `packages/scripts/clean-consumer-smoke.mjs` against the npm package `pqtabs-mcp` 0.1.2 | `SMOKE_OK`, including the local-signer step that lists the paid tool and reports `paidResearchEnabled` with no spend (today) |
-| CI | GitHub Actions `ci` | the runs on `81ded30` and `6f0a39c` (today) completed with conclusion success: contracts, signer, backend, pins-and-secrets, slither |
+| CI | GitHub Actions `ci` | jobs: contracts, signer (Rust), backend (test and lint), sdk-and-mcp (lint, typecheck, test on Ubuntu), frontend (`tsc --noEmit`, lint ratchet, node tests on Ubuntu), pqtabs-signer (lint and test on Windows, isolated key directory), pins-and-secrets, slither. The status of the latest run is on the [ci workflow page](https://github.com/mohamedwael201193/PQTABS/actions/workflows/ci.yml) |
 
 ## Quick start
 
@@ -170,9 +170,22 @@ cd ..
 # frontend
 cd frontend
 npm ci
+npx tsc --noEmit
+npm run lint:ratchet   # no new lint problems beyond frontend/lint-baseline.json
+npm test               # 93 node tests
 npx next dev -p 3000   # http://localhost:3000
+cd ..
 
-# signer
+# SDK and MCP (one npm workspace in packages/)
+cd packages
+npm ci
+npm test --workspaces --if-present
+cd ..
+
+# local signer (Windows; see packages/pqtabs-signer/README.md for the other platforms)
+powershell -ExecutionPolicy Bypass -File packages\pqtabs-signer\scripts\install-windows.ps1
+
+# Rust signer for the browser
 cargo test --manifest-path signer/Cargo.toml
 ```
 
@@ -222,6 +235,26 @@ Arc's native USDC also emits a `Transfer` event at `0xffffFFFfFFffffffffffffffFf
 
 Worked example: the research payment `0x41496d26…76ae` has one ERC-20 `Transfer` log whose `data` decodes to `360`. At 6 decimals that is `0.00036 USDC`, the research price.
 
+## Research economics
+
+The research tariff is **360 raw USDC (0.00036 USDC) per answer**. It is a documented demo subsidy, not a price that covers cost. It stays unchanged until a change is approved.
+
+Measured on 2026-10-13:
+
+- **Provider (Groq, `openai/gpt-oss-120b`, list price $0.15 and $0.60 per 1M input and output tokens).** A 13-question sample through the production `askGroq` path, with max 400 output tokens and reasoning effort low: input mean 552 tokens (max 608), output mean 86 (max 224), of which reasoning mean 26. All 13 finished with `stop`; none reached the 400-token cap. Provider cost per answer: mean 134.5 raw, p90 205, max 218. The backend now logs token counts for each answer (event `research_usage`, counts only).
+- **Relayer gas per spend.** 2,112 raw (0.00211 USDC), 5.9 times the tariff. Capability open plus close: 22,460 raw (0.02246 USDC), paid by the relayer.
+- **Hosting.** Render free plan, platform fee $0 (measured). Vercel plan not measured. The RPC is the public Arc endpoint, treated as zero.
+
+Break-even price per answer, `P_min = gas + provider cost + (open + close + hosting) / uses`:
+
+| Uses per capability | P_min (raw USDC), provider mean 134.5 | P_min with provider p90 205 |
+|---|---|---|
+| 1 | 24,707 (0.02471 USDC) | 24,777 (0.02478 USDC) |
+| 10 | 4,493 (0.00449 USDC) | 4,563 (0.00456 USDC) |
+| 100 | 2,472 (0.00247 USDC) | 2,542 (0.00254 USDC) |
+
+At 360 raw each answer loses about 1,887 raw (0.00189 USDC) before capability overhead, mostly relayer gas. Do not claim profitability at this tariff. Not measured: Vercel hosting, and provider cost of real production tasks beyond the 13-question sample. To repeat the measurement, run `node packages/scripts/groq-usage-measure.mjs` (13 direct Groq calls, no Arc payment). Evidence: `packages/scripts/evidence/groq-usage-2026-10-13.json`.
+
 ## Troubleshooting
 
 | Symptom | Likely cause | What to do |
@@ -243,7 +276,7 @@ The Developer Page (`/developers` in the app) covers install, MCP setup, tools, 
 The onboarding flow is:
 
 1. Optional: connect a Circle developer-controlled EOA. The primary path does not need Circle credentials.
-2. Create a local signer on your machine with `pqtabs-signer create`. Only the public address is shown in the browser.
+2. Install the local signer on Windows with `packages/pqtabs-signer/scripts/install-windows.ps1`, then create its key with `pqtabs-signer create` (or import a backup). Only the public address is shown in the browser.
 3. Pair the signer with the app. The app asks for a signature over a fixed pairing message that carries the origin, a nonce, and an expiry. The signature authorizes nothing. The app checks it against the agent address, and each request confirms once (a second check of the same request is refused).
 4. Authorize a capability through the root flow in the app. A session never stands in for this step.
 5. Connect `pqtabs-mcp` 0.1.2 with `PQTABS_SIGNER_CLI` and `PQTABS_SIGNER_AGENT`.
