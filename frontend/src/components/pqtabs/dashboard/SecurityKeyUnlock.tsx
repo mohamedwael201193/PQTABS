@@ -3,11 +3,13 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { backupMatchesRoot, backupRefusal } from "@/data/pq-key-match";
-import { lockRoot, rootSession, rootUnlocked, subscribeRootSession, unlockBackup, verifyingKey, type RootSessionState } from "@/data/pq-vault";
+import { lockRoot, rootSession, rootUnlocked, securityKeyLoadError, subscribeRootSession, unlockBackup, verifyingKey, type RootSessionState } from "@/data/pq-vault";
 import { hasRootBackup, loadRootBackup, saveRootBackup } from "@/data/root-backup";
 import { usePqtabsData } from "@/lib/store";
 
 function unlockError(reason: unknown): string {
+  const loaded = securityKeyLoadError(reason);
+  if (loaded) return loaded;
   const raw = reason instanceof Error ? reason.message : String(reason ?? "");
   if (raw === "not a pqtabs backup") return "This file is not a security-key backup. Nothing was signed.";
   if (raw === "decrypt failed") return "That passphrase did not open this backup. Nothing was signed.";

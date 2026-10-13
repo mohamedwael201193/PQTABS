@@ -7,7 +7,7 @@
  */
 
 type WasmSigner = {
-  default: (input?: { module_or_path?: string }) => Promise<unknown>;
+  default: (input?: { module_or_path?: BufferSource | string }) => Promise<unknown>;
   keygen_json: () => string;
   sign_hex: (signingKeyHex: string, digestHex: string) => string;
   backup_encrypt_hex: (passphrase: string, plaintext: string) => string;
@@ -84,12 +84,34 @@ function holds(registrar: string): boolean {
 }
 let loading: Promise<WasmSigner> | null = null;
 
+/** Chrome aborts streaming compile of the brotli-compressed signer. Bytes compile instead. A failed load can be retried. */
+export function securityKeyLoadError(reason: unknown): string | null {
+  const raw = reason instanceof Error ? reason.message : String(reason ?? "");
+  if (/WebAssembly|wasm|security-key signer did not load|Response body loading was aborted/i.test(raw)) {
+    return "The security-key signer did not finish loading. Nothing was signed. Try unlock again.";
+  }
+  return null;
+}
+
+async function loadSigner(): Promise<WasmSigner> {
+  const mod = await import("@/lib/pq/pqtabs_sign_wasm.js");
+  const api = mod as unknown as WasmSigner;
+  const response = await fetch("/pq/pqtabs_sign_wasm_bg.wasm");
+  if (!response.ok) throw new Error("The security-key signer did not load. Nothing was signed.");
+  const bytes = await response.arrayBuffer();
+  const magic = new Uint8Array(bytes, 0, Math.min(4, bytes.byteLength));
+  if (magic.length < 4 || magic[0] !== 0x00 || magic[1] !== 0x61 || magic[2] !== 0x73 || magic[3] !== 0x6d) {
+    throw new Error("The security-key signer did not load. Nothing was signed.");
+  }
+  await api.default({ module_or_path: bytes });
+  return api;
+}
+
 async function signer(): Promise<WasmSigner> {
   if (!loading) {
-    loading = import("@/lib/pq/pqtabs_sign_wasm.js").then(async (mod) => {
-      const api = mod as unknown as WasmSigner;
-      await api.default({ module_or_path: "/pq/pqtabs_sign_wasm_bg.wasm" });
-      return api;
+    loading = loadSigner().catch((error: unknown) => {
+      loading = null;
+      throw error;
     });
   }
   return loading;
