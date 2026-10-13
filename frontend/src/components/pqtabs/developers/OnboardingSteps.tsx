@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { type ReactNode, useState } from "react";
-import { isAddress } from "viem";
+import { type AgentAddressState, classifyAgentInput } from "./agent-address";
 import { CopyBlock } from "./CopyBlock";
 
 /**
@@ -10,22 +10,6 @@ import { CopyBlock } from "./CopyBlock";
  * It accepts only a public agent address (the one `pqtabs-signer status` prints), and it refuses anything that
  * looks like a private key. Opening a capability is a root action in the PQTABS app, with the root's signature.
  */
-
-const PRIVATE_KEY_LIKE = /^(0x)?[0-9a-fA-F]{64}$/;
-
-type AddressState =
-  | { kind: "empty" }
-  | { kind: "key" }
-  | { kind: "invalid" }
-  | { kind: "valid"; address: string };
-
-export function classifyAgentInput(value: string): AddressState {
-  const trimmed = value.trim();
-  if (trimmed === "") return { kind: "empty" };
-  if (PRIVATE_KEY_LIKE.test(trimmed)) return { kind: "key" };
-  if (isAddress(trimmed)) return { kind: "valid", address: trimmed };
-  return { kind: "invalid" };
-}
 
 const SIGNER_PLACEHOLDER = "<path to packages/pqtabs-signer/dist/src/cli.js>";
 
@@ -117,7 +101,7 @@ export function OnboardingSteps() {
           {state.kind === "empty" && "Enter the address of the agent your root opened. Nothing is sent anywhere."}
           {state.kind === "key" && (
             <span className="text-destructive">
-              This looks like a private key. Do not paste keys here. Paste only the public address that pqtabs-signer status prints.
+              This looks like a private key (64 hex characters). Do not paste keys here. Paste only the public address that pqtabs-signer status prints.
             </span>
           )}
           {state.kind === "invalid" && <span className="text-destructive">Enter a public address: 0x followed by 40 hex characters.</span>}

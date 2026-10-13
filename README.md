@@ -137,6 +137,7 @@ Rows marked **today** were run on 2026-10-13 from the working tree that includes
 | MCP unit tests | `npm test` in `packages/pqtabs-mcp/` | 19 passed, 0 failed, exit 0 (today). Includes the local signer boundary |
 | SDK and MCP lint | `npx biome check src test` | exit 0 (today) |
 | Frontend typecheck | `npx tsc --noEmit` in `frontend/` | 0 errors (today) |
+| Developer address field | `node --experimental-strip-types --test src/components/pqtabs/developers/agent-address.test.ts` | 3 passed, 0 failed, exit 0 (today). Refuses key-shaped input |
 | Frontend lint | `npx eslint .` in `frontend/` | 25 errors and 2 warnings, all react-hooks rules in existing dashboard and other files (today). CI does not run frontend lint. Not changed in this pass |
 | Frontend node tests | `node --experimental-strip-types --test` over the 21 `frontend/src/**/*.test.ts` files | 69 passed, 0 failed, exit 0 |
 | Signer (Rust) | `cargo test --manifest-path signer/Cargo.toml` | 8 passed (5 + 3), exit 0 |
