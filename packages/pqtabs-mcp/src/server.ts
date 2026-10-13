@@ -9,7 +9,7 @@ import {
 } from "pqtabs-sdk";
 import { z } from "zod";
 
-export const PACKAGE_VERSION = "0.1.1";
+export const PACKAGE_VERSION = "0.1.2";
 
 const addressSchema = z.string().regex(/^0x[0-9a-fA-F]{40}$/, "expected an EVM address");
 const txHashSchema = z.string().regex(/^0x[0-9a-fA-F]{64}$/, "expected a 32-byte transaction hash");

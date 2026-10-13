@@ -1,6 +1,6 @@
 {
   "name": "pqtabs-mcp",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Local stdio MCP server for PQTABS on Arc. Check capabilities, price research, and pay only inside an already-authorized USDC capability.",
   "keywords": [
     "mcp",

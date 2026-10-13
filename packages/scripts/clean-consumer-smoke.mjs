@@ -21,6 +21,10 @@ const packagesRoot = resolve(here, "..");
 const sdkDir = join(packagesRoot, "pqtabs-sdk");
 const mcpDir = join(packagesRoot, "pqtabs-mcp");
 const useRegistry = process.argv.includes("--registry");
+// Versions come from each package's manifest, so a release bump cannot leave the smoke test checking an old version.
+const readVersion = (dir) => JSON.parse(readFileSync(join(dir, "package.json"), "utf8").replace(/^\uFEFF/, "")).version;
+const sdkVersion = readVersion(sdkDir);
+const mcpVersion = readVersion(mcpDir);
 
 const ROOT_A = "0x846f56a8547Fe5cC3120c189c5640e84DAAB65Cf";
 const SETTLED_TX = "0x74ce7b557f8e5156af8fca701b40d833651ff1d206442f0a3ef4c801698f1b15";
@@ -85,8 +89,8 @@ try {
     checkTarballContents("pqtabs-mcp", packageFiles(mcpDir));
     run("npm", ["pack", "--pack-destination", workdir], { cwd: sdkDir });
     run("npm", ["pack", "--pack-destination", workdir], { cwd: mcpDir });
-    tarballs.sdk = join(workdir, "pqtabs-sdk-0.1.0.tgz");
-    tarballs.mcp = join(workdir, "pqtabs-mcp-0.1.1.tgz");
+    tarballs.sdk = join(workdir, `pqtabs-sdk-${sdkVersion}.tgz`);
+    tarballs.mcp = join(workdir, `pqtabs-mcp-${mcpVersion}.tgz`);
   }
 
   const project = join(workdir, "consumer");
@@ -96,7 +100,7 @@ try {
     private: true,
     type: "module",
     dependencies: useRegistry
-      ? { "pqtabs-mcp": "0.1.1", "pqtabs-sdk": "0.1.0" }
+      ? { "pqtabs-mcp": "latest", "pqtabs-sdk": "latest" }
       : { "pqtabs-mcp": `file:${tarballs.mcp.replaceAll("\\", "/")}`, "pqtabs-sdk": `file:${tarballs.sdk.replaceAll("\\", "/")}` },
   };
   writeFileSync(join(project, "package.json"), JSON.stringify(manifest, null, 2));
@@ -106,7 +110,10 @@ try {
 
   const installed = JSON.parse(readFileSync(join(project, "node_modules", "pqtabs-mcp", "package.json"), "utf8").replace(/^\uFEFF/, ""));
   const installedSdk = JSON.parse(readFileSync(join(project, "node_modules", "pqtabs-sdk", "package.json"), "utf8").replace(/^\uFEFF/, ""));
-  check(installed.version === "0.1.1" && installedSdk.version === "0.1.0", "installed versions are mcp 0.1.1 / sdk 0.1.0");
+  // Local mode must install exactly the packed versions. Registry mode installs whatever npm has as latest.
+  const expectMcp = useRegistry ? installed.version : mcpVersion;
+  const expectSdk = useRegistry ? installedSdk.version : sdkVersion;
+  check(installed.version === expectMcp && installedSdk.version === expectSdk, `installed versions are mcp ${installed.version} / sdk ${installedSdk.version}`);
 
   const probe = join(project, "probe.mjs");
   writeFileSync(
@@ -140,7 +147,7 @@ assert.throws(() => new PqtabsClient({ backendUrl: "http://example.com" }), Pqta
 console.log("  ok   sdk entry points import; plain http is refused for a remote backend");
 
 // 2. The MCP package exports a server factory and a version that matches.
-assert.equal(PACKAGE_VERSION, "0.1.1");
+assert.equal(PACKAGE_VERSION, "${installed.version}");
 assert.equal(typeof createPqtabsServer, "function");
 console.log("  ok   mcp entry points import (version " + PACKAGE_VERSION + ")");
 
@@ -184,6 +191,24 @@ assert.equal(bad.isError, true, "invalid input is rejected");
 console.log("  ok   invalid input is rejected by the schema");
 
 await client.close();
+
+// 4. Optional: the local-signer path. Runs only when the operator passes a signer CLI and a PUBLIC agent address.
+// It never calls the paid tool and never signs. It checks that the paid tool is advertised and that status shows the address.
+if (process.env.PQTABS_SMOKE_SIGNER_CLI && process.env.PQTABS_SMOKE_SIGNER_AGENT) {
+  const signerEnv = { ...env, PQTABS_SIGNER_CLI: process.env.PQTABS_SMOKE_SIGNER_CLI, PQTABS_SIGNER_AGENT: process.env.PQTABS_SMOKE_SIGNER_AGENT };
+  const signedTransport = new StdioClientTransport({ command: process.execPath, args: [cliPath], env: signerEnv, stderr: "pipe" });
+  const signedClient = new Client({ name: "consumer-smoke-signer", version: "0.0.0" });
+  await signedClient.connect(signedTransport);
+  const signedTools = (await signedClient.listTools()).tools.map((t) => t.name);
+  assert.ok(signedTools.includes("pqtabs_run_paid_research"), "paid tool is advertised with the local signer");
+  const signedStatus = await signedClient.callTool({ name: "pqtabs_status", arguments: {} });
+  assert.ok(!signedStatus.isError, "status works with the local signer");
+  assert.equal(signedStatus.structuredContent.paidResearchEnabled, true, "status reports paid research enabled");
+  assert.equal(signedStatus.structuredContent.agentAddress.toLowerCase(), process.env.PQTABS_SMOKE_SIGNER_AGENT.toLowerCase(), "status shows the public agent address");
+  console.log("  ok   local signer path: paid tool advertised; status shows the public agent address; nothing was signed or spent");
+  await signedClient.close();
+}
+
 console.log("SMOKE_OK");
 `,
   );
@@ -192,7 +217,13 @@ console.log("SMOKE_OK");
   const probeOutput = spawnSync(process.execPath, [probe], {
     cwd: project,
     encoding: "utf8",
-    env: { PATH: process.env.PATH ?? "", SYSTEMROOT: process.env.SYSTEMROOT ?? "", PQTABS_SMOKE_STATE: join(workdir, "state") },
+    env: {
+      PATH: process.env.PATH ?? "",
+      SYSTEMROOT: process.env.SYSTEMROOT ?? "",
+      PQTABS_SMOKE_STATE: join(workdir, "state"),
+      PQTABS_SMOKE_SIGNER_CLI: process.env.PQTABS_SMOKE_SIGNER_CLI ?? "",
+      PQTABS_SMOKE_SIGNER_AGENT: process.env.PQTABS_SMOKE_SIGNER_AGENT ?? "",
+    },
   });
   process.stdout.write(probeOutput.stdout);
   if (probeOutput.stderr.trim()) process.stdout.write(`stderr: ${probeOutput.stderr.slice(-1500)}\n`);

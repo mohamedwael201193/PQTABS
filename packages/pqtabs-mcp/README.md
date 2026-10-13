@@ -62,23 +62,26 @@ On Windows, if the host cannot start `npx`, use the full path to `npx.cmd`, or i
 
 ### Enable paid research (optional)
 
-Read tools work without a key. Paid research is only offered when an **agent key** for an already-authorized capability is set in the server's environment. Add it to the same entry:
+Read tools work without a signer. Paid research is offered only when the server has a signer for an agent that an already-authorized capability names. Use the **local signer**. The MCP server then never holds the agent key. It starts `pqtabs-signer sign` as a child process and receives one signature per approved payment:
 
 ```json
 {
   "mcpServers": {
     "pqtabs": {
       "command": "npx",
-      "args": ["-y", "pqtabs-mcp"],
+      "args": ["-y", "pqtabs-mcp@0.1.2"],
       "env": {
-        "PQTABS_AGENT_PRIVATE_KEY": "<agent key from your secret store>"
+        "PQTABS_SIGNER_CLI": "<path to packages/pqtabs-signer/dist/src/cli.js>",
+        "PQTABS_SIGNER_AGENT": "<the public agent address from pqtabs-signer status>"
       }
     }
   }
 }
 ```
 
-Prefer a secret manager over a plain config file. Never paste the root's post-quantum key or backup phrase into any configuration.
+`PQTABS_SIGNER_CLI` needs the `pqtabs-signer` CLI from the PQTABS repository. It is not published to npm yet. Build it with `npm run build` in `packages/pqtabs-signer`. Setting both variables without the CLI, or the CLI without the address, stops the server with a message. Nothing is started.
+
+The legacy `PQTABS_AGENT_PRIVATE_KEY` variable still works, but the key then sits in the server process. Do not set it together with the local signer. Never paste the root's post-quantum key or backup phrase into any configuration.
 
 ## Environment variables
 
@@ -87,7 +90,9 @@ Prefer a secret manager over a plain config file. Never paste the root's post-qu
 | `PQTABS_BACKEND_URL` | `https://pqtabs.onrender.com` | Backend. Plain `http` is allowed only for localhost. |
 | `PQTABS_RPC_URL` | `https://rpc.mainnet.arc.io` | Arc RPC for chain checks and receipts |
 | `PQTABS_STATE_DIR` | `~/.pqtabs` | Stores spend attempts so a retry never signs twice |
-| `PQTABS_AGENT_PRIVATE_KEY` | unset | Optional. Enables `pqtabs_run_paid_research`. An invalid key stops the server and is not echoed |
+| `PQTABS_SIGNER_CLI` | unset | Optional. Path to the `pqtabs-signer` CLI. With `PQTABS_SIGNER_AGENT`, enables `pqtabs_run_paid_research`. The key stays in the local signer |
+| `PQTABS_SIGNER_AGENT` | unset | Optional. The public agent address the local signer holds. Must be an address, not a key |
+| `PQTABS_AGENT_PRIVATE_KEY` | unset | Legacy. The raw agent key in this process. An invalid key stops the server and is not echoed. Do not combine with the local signer |
 
 Flags: `--version` prints the version. `--help` prints usage. Status messages go to stderr. The MCP protocol uses stdout.
 
@@ -144,5 +149,6 @@ MIT. See [LICENSE](./LICENSE).
 
 ## Changelog
 
+- **0.1.2:** Local signer support. `PQTABS_SIGNER_CLI` and `PQTABS_SIGNER_AGENT` enable `pqtabs_run_paid_research` through the `pqtabs-signer` child process, so the MCP never holds the key. The legacy `PQTABS_AGENT_PRIVATE_KEY` path is unchanged, with a notice, and cannot be combined with the local signer. Read tools and the other quote tools behave as before.
 - **0.1.1:** `pqtabs_check_spend_policy` is marked `readOnlyHint: false` and its description says it creates a quote record on the backend. Nothing is signed, broadcast, or moved. The 0.1.0 README and annotation called it read-only; this release corrects both. No behavior change.
 - **0.1.0:** first release.
