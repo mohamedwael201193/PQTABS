@@ -67,7 +67,13 @@ export function extractSignature(text: string): Hex | null {
 
 export type PairingCheck =
   | { ok: true }
-  | { ok: false; reason: "expired" | "wrong_origin" | "malformed_signature" | "not_signed_by_agent" };
+  | { ok: false; reason: "expired" | "wrong_origin" | "malformed_signature" | "not_signed_by_agent" | "already_used" };
+
+/**
+ * Nonces that a valid signature has already confirmed in this page. A pairing is single-use:
+ * the same request cannot be confirmed twice, so a copied signature is not reused.
+ */
+const confirmedNonces = new Set<string>();
 
 /** Checks the time, the page origin, and the signature. Nothing here touches a key or the network. */
 export async function verifyPairing(input: { request: PairingRequest; signature: string; pageOrigin: string; nowMs: number }): Promise<PairingCheck> {
@@ -81,7 +87,11 @@ export async function verifyPairing(input: { request: PairingRequest; signature:
       message: pairingMessage(input.request),
       signature,
     });
-    return valid ? { ok: true } : { ok: false, reason: "not_signed_by_agent" };
+    if (!valid) return { ok: false, reason: "not_signed_by_agent" };
+    // Only a valid signature from the agent consumes the request. A wrong key still reports its own reason.
+    if (confirmedNonces.has(input.request.nonce)) return { ok: false, reason: "already_used" };
+    confirmedNonces.add(input.request.nonce);
+    return { ok: true };
   } catch {
     return { ok: false, reason: "malformed_signature" };
   }

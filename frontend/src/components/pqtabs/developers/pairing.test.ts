@@ -85,3 +85,11 @@ test("a lowercase address is pinned to its checksum form, so the signer and the 
   assert.equal(request.agent, "0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf");
   assert.ok(pairingMessage(request).includes("Agent: 0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf"));
 });
+
+test("a pairing confirms once: the same request and signature are refused the second time", async () => {
+  const account = privateKeyToAccount(generatePrivateKey());
+  const request = newPairingRequest({ agent: account.address, origin: ORIGIN, nowMs: NOW });
+  const signature = await account.signMessage({ message: pairingMessage(request) });
+  assert.deepEqual(await verifyPairing({ request, signature, pageOrigin: ORIGIN, nowMs: NOW }), { ok: true });
+  assert.deepEqual(await verifyPairing({ request, signature, pageOrigin: ORIGIN, nowMs: NOW }), { ok: false, reason: "already_used" });
+});

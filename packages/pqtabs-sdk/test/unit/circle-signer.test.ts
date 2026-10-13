@@ -4,11 +4,12 @@
  */
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { encodeAbiParameters, type Hex, hashTypedData, keccak256, stringToBytes } from "viem";
+import { encodeAbiParameters, type Hex, hashTypedData, keccak256, recoverAddress, stringToBytes } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import {
   type CircleSignTypedDataRequest,
   circleDeveloperSigner,
+  circleTypedDataDigest,
   fromCircleTypedDataJson,
   normalizeSignature,
   SECP256K1_ORDER,
@@ -186,4 +187,31 @@ test("a malformed or failing Circle response is a signer error that never echoes
     () => failing.signTransferAuthorization(auth),
     (error: unknown) => isPqtabsError(error) && error.code === "signer_unavailable" && !error.message.includes("SECRET-VALUE"),
   );
+});
+
+// Known vector: the mined Arc Mainnet spend 0x5358ec04...65b5 (block 25682466). Barkeep accepted its
+// 213-byte blob, and the first 65 bytes are the agent's ECDSA signature over the EIP-3009 digest.
+// The adapter's digest must reproduce that exact signer, or the Circle path is not compatible.
+const VECTOR_AGENT = "0x2c0e47e0950e7fE6C62D5F4E70d8C0b51d8B4865";
+const VECTOR_AUTHORIZATION = {
+  chainId: 5042,
+  asset: "0x3600000000000000000000000000000000000000",
+  from: "0x74EBd639bBd9A18B28682FD5148D4a0eC041bf9F",
+  to: "0xf76e6B0920e9332fF4410f6dD53F01722AbC71a3",
+  value: 360n,
+  validAfter: 0n,
+  validBefore: 1791859752n,
+  nonce: "0x89f79c796eff65b3d890cfdea5d2ad9c1e778587e28a2ab548dda09432090761",
+} as const;
+const VECTOR_SIGNATURE =
+  "0x1bc3475fd931860ef68883588be1900a227bfb9c6f58ddf6029beef7c22265fe0a8b4164817b6db6b9b903d662dcc416291f0146287865cbc91508dbf37d135b1b" as const;
+
+test("known vector: the adapter digest of the mined Arc spend recovers to the agent Barkeep accepted", async () => {
+  const digest = circleTypedDataDigest({ ...VECTOR_AUTHORIZATION });
+  assert.equal(await recoverAddress({ hash: digest, signature: VECTOR_SIGNATURE }), VECTOR_AGENT);
+});
+
+test("known vector: changing one field of the mined authorization changes the recovered signer, so it is not the agent", async () => {
+  const digest = circleTypedDataDigest({ ...VECTOR_AUTHORIZATION, value: 361n });
+  assert.notEqual(await recoverAddress({ hash: digest, signature: VECTOR_SIGNATURE }), VECTOR_AGENT);
 });

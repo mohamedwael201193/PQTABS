@@ -20,6 +20,7 @@ const REASON_TEXT: Record<string, string> = {
   wrong_origin: "This request was made for a different site. Create a new request on this page.",
   malformed_signature: "Paste the signature (0x and 130 hex characters), or the JSON the command printed.",
   not_signed_by_agent: "That signature is not from the agent address above. Check that the signer on this machine holds this address.",
+  already_used: "This pairing was already confirmed. Create a new request to pair again.",
 };
 
 /**

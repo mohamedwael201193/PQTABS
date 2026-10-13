@@ -114,7 +114,7 @@ The addresses are taken from `deployments/mainnet.json` and `backend/src/constan
 - **Agent key.** The agent signs spend requests with a classical ECDSA key, which is separate from the post-quantum root. The key lives in one of two places: the browser vault (AES-GCM encrypted with a non-extractable device key in IndexedDB) or the local signer on Windows (DPAPI). The backend never receives the agent or root key. The app never asks for a private key or a signature paste.
 - **Local signer (Windows).** `pqtabs-signer` keeps an agent key encrypted with Windows DPAPI for the current user, under `%LOCALAPPDATA%\pqtabs-signer\keys`. The MCP server starts the signer as a child process and receives only the 65-byte signature for each approved authorization. On this path the MCP process never holds the raw key. DPAPI does not protect against code that already runs as the same user.
 - **Relayer.** The relayer pays gas and broadcasts transactions. Root actions need the post-quantum signature, which the relayer does not hold.
-- **Circle wallets.** Circle's agent wallet from the CLI is a smart contract account. Barkeep's tab accepts only an ECDSA signature from an externally owned account, so that wallet cannot be the agent. A Circle developer-controlled EOA on ARC has a signer adapter (`circleDeveloperSigner` in `pqtabs-sdk`) that is tested with known vectors. It has not been run against Circle's live API, and it needs your own Circle credentials.
+- **Circle wallets.** Circle's agent wallet from the CLI is a smart contract account. Barkeep's tab accepts only an ECDSA signature from an externally owned account, so that wallet cannot be the agent. Circle's docs list only `ARC-TESTNET` in the Wallets and CCTP tables, so the mainnet chain code `ARC` used by the adapter is unverified. A Circle developer-controlled EOA has a signer adapter (`circleDeveloperSigner` in `pqtabs-sdk`). Its digest reproduces the signer that Barkeep accepted for a mined Arc spend (an offline known vector). A live Circle signature has not been produced, so the compatibility of Circle's live signing is not proven. It needs your own Circle credentials and an approved test.
 - **Replay and quotes.** A research quote binds the task, price, payee, and max tokens by hash (`researchBodyHash`) and expires after 600 seconds.
 - **Failure states.** A matched receipt with a missing answer is reported as `result_pending`, not as complete. A refused spend says why. Read traffic and relay traffic use separate rate-limit buckets, and the relay bucket is limited to a fixed number of requests per minute (the suite checks the ninth request inside one minute is refused).
 
@@ -135,7 +135,7 @@ Rows marked **today** were run on 2026-10-13 from the working tree that includes
 |---|---|---|
 | Backend unit and integration | `npm test` in `backend/` | 89 passed, 0 failed, exit 0 (today). Includes 7 portfolio-scan tests (cold scan, TTL cache, incremental scan, bounded windows, failed scan not stored, rate-limit refusal with no Arc calls, and an address with no contract code refused as `unknown_root` instead of a 500) |
 | Backend lint | `npm run lint` in `backend/` | exit 0 (today) |
-| SDK unit tests | `npm test` in `packages/pqtabs-sdk/` | 61 passed, 0 failed, exit 0 (today). Includes the Circle adapter vectors |
+| SDK unit tests | `npm test` in `packages/pqtabs-sdk/` | 63 passed, 0 failed, exit 0 (today). Includes the Circle adapter vectors and two offline known vectors from the mined Arc spend `0x5358ec04…65b5` (the adapter digest recovers to the agent that Barkeep accepted) |
 | MCP unit tests | `npm test` in `packages/pqtabs-mcp/` | 19 passed, 0 failed, exit 0 (today). Includes the local signer boundary |
 | Local signer (TypeScript) | `npm test` in `packages/pqtabs-signer/` | 43 passed, 0 failed, exit 0 (today). Includes the pairing-message vector and refusal of another agent |
 | SDK, MCP, and signer lint | `npx biome check` in each package | exit 0 (today) |
@@ -143,7 +143,7 @@ Rows marked **today** were run on 2026-10-13 from the working tree that includes
 | Frontend production build | `npx next build` in `frontend/` | compiles, prerenders `/`, `/_not-found`, and `/developers` (today) |
 | Receipt wait | `npm run test:receipt` in `frontend/` | 9 passed, 0 failed, exit 0 (today). A timeout or transient RPC error is pending, never failed |
 | Developer address field | `node --experimental-strip-types --test src/components/pqtabs/developers/agent-address.test.ts` | 3 passed, 0 failed, exit 0 (today). Refuses key-shaped input |
-| Developer pairing and session | `node --experimental-strip-types --test` on `pairing.test.ts` and `developer-session.test.ts` | 5 and 6 passed, 0 failed, exit 0 (today). The pairing vector matches the signer, and a lowercase address pairs as its checksum form |
+| Developer pairing and session | `node --experimental-strip-types --test` on `pairing.test.ts` and `developer-session.test.ts` | 6 and 6 passed, 0 failed, exit 0 (today). The pairing vector matches the signer, and a lowercase address pairs as its checksum form |
 | Frontend lint | `npx eslint .` in `frontend/` | 25 errors and 2 warnings, all react-hooks rules in existing dashboard and other files (today). CI does not run frontend lint. Not changed in this pass |
 | Frontend node tests | `node --experimental-strip-types --test` over the 25 `frontend/src/**/*.test.ts` files | 92 passed, 0 failed, exit 0 (today) |
 | Signer (Rust) | `cargo test --manifest-path signer/Cargo.toml` | 8 passed (5 + 3), exit 0 |
@@ -244,7 +244,7 @@ The onboarding flow is:
 
 1. Optional: connect a Circle developer-controlled EOA. The primary path does not need Circle credentials.
 2. Create a local signer on your machine with `pqtabs-signer create`. Only the public address is shown in the browser.
-3. Pair the signer with the app. The app asks for a signature over a fixed pairing message that carries the origin, a nonce, and an expiry. The signature authorizes nothing, and the app checks it against the agent address.
+3. Pair the signer with the app. The app asks for a signature over a fixed pairing message that carries the origin, a nonce, and an expiry. The signature authorizes nothing. The app checks it against the agent address, and each request confirms once (a second check of the same request is refused).
 4. Authorize a capability through the root flow in the app. A session never stands in for this step.
 5. Connect `pqtabs-mcp` 0.1.2 with `PQTABS_SIGNER_CLI` and `PQTABS_SIGNER_AGENT`.
 6. Optional: start a read-only API session. The session can read root portfolios (`read:roots`) only. It cannot sign, open a capability, or spend, and you can revoke it from the page.
