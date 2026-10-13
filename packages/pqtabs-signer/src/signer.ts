@@ -3,18 +3,24 @@ import { privateKeyToAccount } from "viem/accounts";
 import { assertSignableAuthorization, type TransferAuthorization, transferTypedData } from "./authorization.js";
 import { SignerError } from "./errors.js";
 import { loadAgentKey } from "./keystore.js";
+import { assertPairingRequest, pairingMessage } from "./pairing.js";
 import type { Protector } from "./protect.js";
 
-/** The agent's signing boundary. The key stays inside the closure and is never a property of this object. */
+/**
+ * The agent's signing boundary. The key stays inside the closure and is never a property of this object.
+ * There is no method that signs arbitrary bytes or arbitrary text. Each method signs one fixed format.
+ */
 export interface AgentSigner {
   readonly address: Address;
   signTransferAuthorization(authorization: TransferAuthorization, now?: bigint): Promise<Hex>;
+  /** Signs the fixed pairing template for one validated request. Pairing never signs a payment. */
+  signPairing(request: { agent: string; origin: string; nonce: string; expiresAt: string }, nowSeconds?: number): Promise<Hex>;
   toJSON(): { address: Address };
 }
 
 /**
  * Unlocks the stored key for `agent` and returns a signer. Fails closed if the key is missing, cannot be unlocked,
- * or does not derive `agent`. The returned signer exposes only the address and a signing method.
+ * or does not derive `agent`. The returned signer exposes only the address and two fixed-format signing methods.
  */
 export async function openKeystoreSigner(options: { dir: string; agent: string; protector: Protector }): Promise<AgentSigner> {
   const key = await loadAgentKey(options);
@@ -24,6 +30,13 @@ export async function openKeystoreSigner(options: { dir: string; agent: string; 
     async signTransferAuthorization(authorization, now) {
       assertSignableAuthorization(authorization, now ?? BigInt(Math.floor(Date.now() / 1000)));
       return account.signTypedData(transferTypedData(authorization));
+    },
+    async signPairing(request, nowSeconds) {
+      const checked = assertPairingRequest(request, nowSeconds ?? Math.floor(Date.now() / 1000));
+      if (checked.agent.toLowerCase() !== account.address.toLowerCase()) {
+        throw new SignerError("address_mismatch", `This signer holds ${account.address}, not ${checked.agent}. Nothing was signed.`);
+      }
+      return account.signMessage({ message: pairingMessage(checked) });
     },
     toJSON() {
       return { address: account.address };

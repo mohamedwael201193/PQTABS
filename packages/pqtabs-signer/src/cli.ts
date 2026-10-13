@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 import { readFile } from "node:fs/promises";
 import { type Address, getAddress } from "viem";
-import { privateKeyToAccount } from "viem/accounts";
+import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { openAgentBackup } from "./backup.js";
 import { SignerError } from "./errors.js";
 import { defaultKeyDir, loadAgentKey, removeAgentKey, saveAgentKey, storedAgents } from "./keystore.js";
+import { assertPairingRequest, pairingMessage } from "./pairing.js";
 import { platformProtector } from "./protect.js";
 import { openKeystoreSigner, parseAuthorizationJson } from "./signer.js";
 
@@ -14,7 +15,10 @@ import { openKeystoreSigner, parseAuthorizationJson } from "./signer.js";
  *
  * Commands:
  *   platform                                     Show whether this machine has a tested key store.
- *   import-backup <file> --agent <address>       Import a PQTABS dashboard backup into the local store.
+ *   create                                       Create a new agent key on this machine. Prints only its public address.
+ *   pair --agent <address> --origin <origin> --nonce <hex> --expires <iso>
+ *                                                Sign the pairing message a page shows. Proves control, authorizes nothing.
+ *   import-backup <file> --agent <address>       Recovery or migration: import a PQTABS dashboard backup.
  *   status --agent <address>                     Report whether a key is stored and unlocks for this agent.
  *   list                                         List stored agent addresses.
  *   forget --agent <address>                     Remove the stored key for an agent.
@@ -53,6 +57,12 @@ function requireAgent(flags: Record<string, string | true>): Address {
   } catch {
     throw new SignerError("invalid_address", "That is not a valid Ethereum address.");
   }
+}
+
+function requireFlag(flags: Record<string, string | true>, name: string): string {
+  const value = flags[name];
+  if (typeof value !== "string" || value === "") throw new SignerError("missing_flag", `Pass --${name} <value>.`);
+  return value;
 }
 
 /** Reads a passphrase from the terminal with echo off. Refuses when stdin is not a terminal. */
@@ -109,6 +119,35 @@ async function run(argv: string[]): Promise<unknown> {
       const protector = platformProtector();
       return { ok: true, protector: protector.name, keyDir: dir };
     }
+    case "create": {
+      // A new random key. It is stored protected by the operating system and read back before anything reports success.
+      const protector = platformProtector();
+      const privateKey = generatePrivateKey();
+      const agent = privateKeyToAccount(privateKey).address;
+      await saveAgentKey({ dir, agent, privateKey, protector, replace: false });
+      const check = await loadAgentKey({ dir, agent, protector });
+      if (privateKeyToAccount(check).address.toLowerCase() !== agent.toLowerCase()) {
+        await removeAgentKey({ dir, agent });
+        throw new SignerError("store_check_failed", "The new key did not read back from the store. It was removed. Nothing is usable.");
+      }
+      return { ok: true, agent, created: true, protector: protector.name, next: "Pair this address on the PQTABS Developers page. The private key stays on this machine." };
+    }
+    case "pair": {
+      const agent = requireAgent(flags);
+      const request = assertPairingRequest(
+        {
+          agent,
+          origin: requireFlag(flags, "origin"),
+          nonce: requireFlag(flags, "nonce"),
+          expiresAt: requireFlag(flags, "expires"),
+        },
+        Math.floor(Date.now() / 1000),
+      );
+      const protector = platformProtector();
+      const signer = await openKeystoreSigner({ dir, agent, protector });
+      const signature = await signer.signPairing(request);
+      return { ok: true, agent: signer.address, signature, message: pairingMessage(request) };
+    }
     case "import-backup": {
       const file = positional[0];
       if (!file) throw new SignerError("missing_file", "Pass the backup file path.");
@@ -163,7 +202,7 @@ async function run(argv: string[]): Promise<unknown> {
     default:
       throw new SignerError(
         "usage",
-        "Usage: pqtabs-signer <platform | import-backup <file> --agent 0x... | status --agent 0x... | list | forget --agent 0x... | sign --agent 0x...>",
+        "Usage: pqtabs-signer <platform | create | pair --agent 0x... --origin <origin> --nonce <hex> --expires <iso> | import-backup <file> --agent 0x... | status --agent 0x... | list | forget --agent 0x... | sign --agent 0x...>",
       );
   }
 }

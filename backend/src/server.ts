@@ -214,7 +214,7 @@ export function createApp(clients: Clients = loadClients(), getIndex?: () => Sql
     const started = Date.now();
     const portfolio = index ? await readIndexedPortfolio(index, clients.public, clients.factory, root) : await readPortfolio(clients, root);
     c.header("Server-Timing", `app;dur=${Date.now() - started}`);
-    return c.json({ root, ...portfolio });
+    return c.json({ root, source: index ? "index" : "live", ...portfolio });
   });
 
   app.get("/v1/roots/:root/tabs/:tab", async (c) => {
@@ -388,7 +388,7 @@ export function createApp(clients: Clients = loadClients(), getIndex?: () => Sql
     const index = getIndex?.() ?? null;
     const portfolio = index ? await readIndexedPortfolio(index, clients.public, clients.factory, root) : await readPortfolio(clients, root);
     c.header("cache-control", "no-store");
-    return c.json({ root, ...portfolio });
+    return c.json({ root, source: index ? "index" : "live", ...portfolio });
   });
 
   app.post("/v1/research/quote", async (c) => {

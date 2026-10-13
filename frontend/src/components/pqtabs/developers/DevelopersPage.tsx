@@ -1,4 +1,4 @@
-﻿import Link from "next/link";
+import Link from "next/link";
 import { Logo, Reveal, SectionShell } from "@/components/pqtabs/shared";
 import { Button } from "@/components/ui/button";
 import { CopyBlock } from "./CopyBlock";
@@ -6,12 +6,12 @@ import { OnboardingSteps } from "./OnboardingSteps";
 
 /**
  * /developers: how to use the published PQTABS SDK and MCP server.
- * Every command, package name, env name, and config shape here is taken from the published 0.1.1 packages
+ * Every command, package name, env name, and config shape here is taken from the published packages (sdk 0.1.1, mcp 0.1.2)
  * and from each host's documentation. Nothing on this page moves money; the page only describes the tools.
  */
 
 const SDK_VERSION = "0.1.1";
-const MCP_VERSION = "0.1.1";
+const MCP_VERSION = "0.1.2";
 
 const INSTALL_SDK = "npm install pqtabs-sdk";
 const INSTALL_MCP = "npm install -g pqtabs-mcp";
@@ -101,7 +101,7 @@ const ENV_VARS = [
   { name: "PQTABS_STATE_DIR", def: "~/.pqtabs", note: "Stores spend attempts so a retry never signs twice." },
   { name: "PQTABS_SIGNER_CLI", def: "unset", note: "Repository build. Path to the pqtabs-signer CLI. The MCP asks it for one signature per approved payment and never holds the key." },
   { name: "PQTABS_SIGNER_AGENT", def: "unset", note: "Repository build. The public agent address. It must match the address the signer stores." },
-  { name: "PQTABS_AGENT_PRIVATE_KEY", def: "unset", note: "Legacy, pqtabs-mcp 0.1.1. The raw key sits in the server process. Prefer a local signer. Unset it to run read-only." },
+  { name: "PQTABS_AGENT_PRIVATE_KEY", def: "unset", note: "Legacy, pqtabs-mcp 0.1.1 and earlier. The raw key sits in the server process. Prefer a local signer. Unset it to run read-only." },
 ] as const;
 
 const STATUSES = [
@@ -358,8 +358,8 @@ export default function DevelopersPage() {
               <p className="mt-2">
                 The entries above are read-only. Paid research needs a signer for an agent your root has already authorized. The
                 repository build uses <code className="font-mono">PQTABS_SIGNER_CLI</code> and{" "}
-                <code className="font-mono">PQTABS_SIGNER_AGENT</code>, so the MCP process never holds the key. The published 0.1.1
-                package reads <code className="font-mono">PQTABS_AGENT_PRIVATE_KEY</code> instead. That is a legacy path, because
+                <code className="font-mono">PQTABS_SIGNER_AGENT</code>, so the MCP process never holds the key. The published 0.1.2
+                package also reads <code className="font-mono">PQTABS_AGENT_PRIVATE_KEY</code> for older setups. That is a legacy path, because
                 the key sits in the server process. Do not paste a root backup phrase or a root private key into any configuration.
               </p>
             </div>

@@ -9,6 +9,7 @@ const UNIT = [
   "dev-session.test.js",
   "http.test.js",
   "index.test.js",
+  "portfolio-scan.test.js",
   "research.test.js",
   "rpc-error.test.js",
   "spend-blob.test.js",

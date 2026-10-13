@@ -4,9 +4,11 @@ import Link from "next/link";
 import { type ReactNode, useState } from "react";
 import { type AgentAddressState, classifyAgentInput } from "./agent-address";
 import { CopyBlock } from "./CopyBlock";
+import { PairingPanel } from "./PairingPanel";
+import { SessionPanel } from "./SessionPanel";
 
 /**
- * Developer onboarding. This component never creates a capability, never signs, and never asks for a key.
+ * Developer onboarding. This component never creates a capability, never signs a payment, and never asks for a key.
  * It accepts only a public agent address (the one `pqtabs-signer status` prints), and it refuses anything that
  * looks like a private key. Opening a capability is a root action in the PQTABS app, with the root's signature.
  */
@@ -18,8 +20,8 @@ export function mcpConfigFor(address: string | null): string {
     {
       mcpServers: {
         pqtabs: {
-          command: "node",
-          args: ["<path to packages/pqtabs-mcp/dist/src/cli.js>"],
+          command: "npx",
+          args: ["-y", "pqtabs-mcp@0.1.2"],
           env: {
             PQTABS_SIGNER_CLI: SIGNER_PLACEHOLDER,
             PQTABS_SIGNER_AGENT: address ?? "0x<agent address from pqtabs-signer status>",
@@ -65,7 +67,7 @@ function StepCard({ index, title, status, children }: { index: string; title: st
 export function OnboardingSteps() {
   const [draft, setDraft] = useState("");
   const [confirmedRoot, setConfirmedRoot] = useState(false);
-  const state = classifyAgentInput(draft);
+  const state: AgentAddressState = classifyAgentInput(draft);
   const address = state.kind === "valid" ? state.address : null;
 
   return (
@@ -75,15 +77,19 @@ export function OnboardingSteps() {
           Circle&apos;s agent wallet from the CLI is a smart contract account. Barkeep&apos;s capability accepts only an ECDSA
           signature from an externally owned account, so the CLI wallet cannot be the agent. This is proven on-chain. A
           Circle developer-controlled EOA on ARC is a separate option. It needs your Circle API key and entity secret on your
-          own server. This page never asks for them.
+          own server. This page never asks for them, and the primary path below does not need them.
         </p>
       </StepCard>
 
-      <StepCard index="2" title="Use a local signer" status={address ? "Address accepted" : "Paste the public address"}>
+      <StepCard index="2" title="Create a local signer" status={address ? "Address accepted" : "Create, then paste the public address"}>
         <p>
-          Run <code className="font-mono text-[12px] text-foreground">pqtabs-signer status --agent 0x…</code> on your machine. Paste only
-          the public address it prints. The key stays in the operating system credential store and never reaches this page or
-          the MCP process.
+          Run this once on the machine that will run your agent. It creates a new key, protects it with your operating system
+          account, and prints only the public address.
+        </p>
+        <CopyBlock label="Create a signer (prints only the public address)" code={`node "${SIGNER_PLACEHOLDER}" create`} />
+        <p>
+          Check it any time with <code className="font-mono text-[12px] text-foreground">pqtabs-signer status --agent 0x…</code>. The key never
+          reaches this page, the backend, or the MCP process.
         </p>
         <label className="block">
           <span className="font-mono text-[10px] uppercase tracking-[0.16em]">Agent address (public)</span>
@@ -98,20 +104,40 @@ export function OnboardingSteps() {
           />
         </label>
         <p id="agent-address-help" role="status" className="text-xs">
-          {state.kind === "empty" && "Enter the address of the agent your root opened. Nothing is sent anywhere."}
+          {state.kind === "empty" && "Paste the address that pqtabs-signer create printed. Nothing is sent anywhere."}
           {state.kind === "key" && (
             <span className="text-destructive">
-              This looks like a private key (64 hex characters). Do not paste keys here. Paste only the public address that pqtabs-signer status prints.
+              This looks like a private key (64 hex characters). Do not paste keys here. Paste only the public address that pqtabs-signer prints.
             </span>
           )}
           {state.kind === "invalid" && <span className="text-destructive">Enter a public address: 0x followed by 40 hex characters.</span>}
-          {state.kind === "valid" && <span className="text-foreground">Public address accepted. It is used only to build the config below.</span>}
+          {state.kind === "valid" && <span className="text-foreground">Public address accepted. Pair it in the next step.</span>}
         </p>
+        <details className="rounded-lg border border-white/[.06] p-4">
+          <summary className="cursor-pointer font-mono text-[11px] uppercase tracking-[0.14em] text-foreground">
+            Recovery: move an existing key from a dashboard backup
+          </summary>
+          <p className="mt-3">
+            Only if you already exported an encrypted backup from the PQTABS dashboard and need it on this machine. The passphrase
+            is typed into the terminal, hidden, and never into this page.
+          </p>
+          <div className="mt-3">
+            <CopyBlock label="Import a backup" code={`node "${SIGNER_PLACEHOLDER}" import-backup <backup file> --agent 0x…`} />
+          </div>
+        </details>
       </StepCard>
 
-      <StepCard index="3" title="Authorize the agent" status="Root action. Not done here">
+      <StepCard index="3" title="Pair the signer" status={address ? "Ready to pair" : "Needs the address"}>
         <p>
-          Only the root can open a capability. Open the PQTABS app and create a capability for the address above. Review the
+          Pairing proves that the signer on your machine holds the address above. The page issues a one-time request, you sign
+          it locally, and the page checks the signature. It does not authorize any payment.
+        </p>
+        <PairingPanel key={address ?? "none"} agent={address} />
+      </StepCard>
+
+      <StepCard index="4" title="Authorize the agent" status="Root action. Not done here">
+        <p>
+          Only the root can open a capability. Open the PQTABS app and create a capability for the paired address. Review the
           cap, the per-call limit, the approved payees, and the expiry. Then sign with the root security key. Nothing on this
           page creates, signs, or changes a capability.
         </p>
@@ -129,16 +155,17 @@ export function OnboardingSteps() {
         </Link>
       </StepCard>
 
-      <StepCard index="4" title="Connect the MCP server" status={address ? "Config ready" : "Needs the address"}>
+      <StepCard index="5" title="Connect the MCP server" status={address ? "Config ready" : "Needs the address"}>
         <p>
-          Put the signer path and the public agent address in the MCP environment. The MCP holds no key. It asks the local
-          signer for one signature per payment. The published <code className="font-mono text-[12px] text-foreground">pqtabs-mcp</code> 0.1.1 does not yet
-          read these variables. Use the repository build until the next npm release.
+          <code className="font-mono text-[12px] text-foreground">pqtabs-mcp</code> 0.1.2 is on npm and reads both variables below.
+          It holds no key: it asks the local signer for one signature per payment. The signer itself is not on npm, so point
+          <code className="font-mono text-[12px] text-foreground"> PQTABS_SIGNER_CLI</code> at the built file from this repository. On
+          Windows, Cursor may need <code className="font-mono text-[12px] text-foreground">cmd /c npx</code>.
         </p>
         <CopyBlock label="MCP configuration (no key)" code={mcpConfigFor(address)} />
       </StepCard>
 
-      <StepCard index="5" title="Test safely" status="Read-only first">
+      <StepCard index="6" title="Test safely" status="Read-only first">
         <ol className="list-decimal space-y-2 pl-5">
           <li>
             Call <code className="font-mono text-[12px] text-foreground">pqtabs_status</code>. It reads the backend and Arc, and spends nothing.
@@ -155,7 +182,7 @@ export function OnboardingSteps() {
         </ol>
       </StepCard>
 
-      <StepCard index="6" title="Manage access" status="In the PQTABS app">
+      <StepCard index="7" title="Manage access" status="In the PQTABS app">
         <p>Each capability carries these limits. Change or close it in the app. Closing returns unspent USDC to the root.</p>
         <ul className="grid gap-2 sm:grid-cols-2">
           {[
@@ -173,6 +200,10 @@ export function OnboardingSteps() {
             </li>
           ))}
         </ul>
+      </StepCard>
+
+      <StepCard index="8" title="Read-only API session" status="Optional. Reads only">
+        <SessionPanel />
       </StepCard>
 
       <div className="rounded-2xl border border-white/[.08] bg-white/[.02] p-6">
@@ -203,8 +234,8 @@ export function OnboardingSteps() {
       </div>
 
       <p className="text-xs text-muted-foreground">
-        The backend&apos;s developer-session API is read-only. A session never authorizes a signature, a capability, or a
-        payment. This page has no developer-session screen yet. Pairing a device is not implemented.
+        A developer session is read-only. It never authorizes a signature, a capability, or a payment. Pairing proves that a
+        signer holds an address. It does not authorize a capability, and only the root can do that.
       </p>
     </div>
   );

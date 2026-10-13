@@ -10,6 +10,7 @@ import { parseUsdcRaw } from "@/data/actions";
 import { fundBar } from "@/data/fund-bar";
 import { usd } from "@/data/formatters";
 import { loadSnapshot } from "@/data/production";
+import { awaitReceipt } from "@/data/receipt";
 import { arcClient, fundRoot } from "@/data/wallet";
 import { useWalletUsdc } from "@/hooks/use-account-data";
 import { useActivity, useDashboardUi, usePqtabsData, useTabs, useTotals } from "@/lib/store";
@@ -53,7 +54,8 @@ function FundNotice() {
       }
       const hash = await fundRoot(live.snapshot.account.rootAddress as `0x${string}`, parseUsdcRaw(amount));
       setDepositHash(hash);
-      const receipt = await arcClient().waitForTransactionReceipt({ hash });
+      // A transient or missing receipt is pending, not a failed deposit. It stays pending until Arc reports a status.
+      const receipt = await awaitReceipt(arcClient(), hash);
       if (receipt.status !== "success") throw new Error("The deposit reverted.");
       const after = usePqtabsData.getState();
       if (after.registrar.toLowerCase() !== registrar.toLowerCase()) {

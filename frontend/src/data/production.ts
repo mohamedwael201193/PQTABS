@@ -5,6 +5,7 @@ import { rootSignatureBlock } from "./root-sign-check";
 import { spendKind } from "./spend-kind";
 import { usd } from "./formatters";
 import { presentAnswer } from "./research-answer";
+import { awaitReceipt, ReceiptPendingError } from "./receipt";
 import { paymentSignatureHeader, payeeLabel, quoteIdOf, quotedCharge, receiptSettlesSpend, serviceAnswer, settlementFailure, transactionFromPaymentResponse, type SpendAuthorization } from "./x402-pay";
 import { arcClient } from "./wallet";
 import type { Hex } from "viem";
@@ -497,8 +498,21 @@ async function relay(path: string, body: unknown): Promise<{ hash: string }> {
 }
 
 async function waitForReceipt(hash: string): Promise<{ status: string }> {
-  const receipt = await arcClient().waitForTransactionReceipt({ hash: hash as Hex, timeout: 90_000 });
+  const receipt = await receiptOrPending(hash);
   return { status: receipt.status };
+}
+
+/**
+ * Only a receipt status is definitive. A transient Arc error or a missing receipt
+ * stays pending (SettlementPending), and is never shown as a failed payment.
+ */
+async function receiptOrPending(hash: string) {
+  try {
+    return await awaitReceipt(arcClient(), hash as Hex);
+  } catch (error: unknown) {
+    if (error instanceof ReceiptPendingError) throw new SettlementPending(hash);
+    throw error;
+  }
 }
 
 export type PreparedAction = {
@@ -636,7 +650,7 @@ export async function submitSpend(input: {
 
 export class SettlementPending extends Error {
   constructor(readonly hash: string) {
-    super("The transaction was submitted. The receipt is not confirmed yet.");
+    super(`Submitted to Arc (${hash}). The receipt is still pending, so the outcome is not known yet. This is not a failure. Check the explorer before you retry.`);
     this.name = "SettlementPending";
   }
 }
@@ -670,11 +684,9 @@ export async function settleResearch(input: {
   if (!response.ok || !payload.hash || !/^0x[0-9a-fA-F]{64}$/.test(payload.hash)) {
     throw new Error(readableError(payload.detail || payload.error, "Arc did not accept this authorization. Nothing was broadcast."));
   }
-  let receipt;
-  try {
-    receipt = await arcClient().waitForTransactionReceipt({ hash: payload.hash as Hex, timeout: 90_000 });
-  } catch {
-    throw new SettlementPending(payload.hash);
+  const receipt = await receiptOrPending(payload.hash);
+  if (receipt.status === "reverted") {
+    throw new Error(`Arc reverted ${payload.hash}. The payment did not go through.`);
   }
   const proof = {
     status: receipt.status,
@@ -761,7 +773,10 @@ export async function settleService(
     const failure = await response.json().catch(() => null);
     throw new Error(settlementFailure(failure));
   }
-  const receipt = await arcClient().waitForTransactionReceipt({ hash: transaction as Hex, timeout: 90_000 });
+  const receipt = await receiptOrPending(transaction);
+  if (receipt.status === "reverted") {
+    throw new Error(`Arc reverted ${transaction}. The payment did not go through.`);
+  }
   if (!receiptSettlesSpend(receipt, { from: authorization.from, to: authorization.to, value: authorization.value })) {
     throw new Error("Arc did not include this payment. No receipt was recorded.");
   }

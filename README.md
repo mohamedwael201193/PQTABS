@@ -122,7 +122,9 @@ Known limits, stated plainly:
 
 - Arc's public RPC rate-limits reads. The backend retries rate-limited calls. A `429` from `/v1/x402/decide` is usually a read limit, not a refusal of the payment.
 - Closing a capability needs the root's security-key unlock in the browser.
-- The published `pqtabs-mcp` 0.1.1 reads `PQTABS_AGENT_PRIVATE_KEY` from its environment, which puts the key in the server process. The local-signer configuration (`PQTABS_SIGNER_CLI`, `PQTABS_SIGNER_AGENT`) is in the repository build and is not on npm yet.
+- `pqtabs-mcp` 0.1.2 on npm starts the local signer when `PQTABS_SIGNER_CLI` and `PQTABS_SIGNER_AGENT` are set, so the MCP process never holds the key. Versions 0.1.1 and earlier read `PQTABS_AGENT_PRIVATE_KEY` from their environment, which puts the key in the server process. The signer itself is Windows-only (DPAPI) and is not published to npm. The MCP configuration points at its built CLI.
+- A receipt that Arc has not returned yet is shown as pending, not failed. The frontend waits up to 90 seconds with bounded backoff on `-32014`, then tells you to check the explorer before you retry. Only a `success` or `reverted` receipt is treated as a result.
+- Portfolio reads scan each root only from the last scanned block, not from the factory deploy block. A fresh read is cached for 10 seconds, and a live scan is refused with `503` while the RPC is rate-limiting.
 - A capability with a zero balance still counts its cap toward open exposure until it is closed.
 
 ## Test totals
@@ -131,18 +133,23 @@ Rows marked **today** were run on 2026-10-13 from the working tree that includes
 
 | Suite | Command | Result |
 |---|---|---|
-| Backend unit and integration | `npm test` in `backend/` | 82 passed, 0 failed, exit 0 (today) |
+| Backend unit and integration | `npm test` in `backend/` | 88 passed, 0 failed, exit 0 (today). Includes 6 portfolio-scan tests (cold scan, TTL cache, incremental scan, bounded windows, failed scan not stored, rate-limit refusal with no Arc calls) |
 | Backend lint | `npm run lint` in `backend/` | exit 0 (today) |
 | SDK unit tests | `npm test` in `packages/pqtabs-sdk/` | 61 passed, 0 failed, exit 0 (today). Includes the Circle adapter vectors |
 | MCP unit tests | `npm test` in `packages/pqtabs-mcp/` | 19 passed, 0 failed, exit 0 (today). Includes the local signer boundary |
-| SDK and MCP lint | `npx biome check src test` | exit 0 (today) |
+| Local signer (TypeScript) | `npm test` in `packages/pqtabs-signer/` | 43 passed, 0 failed, exit 0 (today). Includes the pairing-message vector and refusal of another agent |
+| SDK, MCP, and signer lint | `npx biome check` in each package | exit 0 (today) |
 | Frontend typecheck | `npx tsc --noEmit` in `frontend/` | 0 errors (today) |
+| Frontend production build | `npx next build` in `frontend/` | compiles, prerenders `/`, `/_not-found`, and `/developers` (today) |
+| Receipt wait | `npm run test:receipt` in `frontend/` | 9 passed, 0 failed, exit 0 (today). A timeout or transient RPC error is pending, never failed |
 | Developer address field | `node --experimental-strip-types --test src/components/pqtabs/developers/agent-address.test.ts` | 3 passed, 0 failed, exit 0 (today). Refuses key-shaped input |
+| Developer pairing and session | `node --experimental-strip-types --test` on `pairing.test.ts` and `developer-session.test.ts` | 5 and 6 passed, 0 failed, exit 0 (today). The pairing vector matches the signer, and a lowercase address pairs as its checksum form |
 | Frontend lint | `npx eslint .` in `frontend/` | 25 errors and 2 warnings, all react-hooks rules in existing dashboard and other files (today). CI does not run frontend lint. Not changed in this pass |
-| Frontend node tests | `node --experimental-strip-types --test` over the 21 `frontend/src/**/*.test.ts` files | 69 passed, 0 failed, exit 0 |
+| Frontend node tests | `node --experimental-strip-types --test` over the 25 `frontend/src/**/*.test.ts` files | 92 passed, 0 failed, exit 0 (today) |
 | Signer (Rust) | `cargo test --manifest-path signer/Cargo.toml` | 8 passed (5 + 3), exit 0 |
 | Contracts (Foundry) | `forge test` | 17 test functions in 2 files (grep count). Foundry is not installed locally; the CI `contracts` job passed. |
-| Pins and secrets | `python scripts/check_pins.py`, `python scripts/secret_scan.py` | pass (today). The secret scan matches env-style assignments only (`NAME=value` at line start), so ordinary code such as `const token = ...` is no longer flagged. 357 files scanned |
+| Pins and secrets | `python scripts/check_pins.py`, `python scripts/secret_scan.py` | pass (today). The secret scan matches env-style assignments only (`NAME=value` at line start), so ordinary code such as `const token = ...` is no longer flagged. 370 tracked files scanned (today, before the release commit) |
+| Published MCP clean-consumer smoke | `packages/scripts/clean-consumer-smoke.mjs` against the npm package `pqtabs-mcp` 0.1.2 | `SMOKE_OK`, including the local-signer step that lists the paid tool and reports `paidResearchEnabled` with no spend (today) |
 | CI | GitHub Actions `ci` | the latest completed run on `23f3d26` passed all five jobs: contracts, signer, backend, pins-and-secrets, slither |
 
 ## Quick start
@@ -191,7 +198,7 @@ Set these in your shell or in a `.env` file that is never committed. Only the na
 | `NEXT_PUBLIC_EXPLORER_URL` | frontend | explorer base URL |
 | `PQTABS_SIGNER_CLI` | MCP (repository build) | path to the `pqtabs-signer` CLI. The MCP asks it for one signature per approved payment |
 | `PQTABS_SIGNER_AGENT` | MCP (repository build) | public agent address. Must match the address the signer stores |
-| `PQTABS_AGENT_PRIVATE_KEY` | MCP 0.1.1 (legacy) | raw agent key in the server process (secret). Prefer a local signer |
+| `PQTABS_AGENT_PRIVATE_KEY` | MCP 0.1.1 and earlier (legacy) | raw agent key in the server process (secret). Prefer a local signer. In 0.1.2 it still works with a notice, and setting it together with the signer variables is refused (`invalid_config`) |
 
 Never put private keys, API keys, or encrypted backups in a commit. The repository's secret scan runs in CI.
 
@@ -222,6 +229,7 @@ Worked example: the research payment `0x41496d26…76ae` has one ERC-20 `Transfe
 | `429` from `/v1/x402/decide` | Arc RPC read limit | Wait a few seconds and retry once |
 | `eth_getLogs` error `-32012` | Block range over 10,000 | Page in ranges of 9,999 blocks or fewer |
 | `eth_getLogs` error `-32014` | Load-balanced RPC node near the head | The backend retries with backoff, then returns `503 rpc_unavailable`. Nothing is decided from that read |
+| Receipt shows as pending after a payment | Arc has not returned the receipt yet | This is not a failure. Check the transaction in the explorer with the hash shown before you retry |
 | `signer_unavailable` or `signer_mismatch` | Local signer missing, locked, or holding a different agent | Run `pqtabs-signer status --agent <address>`. Nothing is broadcast when signing is refused |
 | Refused with reason `balance` | Capability balance is zero or below the price | Check the capability's remaining balance; a capability with a zero balance still counts its cap toward exposure until it is closed |
 | `503` `merchant_unconfigured` on quote | `MERCHANT_PAYEE` is not set | Set the variable on the backend |
@@ -230,7 +238,18 @@ Worked example: the research payment `0x41496d26…76ae` has one ERC-20 `Transfe
 
 ## Developers
 
-The Developer Page (`/developers` in the app) covers install, MCP setup, tools, and onboarding. The onboarding steps take a public agent address only and refuse anything that looks like a private key. They show an MCP configuration with no key. They do not create a capability, sign, or spend. Opening a capability is a root action in the PQTABS app.
+The Developer Page (`/developers` in the app) covers install, MCP setup, tools, and onboarding. The onboarding steps take a public agent address only and refuse anything that looks like a private key. They show an MCP configuration with no key.
+
+The onboarding flow is:
+
+1. Optional: connect a Circle developer-controlled EOA. The primary path does not need Circle credentials.
+2. Create a local signer on your machine with `pqtabs-signer create`. Only the public address is shown in the browser.
+3. Pair the signer with the app. The app asks for a signature over a fixed pairing message that carries the origin, a nonce, and an expiry. The signature authorizes nothing, and the app checks it against the agent address.
+4. Authorize a capability through the root flow in the app. A session never stands in for this step.
+5. Connect `pqtabs-mcp` 0.1.2 with `PQTABS_SIGNER_CLI` and `PQTABS_SIGNER_AGENT`.
+6. Optional: start a read-only API session. The session can read root portfolios (`read:roots`) only. It cannot sign, open a capability, or spend, and you can revoke it from the page.
+
+An encrypted backup import is for recovery and migration only. No private key, backup passphrase, or root secret goes through the browser, the backend, an AI chat, or an ordinary API response.
 
 ## Official Arc documentation
 

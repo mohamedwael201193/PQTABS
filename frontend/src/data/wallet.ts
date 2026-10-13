@@ -2,6 +2,7 @@
 
 import { createPublicClient, createWalletClient, custom, defineChain, getAddress, http, type Address, type Hex } from "viem";
 import { createRootAccountRefusal, createRootFeeRefusal, quotedCreateRootFee } from "./create-root-fee";
+import { awaitReceipt } from "./receipt";
 
 export const arc = defineChain({
   id: 5042,
@@ -175,7 +176,8 @@ export async function createSecurityDomain(vk: Hex, maxOpenExposure: bigint, use
 }
 
 export async function waitForRoot(hash: Hex): Promise<Address> {
-  const receipt = await arcClient().waitForTransactionReceipt({ hash });
+  // A missing or transient receipt throws ReceiptPendingError. It is not a rejection.
+  const receipt = await awaitReceipt(arcClient(), hash);
   if (receipt.status !== "success") throw new Error("Arc rejected the security domain.");
   const log = receipt.logs.find((item) => item.address.toLowerCase() === FACTORY.toLowerCase() && item.topics[2]);
   if (!log?.topics[2]) throw new Error("The receipt did not include a root.");

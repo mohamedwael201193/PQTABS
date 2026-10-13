@@ -11,6 +11,7 @@ import {
 } from "viem";
 import { type PrivateKeyAccount, privateKeyToAccount } from "viem/accounts";
 import { CHAIN_ID, FACTORY, FACTORY_BLOCK, MIN_FEE, RPC_URL, USDC } from "./constants.js";
+import { liveReadsPaused, noteRateLimit } from "./index/lane.js";
 import { erc20SpendRaw } from "./index/usdc-event.js";
 import { RequestError } from "./validate.js";
 
@@ -243,27 +244,30 @@ function isRangeError(error: unknown): boolean {
 }
 
 async function windows<T>(
+  start: bigint,
   latest: bigint,
   span: bigint,
   read: (from: bigint, to: bigint) => Promise<readonly T[]>,
 ): Promise<T[]> {
   const rows: T[] = [];
-  for (let from = FACTORY_BLOCK; from <= latest; from += span) {
+  for (let from = start; from <= latest; from += span) {
     const to = from + span - 1n > latest ? latest : from + span - 1n;
     rows.push(...(await withRpcRetry(() => read(from, to))));
   }
   return rows;
 }
 
+/** Read blocks start..latest in windows Arc accepts. Falls back to smaller windows on a range error. */
 async function ranged<T>(
+  start: bigint,
   latest: bigint,
   read: (from: bigint, to: bigint) => Promise<readonly T[]>,
 ): Promise<T[]> {
   try {
-    return await windows(latest, 9_999n, read);
+    return await windows(start, latest, 9_999n, read);
   } catch (error) {
     if (!isRangeError(error)) throw error;
-    return windows(latest, 4_000n, read);
+    return windows(start, latest, 4_000n, read);
   }
 }
 
@@ -283,6 +287,23 @@ type PortfolioRead = { tabs: PortfolioTab[]; activity: PortfolioEvent[]; asOf: s
 
 const portfolioInflight = new Map<string, Promise<PortfolioRead>>();
 
+/** How long one live portfolio read is reused. Balances are never older than this. */
+export const PORTFOLIO_TTL_MS = 10_000;
+/** How many roots keep an incremental scan in memory. Oldest roots are dropped first. */
+const SCAN_ROOTS_MAX = 64;
+
+/** Test seam for the portfolio cache clock. */
+export const portfolioClock = { now: (): number => Date.now() };
+
+const portfolioCache = new Map<string, { at: number; value: PortfolioRead }>();
+const portfolioScans = new Map<string, PortfolioScan>();
+
+function isRateLimitError(error: unknown): boolean {
+  if (error instanceof RequestError && error.status === 429) return true;
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes("429") || message.toLowerCase().includes("rate limit");
+}
+
 function callValue(results: readonly CallResult[], index: number, label: string): unknown {
   const row = results[index];
   if (!row || row.status === "failure") {
@@ -297,15 +318,101 @@ function payeeList(results: readonly CallResult[], index: number): Address[] {
   return [...(row.result as readonly Address[])];
 }
 
+/**
+ * Live portfolio read. This is the fallback used when the Postgres index is not ready.
+ * It is bounded three ways: a short cache, one scan at a time per root, and no scan while Arc is rate limiting.
+ * Each root keeps its logs and block times, so a later read scans only the blocks after the last one it saw.
+ */
 export function readPortfolio(clients: Clients, root: Address): Promise<PortfolioRead> {
   const key = `${clients.factory.toLowerCase()}:${root.toLowerCase()}`;
+  const cached = portfolioCache.get(key);
+  if (cached && portfolioClock.now() - cached.at < PORTFOLIO_TTL_MS) return Promise.resolve(cached.value);
   const existing = portfolioInflight.get(key);
   if (existing) return existing;
-  const pending = readPortfolioOnce(clients, root).finally(() => {
-    portfolioInflight.delete(key);
-  });
+  if (liveReadsPaused()) {
+    return Promise.reject(new RequestError(503, "unavailable", "Arc is temporarily unavailable. Your funds are safe. Try again."));
+  }
+  const pending = readPortfolioOnce(clients, root)
+    .then((value) => {
+      portfolioCache.set(key, { at: portfolioClock.now(), value });
+      return value;
+    })
+    .catch((error: unknown) => {
+      if (isRateLimitError(error)) noteRateLimit();
+      throw error;
+    })
+    .finally(() => {
+      portfolioInflight.delete(key);
+    });
   portfolioInflight.set(key, pending);
   return pending;
+}
+
+/** Logs for one root from `from` through `latest`. Spend logs need the capability list, so they are read separately. */
+async function readRootLogs(client: PublicClient, root: Address, from: bigint, latest: bigint) {
+  const opened = await ranged(from, latest, (a, b) => client.getLogs({ address: root, event: openedEvent, fromBlock: a, toBlock: b }));
+  const closed = await ranged(from, latest, (a, b) => client.getLogs({ address: root, event: closedEvent, fromBlock: a, toBlock: b }));
+  const moved = await ranged(from, latest, (a, b) => client.getLogs({ address: root, event: movedEvent, fromBlock: a, toBlock: b }));
+  const rotated = await ranged(from, latest, (a, b) => client.getLogs({ address: root, event: rotatedEvent, fromBlock: a, toBlock: b }));
+  return { opened, closed, moved, rotated };
+}
+
+async function readSpends(client: PublicClient, from: bigint, latest: bigint, tabs: readonly Address[]) {
+  if (tabs.length === 0) return [];
+  return ranged(from, latest, (a, b) =>
+    client.getLogs({
+      address: USDC,
+      event: spentEvent,
+      args: { from: [...tabs] },
+      fromBlock: a,
+      toBlock: b,
+    }),
+  );
+}
+
+type RootLogs = Awaited<ReturnType<typeof readRootLogs>>;
+type SpendLogs = Awaited<ReturnType<typeof readSpends>>;
+
+/** Everything read for one root through `through`. */
+type PortfolioScan = RootLogs & {
+  spends: SpendLogs;
+  through: bigint;
+  tabs: Address[];
+  times: Map<string, string>;
+};
+
+/** Scan only the blocks after the last scan. A scan that fails is not stored, so the next read retries it. */
+async function scanFor(client: PublicClient, root: Address, latest: bigint, prior: PortfolioScan | undefined): Promise<PortfolioScan> {
+  if (prior && prior.through >= latest) return prior;
+  const from = prior ? prior.through + 1n : FACTORY_BLOCK;
+  const logs = await readRootLogs(client, root, from, latest);
+  const knownTabs = new Map<string, Address>();
+  for (const tab of prior?.tabs ?? []) knownTabs.set(tab.toLowerCase(), tab);
+  for (const log of logs.opened) {
+    if (log.args.tab && log.args.agent) knownTabs.set(log.args.tab.toLowerCase(), log.args.tab);
+  }
+  const tabs = [...knownTabs.values()];
+  const spends = await readSpends(client, from, latest, tabs);
+  return {
+    through: latest,
+    tabs,
+    opened: [...(prior?.opened ?? []), ...logs.opened],
+    closed: [...(prior?.closed ?? []), ...logs.closed],
+    moved: [...(prior?.moved ?? []), ...logs.moved],
+    rotated: [...(prior?.rotated ?? []), ...logs.rotated],
+    spends: [...(prior?.spends ?? []), ...spends],
+    times: prior?.times ?? new Map<string, string>(),
+  };
+}
+
+function rememberScan(key: string, scan: PortfolioScan): void {
+  portfolioScans.delete(key);
+  portfolioScans.set(key, scan);
+  while (portfolioScans.size > SCAN_ROOTS_MAX) {
+    const oldest = portfolioScans.keys().next().value;
+    if (oldest === undefined) break;
+    portfolioScans.delete(oldest);
+  }
 }
 
 async function readPortfolioOnce(clients: Clients, root: Address): Promise<PortfolioRead> {
@@ -314,10 +421,10 @@ async function readPortfolioOnce(clients: Clients, root: Address): Promise<Portf
   const head = await withRpcRetry(() => client.getBlock({ blockTag: "latest" }));
   if (head.number == null) throw new Error("Arc did not return a block number.");
   const latest = head.number;
-  const opened = await ranged(latest, (from, to) =>
-    client.getLogs({ address: root, event: openedEvent, fromBlock: from, toBlock: to }),
-  );
-  const times = new Map<string, string>();
+  const scanKey = root.toLowerCase();
+  const scan = await scanFor(client, root, latest, portfolioScans.get(scanKey));
+  rememberScan(scanKey, scan);
+  const { opened, closed, moved, rotated, spends, times } = scan;
   const openedRows = opened.filter((log) => log.args.tab && log.args.agent);
   const calls: {
     address: Address;
@@ -364,22 +471,6 @@ async function readPortfolioOnce(clients: Clients, root: Address): Promise<Portf
       openedAt: await blockTime(client, log.blockNumber, times),
     });
   }
-
-  const closed = await ranged(latest, (from, to) => client.getLogs({ address: root, event: closedEvent, fromBlock: from, toBlock: to }));
-  const moved = await ranged(latest, (from, to) => client.getLogs({ address: root, event: movedEvent, fromBlock: from, toBlock: to }));
-  const rotated = await ranged(latest, (from, to) => client.getLogs({ address: root, event: rotatedEvent, fromBlock: from, toBlock: to }));
-  const spends =
-    tabs.length === 0
-      ? []
-      : await ranged(latest, (from, to) =>
-          client.getLogs({
-            address: USDC,
-            event: spentEvent,
-            args: { from: tabs.map((row) => row.tab) },
-            fromBlock: from,
-            toBlock: to,
-          }),
-        );
 
   const activity: PortfolioEvent[] = [];
   for (const log of opened) {
