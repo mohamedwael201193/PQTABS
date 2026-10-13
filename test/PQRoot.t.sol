@@ -219,6 +219,16 @@ contract PQRootTest is Test {
         MockTab(tab).close();
     }
 
+    function test_live_root_does_not_read_back_the_tab_agent() public {
+        PQRoot a = _root(userA, bytes32(uint256(1)), 5_000_000);
+        MockUSDC(USDC).mint(address(a), 1_000_000);
+        MockBarkeep(BARKEEP).setLie(address(0x1111), 0, address(0));
+        address tab = _open(a, agentA, 100_000, 50_000);
+        assertEq(MockTab(tab).agent(), address(0x1111));
+        assertEq(a.openExposure(), 100_000);
+        MockBarkeep(BARKEEP).clearLie();
+    }
+
     function test_open_over_exposure_reverts_clean() public {
         PQRoot a = _root(userA, bytes32(uint256(1)), 100);
         MockUSDC(USDC).mint(address(a), 1_000);

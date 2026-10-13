@@ -60,21 +60,52 @@ contract MockUSDC {
 }
 
 contract MockTab {
+    address internal constant BARKEEP = 0xccebC58DD1F5937B36D5f9F89f0754424f4D443c;
     address public immutable owner;
-    address public immutable agent;
+    address public immutable builtAgent;
     uint64 public immutable expiry;
+    uint256 internal immutable builtMax;
+    address[] internal builtPayees;
     MockUSDC immutable usdc;
     bool public closed;
 
-    constructor(address owner_, address agent_, uint64 expiry_, address usdc_) {
+    constructor(
+        address owner_,
+        address agent_,
+        uint64 expiry_,
+        uint256 maxPerCall_,
+        address[] memory payees_,
+        address usdc_
+    ) {
         owner = owner_;
-        agent = agent_;
+        builtAgent = agent_;
         expiry = expiry_;
+        builtMax = maxPerCall_;
         usdc = MockUSDC(usdc_);
+        for (uint256 i = 0; i < payees_.length; ++i) builtPayees.push(payees_[i]);
+    }
+
+    /// A test can make these views disagree with the arguments PQRoot passed. The live root does not read them back.
+    function agent() public view returns (address) {
+        address lied = MockBarkeep(BARKEEP).liedAgent();
+        return lied == address(0) ? builtAgent : lied;
+    }
+
+    function maxPerCall() public view returns (uint256) {
+        uint256 lied = MockBarkeep(BARKEEP).liedMaxPerCall();
+        return lied == 0 ? builtMax : lied;
+    }
+
+    function payees() public view returns (address[] memory) {
+        address lied = MockBarkeep(BARKEEP).liedPayee();
+        if (lied == address(0)) return builtPayees;
+        address[] memory one = new address[](1);
+        one[0] = lied;
+        return one;
     }
 
     function spend(address to, uint256 amount) external {
-        require(msg.sender == agent, "NotAgent");
+        require(msg.sender == agent(), "NotAgent");
         require(!closed, "closed");
         require(usdc.transfer(to, amount), "spend");
     }
@@ -93,9 +124,24 @@ contract MockBarkeep {
     address internal constant USDC_ADDR = 0x3600000000000000000000000000000000000000;
     bytes public attackCalldata;
     bytes public attackRevert;
+    address public liedAgent;
+    uint256 public liedMaxPerCall;
+    address public liedPayee;
 
     function setAttack(bytes calldata data) external {
         attackCalldata = data;
+    }
+
+    function setLie(address agent_, uint256 max_, address payee_) external {
+        liedAgent = agent_;
+        liedMaxPerCall = max_;
+        liedPayee = payee_;
+    }
+
+    function clearLie() external {
+        liedAgent = address(0);
+        liedMaxPerCall = 0;
+        liedPayee = address(0);
     }
 
     function IMPLEMENTATION() external pure returns (address) {
@@ -106,15 +152,18 @@ contract MockBarkeep {
         return USDC_ADDR;
     }
 
-    function predictTab(address owner, address agent, address[] memory, uint256, uint64 expiry, bytes32 salt)
-        external
-        view
-        returns (address)
-    {
-        return _addr(owner, agent, expiry, salt);
+    function predictTab(
+        address owner,
+        address agent,
+        address[] memory payees,
+        uint256 maxPerCall,
+        uint64 expiry,
+        bytes32 salt
+    ) external view returns (address) {
+        return _addr(owner, agent, payees, maxPerCall, expiry, salt);
     }
 
-    function openTab(address agent, address[] memory, uint256 maxPerCall, uint64 expiry, uint256 cap, bytes32 salt)
+    function openTab(address agent, address[] memory payees, uint256 maxPerCall, uint64 expiry, uint256 cap, bytes32 salt)
         external
         returns (address tab)
     {
@@ -125,17 +174,26 @@ contract MockBarkeep {
             require(!ok, "reenter succeeded");
             attackRevert = ret;
         }
-        tab = _addr(msg.sender, agent, expiry, salt);
+        tab = _addr(msg.sender, agent, payees, maxPerCall, expiry, salt);
         if (tab.code.length == 0) {
-            MockTab created = new MockTab{salt: salt}(msg.sender, agent, expiry, USDC_ADDR);
+            MockTab created = new MockTab{salt: salt}(msg.sender, agent, expiry, maxPerCall, payees, USDC_ADDR);
             require(address(created) == tab, "addr");
         }
         require(MockUSDC(USDC_ADDR).transferFrom(msg.sender, tab, cap), "fund");
     }
 
-    function _addr(address owner, address agent, uint64 expiry, bytes32 salt) internal view returns (address) {
+    function _addr(
+        address owner,
+        address agent,
+        address[] memory payees,
+        uint256 maxPerCall,
+        uint64 expiry,
+        bytes32 salt
+    ) internal view returns (address) {
         bytes32 initHash = keccak256(
-            abi.encodePacked(type(MockTab).creationCode, abi.encode(owner, agent, expiry, USDC_ADDR))
+            abi.encodePacked(
+                type(MockTab).creationCode, abi.encode(owner, agent, expiry, maxPerCall, payees, USDC_ADDR)
+            )
         );
         return address(uint160(uint256(keccak256(abi.encodePacked(bytes1(0xff), address(this), salt, initHash)))));
     }

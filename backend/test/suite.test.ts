@@ -8,6 +8,7 @@ const UNIT = [
   "arc-ranges.test.js",
   "decide.test.js",
   "dev-session.test.js",
+  "exact-settlement.test.js",
   "http.test.js",
   "index.test.js",
   "portfolio-scan.test.js",

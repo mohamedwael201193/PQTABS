@@ -9,6 +9,7 @@
 - **Live app:** https://pqtabs.vercel.app
 - **Backend API:** https://pqtabs.onrender.com (free plan, may take a moment to wake)
 - **Chain:** Arc mainnet, chain ID `5042`, USDC as the gas token
+- **Judge check:** [JUDGE-QUICKSTART.md](JUDGE-QUICKSTART.md) verifies a receipt, the contracts, and a read-only MCP call. No wallet.
 
 ---
 
@@ -95,16 +96,18 @@ All links open the Arc explorer. The receipt statuses below were read from `http
 | Capability closed | [`0x365405cf…f746`](https://explorer.arc.io/tx/0x365405cfb63e70eec08cafd046d474ed901ff12d568811affd53619c7b66f746) | 24,663,813 | success |
 | Research payment, answered | [`0x41496d26…76ae`](https://explorer.arc.io/tx/0x41496d2663c553f4948680b24f9de159026c2e2212514b44ffb60eda237076ae) | 25,534,892 | success |
 
-Deployed contract addresses (Arc mainnet):
+Deployed contracts, read on 2026-10-13. Hashes and the compiler settings are in [CONTRACT-VERIFICATION.md](CONTRACT-VERIFICATION.md).
 
-| Contract | Address |
-|---|---|
-| RootFactory | [`0x05545F026b75f03aE9Cf1eA8a8373473c94ed323`](https://explorer.arc.io/address/0x05545F026b75f03aE9Cf1eA8a8373473c94ed323) |
-| PQRoot implementation | [`0xb147Ec122E0b8F91dC4398dD0746372fdC22A894`](https://explorer.arc.io/address/0xb147Ec122E0b8F91dC4398dD0746372fdC22A894) |
-| Barkeep tab implementation | [`0x89B63f2E43dea9014750925C01996D34856B01D2`](https://explorer.arc.io/address/0x89B63f2E43dea9014750925C01996D34856B01D2) |
-| USDC (ERC-20 interface) | [`0x3600000000000000000000000000000000000000`](https://explorer.arc.io/address/0x3600000000000000000000000000000000000000) |
+| Contract | Address | Source |
+|---|---|---|
+| RootFactory | [`0x0554…d323`](https://explorer.arc.io/address/0x05545F026b75f03aE9Cf1eA8a8373473c94ed323) | [Sourcify match](https://sourcify.dev/server/v2/contract/5042/0x05545F026b75f03aE9Cf1eA8a8373473c94ed323) |
+| PQRoot implementation | [`0xb147…A894`](https://explorer.arc.io/address/0xb147Ec122E0b8F91dC4398dD0746372fdC22A894) | [Sourcify match](https://sourcify.dev/server/v2/contract/5042/0xb147Ec122E0b8F91dC4398dD0746372fdC22A894) |
+| Barkeep factory | [`0xcceb…443c`](https://explorer.arc.io/address/0xccebC58DD1F5937B36D5f9F89f0754424f4D443c) | Bytecode on chain. Source not verified. |
+| Barkeep tab implementation | [`0x89B6…01D2`](https://explorer.arc.io/address/0x89B63f2E43dea9014750925C01996D34856B01D2) | Bytecode on chain. Source not verified. |
+| USDC ERC-20 interface | [`0x3600…0000`](https://explorer.arc.io/address/0x3600000000000000000000000000000000000000) | Arc system contract. Not a PQTABS deployment. |
+| PQ precompile | [`0x1800…0004`](https://explorer.arc.io/address/0x1800000000000000000000000000000000000004) | Arc precompile. Not a Solidity contract. |
 
-The addresses are taken from `deployments/mainnet.json` and `backend/src/constants.ts`. The factory and USDC have bytecode on chain, read on 2026-10-12.
+The live root `0x2d0F…6b95` is a 45-byte clone of the matched PQRoot implementation. Treasury movement inside a root (fund, open, close, reclaim) is not the same thing as a paid research answer. The research payment in the table above is 360 raw (0.00036 USDC). The staging lifecycle in `deployments/mainnet.json` moved larger but still sub-dollar amounts. Neither is a claim that a large treasury has been put under this root.
 
 ## Security model
 
@@ -117,6 +120,37 @@ The addresses are taken from `deployments/mainnet.json` and `backend/src/constan
 - **Circle wallets.** Circle's agent wallet from the CLI is a smart contract account. Barkeep's tab accepts only an ECDSA signature from an externally owned account, so that wallet cannot be the agent. The tab requires the recovered ECDSA signer to equal `agent()`, and the on-chain check ran for EOA agents only, so this contract-wallet conclusion is inferred from that rule and was not tested live. Circle's docs list only `ARC-TESTNET` in the Wallets and CCTP tables, so the mainnet chain code `ARC` used by the adapter is unverified. A Circle developer-controlled EOA has a signer adapter (`circleDeveloperSigner` in `pqtabs-sdk`). Its digest reproduces the signer that Barkeep accepted for a mined Arc spend (an offline known vector). A live Circle signature has not been produced, so the compatibility of Circle's live signing is not proven. It needs your own Circle credentials and an approved test.
 - **Replay and quotes.** A research quote binds the task, price, payee, and max tokens by hash (`researchBodyHash`) and expires after 600 seconds.
 - **Failure states.** A matched receipt with a missing answer is reported as `result_pending`, not as complete. A refused spend says why. Read traffic and relay traffic use separate rate-limit buckets, and the relay bucket is limited to a fixed number of requests per minute (the suite checks the ninth request inside one minute is refused).
+
+## What is enforced where
+
+PQTABS enforces the post-quantum authorization, the nonce, the deadline, the exposure ceiling, and the open and close accounting. Those rules are in the Sourcify-matched `PQRoot` source.
+
+Barkeep enforces the capability's agent, payee list, per-call maximum, expiry, and the check that a spend signature recovers to that agent. That bytecode is on mainnet and is not source-verified. The tests use a mock of it. The deployed `PQRoot` does not read `agent()`, `payees()`, or `maxPerCall()` back after opening. `PQRootNext` does, and it is not deployed.
+
+## If the post-quantum key is lost
+
+The deployed root has one verifying key. `execute` accepts only a signature under that key. There is no admin, no ECDSA override, and no upgrade path on an existing clone. A lost key cannot authorize a replacement. The USDC in that root stays there.
+
+`PQRootNext` (not deployed) is a separate implementation with a 7-day delayed rotation:
+
+- The spending key can schedule a new key. If a backup PQ key was set at creation, only that backup key can cancel the schedule. Transfers and new capabilities pause while it is pending.
+- The backup key can schedule a new spending key. Only the current spending key can cancel that schedule. This is the path when the spending key is lost and the backup key is not.
+- After 7 days anyone can execute the pending key. Immediate rotation is removed in this version.
+- A stolen spending key can still be cancelled by the backup key, and the reverse. If both keys are lost or both are stolen, this does not help. Existing roots do not gain this by a transaction. They would need a new factory and a new root. Moving funds requires the current key.
+
+## Standard x402
+
+The live research quote advertises only `pqtabs-barkeep`. It is not the standard `exact` scheme, and a stock x402 client cannot pay it.
+
+Circle's facilitator documentation lists Arc mainnet as `eip155:5042` with this USDC contract for the `exact` scheme: https://developers.circle.com/facilitator-service/supported-networks . That page was read on 2026-10-13. PQTABS does not call that facilitator. `backend/src/index/exact-settlement.ts` builds an `exact` accept and checks a settlement report (network, asset, payee, amount, quote, expiry, replay, failed status). Those checks are unit-tested. The live quote does not include the row, because no unmodified client has settled a PQTABS quote through a facilitator.
+
+## Idle treasury
+
+No yield integration is deployed. The address `0x8E357432CC12ff425c36432F312968aEb16112AF` has bytecode on Arc (21,808 bytes) and no Sourcify verification. PQTABS does not send treasury there. Unallocated root USDC earns nothing. Funds inside an open capability are reserved by `openExposure` and are not available to a strategy.
+
+## Circle signing
+
+Circle's CLI agent wallet is a smart contract account. The tab requires the recovered ECDSA signer to equal `agent()`. That on-chain check was run for EOA agents. The contract-wallet case is inferred from that rule and was not tested live. A Circle developer-controlled EOA adapter reproduces the digest of a mined Arc spend offline. No live Circle signature has been produced. Barkeep compatibility with Circle is not verified.
 
 Known limits, stated plainly:
 
@@ -133,7 +167,7 @@ Rows marked **today** were run on 2026-10-13 after the verification pass: the Ci
 
 | Suite | Command | Result |
 |---|---|---|
-| Backend unit and integration | `npm test` in `backend/` | 89 passed, 0 failed, exit 0 (today). Includes 7 portfolio-scan tests (cold scan, TTL cache, incremental scan, bounded windows, failed scan not stored, rate-limit refusal with no Arc calls, and an address with no contract code refused as `unknown_root` instead of a 500) |
+| Backend unit and integration | `npm test` in `backend/` | 95 passed, 0 failed, on 2026-10-13 locally. Includes the exact-settlement checks. CI on `6bd578a` was 92, before that file. |
 | Backend lint | `npm run lint` in `backend/` | exit 0 (today) |
 | SDK unit tests | `npm test` in `packages/pqtabs-sdk/` | 63 passed, 0 failed, exit 0 (today). Includes the Circle adapter vectors and two offline known vectors from the mined Arc spend `0x5358ec04…65b5` (the adapter digest recovers to the agent that Barkeep accepted) |
 | MCP unit tests | `npm test` in `packages/pqtabs-mcp/` | 19 passed, 0 failed, exit 0 (today). Includes the local signer boundary |
@@ -147,7 +181,7 @@ Rows marked **today** were run on 2026-10-13 after the verification pass: the Ci
 | Frontend lint ratchet | `npm run lint:ratchet` in `frontend/` | Passes (today). The 25 existing errors (17 `react-hooks/refs`, 8 `react-hooks/set-state-in-effect`) and 2 generated-file warnings are recorded in `frontend/lint-baseline.json`. The ratchet fails on any new or increased problem. The baseline is not a claim that these are safe; fixing them is open work |
 | Frontend node tests | `npm test` in `frontend/` (runs all 25 `src/**/*.test.ts` files) | 93 passed, 0 failed, exit 0 (today) |
 | Signer (Rust) | `cargo test --manifest-path signer/Cargo.toml` | 8 passed (5 + 3), exit 0 |
-| Contracts (Foundry) | `forge test` | 17 test functions in 2 files (grep count). Foundry is not installed locally; the CI `contracts` job passed. |
+| Contracts (Foundry) | `forge test` | 30 passed, 0 failed, on 2026-10-13 locally (`PQRoot` 17 including the Rust digest check, `Recovery` 12, exposure invariant 1). `PQRootNext` is not deployed. |
 | Pins and secrets | `python scripts/check_pins.py`, `python scripts/secret_scan.py` | pass (today). The secret scan matches env-style assignments only (`NAME=value` at line start), so ordinary code such as `const token = ...` is no longer flagged. 370 tracked files scanned (today, before the release commit) |
 | Published MCP clean-consumer smoke | `packages/scripts/clean-consumer-smoke.mjs` against the npm package `pqtabs-mcp` 0.1.2 | `SMOKE_OK`, including the local-signer step that lists the paid tool and reports `paidResearchEnabled` with no spend (today) |
 | CI | GitHub Actions `ci` | jobs: contracts, signer (Rust), backend (test and lint), sdk-and-mcp (lint, typecheck, test on Ubuntu), frontend (`tsc --noEmit`, lint ratchet, node tests on Ubuntu), pqtabs-signer (lint and test on Windows, isolated key directory), pins-and-secrets, slither. The status of the latest run is on the [ci workflow page](https://github.com/mohamedwael201193/PQTABS/actions/workflows/ci.yml) |
@@ -309,6 +343,9 @@ Only items marked **Live** run in production today.
 | Proof-of-stake validator set | Potential future transition, not live | Arc docs: consensus layer |
 | Gas paid in other stablecoins | Not supported at launch | Arc docs: stablecoin-native model |
 | Services beyond Arc research | Not built | This repository has one paid service |
+| Delayed PQ recovery (`PQRootNext`) | Implemented and tested. Not deployed | Existing clones cannot be upgraded |
+| Standard x402 `exact` settlement | Checked in unit tests. Not on the live quote | Circle documents Arc support. No live client settlement has been run |
+| Idle-treasury yield | Not integrated | Cited vault has bytecode and no Sourcify match |
 
 ## Repository layout
 
