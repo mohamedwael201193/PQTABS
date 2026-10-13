@@ -9,8 +9,8 @@ import {
   fileAttemptStore,
   PqtabsClient,
   PqtabsError,
-  privateKeySigner,
 } from "pqtabs-sdk";
+import { signerFromEnv } from "./local-signer.js";
 import { createPqtabsServer, PACKAGE_VERSION } from "./server.js";
 
 const HELP = `pqtabs-mcp ${PACKAGE_VERSION}
@@ -21,8 +21,12 @@ Environment:
   PQTABS_BACKEND_URL       backend URL (default ${DEFAULT_BACKEND_URL})
   PQTABS_RPC_URL           Arc RPC URL (default ${DEFAULT_RPC_URL})
   PQTABS_STATE_DIR         directory for stored authorizations (default ~/.pqtabs)
-  PQTABS_AGENT_PRIVATE_KEY optional. Enables pqtabs_run_paid_research. The agent key for an
-                           already-authorized capability. Prefer a secret manager over a plain config file.
+  PQTABS_SIGNER_CLI        optional. Path to the pqtabs-signer CLI (packages/pqtabs-signer/dist/src/cli.js).
+                           With PQTABS_SIGNER_AGENT, enables pqtabs_run_paid_research. The key stays in the
+                           local signer (OS credential store). This MCP never receives it.
+  PQTABS_SIGNER_AGENT      optional. The agent address the local signer holds. Must be an address, not a key.
+  PQTABS_AGENT_PRIVATE_KEY legacy only. The raw agent key in this environment. Use it only when the local
+                           signer is not available. Do not set it together with the local signer.
 
 Flags:
   --version    print the version
@@ -42,15 +46,14 @@ async function main(): Promise<void> {
 
   const env = process.env;
   let signer: AgentSigner | undefined;
-  const keyText = env.PQTABS_AGENT_PRIVATE_KEY?.trim();
-  if (keyText) {
-    try {
-      signer = privateKeySigner(keyText as `0x${string}`);
-    } catch {
-      // Never echo the value. Say what is wrong and stop.
-      process.stderr.write("PQTABS_AGENT_PRIVATE_KEY is not a 32-byte hex key. Fix it or unset it. Nothing was started.\n");
-      process.exit(1);
-    }
+  try {
+    const chosen = signerFromEnv(env);
+    signer = chosen.signer;
+    if (chosen.notice) process.stderr.write(`${chosen.notice}\n`);
+  } catch (error) {
+    // Fail closed. Say what is wrong. Never echo a key.
+    process.stderr.write(`${error instanceof PqtabsError ? error.message : "The signer could not be chosen. Nothing was started."}\n`);
+    process.exit(1);
   }
 
   const stateDir = env.PQTABS_STATE_DIR?.trim() || join(homedir(), ".pqtabs");
@@ -71,7 +74,7 @@ async function main(): Promise<void> {
   await server.connect(new StdioServerTransport());
   // stdout carries the MCP protocol. Status goes to stderr only.
   process.stderr.write(
-    `pqtabs-mcp ${PACKAGE_VERSION} ready on stdio. Paid research: ${signer ? "enabled" : "disabled (no agent key set)"}.\n`,
+    `pqtabs-mcp ${PACKAGE_VERSION} ready on stdio. Paid research: ${signer ? "enabled" : "disabled (no signer configured)"}.\n`,
   );
 }
 
