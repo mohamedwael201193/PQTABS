@@ -26,6 +26,7 @@ import {
 import { StatusChip } from "@/components/pqtabs/shared";
 import { relFuture, usd } from "@/data/formatters";
 import { isAddress } from "@/data/actions";
+import { canRetryStaleNonce } from "@/data/root-sign-check";
 import { decisionRecord, expiryWhen, orderedReasons, paymentReasonSentence, settledDecision, settlementReasons, type DecisionFacts, type DecisionRecord, type QuotedDecision } from "@/data/decision-record";
 import { loadDecisions, saveDecision } from "@/data/decision-store";
 import { ChargeConfirm, readAttempt, reconcileAttempt, writeAttempt } from "@/data/paid-attempt";
@@ -1407,25 +1408,43 @@ function TabDrawerBody({
                     disabled={closingSig || !closePrep || !closeReady}
                     onClick={(event) => {
                       event.preventDefault();
-                      if (!closePrep) return;
-                      const live = usePqtabsData.getState();
-                      if (!live.snapshot.account.rootAddress || live.snapshot.account.rootAddress.toLowerCase() !== closePrep.root.toLowerCase()) {
-                        toast.error("The wallet changed. Nothing was signed.");
-                        return;
-                      }
+                      if (!closePrep || !tab) return;
                       setClosingSig(true);
-                      void confirmRootSignature(closePrep, verifyingKey(live.registrar))
-                        .then(() => signRootDigest(live.registrar, closePrep.digest))
-                        .then((signed) => onClose(closePrep, signed))
-                        .catch((reason: unknown) => {
-                          const message = reason instanceof Error ? reason.message : "Unlock your security key first.";
-                          if (message.includes("older security key")) {
-                            lockRoot();
-                            setCloseReady(false);
+                      void (async () => {
+                        let prepared = closePrep;
+                        for (let attempt = 0; attempt < 2; attempt += 1) {
+                          try {
+                            const current = usePqtabsData.getState();
+                            if (!current.snapshot.account.rootAddress || current.snapshot.account.rootAddress.toLowerCase() !== prepared.root.toLowerCase()) {
+                              throw new Error("The wallet changed. Nothing was signed.");
+                            }
+                            await confirmRootSignature(prepared, verifyingKey(current.registrar));
+                            const signed = await signRootDigest(current.registrar, prepared.digest);
+                            await onClose(prepared, signed);
+                            return;
+                          } catch (reason: unknown) {
+                            const message = reason instanceof Error ? reason.message : "Unlock your security key first.";
+                            if (canRetryStaleNonce(attempt, message)) {
+                              const root = usePqtabsData.getState().snapshot.account.rootAddress;
+                              if (!root) throw reason;
+                              try {
+                                prepared = await prepareClose(root, tab.id);
+                              } catch (refresh: unknown) {
+                                toast.error(refresh instanceof Error ? refresh.message : message);
+                                return;
+                              }
+                              setClosePrep(prepared);
+                              continue;
+                            }
+                            if (message.includes("older security key")) {
+                              lockRoot();
+                              setCloseReady(false);
+                            }
+                            toast.error(message);
+                            return;
                           }
-                          toast.error(message);
-                        })
-                        .finally(() => setClosingSig(false));
+                        }
+                      })().finally(() => setClosingSig(false));
                     }}
                     className="bg-danger text-white hover:bg-danger/90"
                   >

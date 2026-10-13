@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rootSignatureBlock } from "./root-sign-check.ts";
+import { canRetryStaleNonce, rootSignatureBlock } from "./root-sign-check.ts";
 
 const vk = "0x5419dd969dc1290bb3cf19d47d5bd0d627fb085c3dc3d38d53a3b1275347bd20";
 
@@ -23,6 +23,12 @@ test("a different verifying key is not signed", () => {
     preparedNonce: "1",
     now: BigInt(1_700_000_000),
   }) ?? "", /older security key/);
+});
+
+test("a stale close nonce is refreshed once", () => {
+  assert.equal(canRetryStaleNonce(0, "The root nonce changed. Nothing was signed."), true);
+  assert.equal(canRetryStaleNonce(1, "The root nonce changed. Nothing was signed."), false);
+  assert.equal(canRetryStaleNonce(0, "The wallet changed. Nothing was signed."), false);
 });
 
 test("a changed nonce is not signed", () => {

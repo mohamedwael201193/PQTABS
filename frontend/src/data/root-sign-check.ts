@@ -21,3 +21,8 @@ export function rootSignatureBlock(input: {
   if (input.now >= BigInt(input.expiry)) return "The capability expires too soon. Nothing was signed.";
   return null;
 }
+
+/** The close dialog can outlive one nonce. Refresh that digest once, then stop. */
+export function canRetryStaleNonce(attempt: number, message: string): boolean {
+  return attempt === 0 && message.includes("The root nonce changed");
+}

@@ -182,7 +182,11 @@ export async function relay(
   try {
     await withRpcRetry(() => clients.public.estimateGas({ account, to, data }));
   } catch (error) {
-    const message = error instanceof Error ? error.message : "simulation failed";
+    if (error instanceof RequestError) throw error;
+    const message = errorText(error);
+    if (message.includes("429") || message.toLowerCase().includes("rate limit")) {
+      throw new RequestError(429, "rate_limited", "Arc is rate limiting reads. Try again in a moment.");
+    }
     throw new RequestError(400, "simulation_failed", message.slice(0, 300));
   }
   const prices = await fee(clients.public);
