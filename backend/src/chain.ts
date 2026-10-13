@@ -280,7 +280,7 @@ async function windows<T>(
 }
 
 /** Read blocks start..latest in windows Arc accepts. Falls back to smaller windows on a range error. */
-async function ranged<T>(
+export async function ranged<T>(
   start: bigint,
   latest: bigint,
   read: (from: bigint, to: bigint) => Promise<readonly T[]>,

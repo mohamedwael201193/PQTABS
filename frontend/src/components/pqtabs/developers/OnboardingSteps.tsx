@@ -75,7 +75,7 @@ export function OnboardingSteps() {
       <StepCard index="1" title="Circle Agent Wallet" status="Optional. Not connected here">
         <p>
           Circle&apos;s agent wallet from the CLI is a smart contract account. Barkeep&apos;s capability accepts only an ECDSA
-          signature from an externally owned account, so the CLI wallet cannot be the agent. This is proven on-chain. A
+          signature from an externally owned account, so the CLI wallet cannot be the agent. The tab requires the recovered ECDSA signer to equal its agent address, and an on-chain check confirmed that rule for EOA agents. The contract-wallet case follows from that rule. It was not tested live. A
           Circle developer-controlled EOA on ARC is a separate option. It needs your Circle API key and entity secret on your
           own server. This page never asks for them, and the primary path below does not need them.
         </p>

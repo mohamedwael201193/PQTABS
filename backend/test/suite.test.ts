@@ -5,6 +5,7 @@ import { describe, it } from "node:test";
 const UNIT = [
   "accounting.test.js",
   "answer-quality.test.js",
+  "arc-ranges.test.js",
   "decide.test.js",
   "dev-session.test.js",
   "http.test.js",
