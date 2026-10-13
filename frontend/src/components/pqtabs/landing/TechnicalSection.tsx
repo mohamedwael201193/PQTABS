@@ -23,7 +23,7 @@ const SPEC = [
   {
     key: "VERIFICATION",
     title: "Arc precompile",
-    body: "Post-quantum signature checks execute natively on Arc, so the root’s authority is enforced by the network.",
+    body: "The root contract checks each SLH-DSA signature through Arc’s post-quantum verification precompile. An action without a valid signature reverts on chain.",
   },
   {
     key: "CAPABILITIES",

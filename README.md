@@ -111,7 +111,7 @@ The addresses are taken from `deployments/mainnet.json` and `backend/src/constan
 - **Root authority.** Root actions carry a nonce and a deadline inside the signed digest (`PQRoot.digestFor`). `PQRoot.execute` checks the SLH-DSA-SHA2-128s signature on chain and is guarded by `nonReentrant`.
 - **Exposure ceiling.** Each root is created with a `maxOpenExposure` ceiling (`RootFactory.createRoot`). Opening a capability cannot push open exposure above it.
 - **Capability limits.** A capability holds a fixed cap, an expiry, and a payee. The backend refuses a spend when the balance is empty or the price exceeds what remains (reason `balance`) before any signing.
-- **Agent key.** The agent signs spend requests with an ECDSA key held in the browser. The backend never receives the root key. The app never asks for a private key or a signature paste.
+- **Agent key.** The agent signs spend requests with a classical ECDSA key, which is separate from the post-quantum root. The key lives in one of two places: the browser vault (AES-GCM encrypted with a non-extractable device key in IndexedDB) or the local signer on Windows (DPAPI). The backend never receives the agent or root key. The app never asks for a private key or a signature paste.
 - **Local signer (Windows).** `pqtabs-signer` keeps an agent key encrypted with Windows DPAPI for the current user, under `%LOCALAPPDATA%\pqtabs-signer\keys`. The MCP server starts the signer as a child process and receives only the 65-byte signature for each approved authorization. On this path the MCP process never holds the raw key. DPAPI does not protect against code that already runs as the same user.
 - **Relayer.** The relayer pays gas and broadcasts transactions. Root actions need the post-quantum signature, which the relayer does not hold.
 - **Circle wallets.** Circle's agent wallet from the CLI is a smart contract account. Barkeep's tab accepts only an ECDSA signature from an externally owned account, so that wallet cannot be the agent. A Circle developer-controlled EOA on ARC has a signer adapter (`circleDeveloperSigner` in `pqtabs-sdk`) that is tested with known vectors. It has not been run against Circle's live API, and it needs your own Circle credentials.
@@ -133,7 +133,7 @@ Rows marked **today** were run on 2026-10-13 from the working tree that includes
 
 | Suite | Command | Result |
 |---|---|---|
-| Backend unit and integration | `npm test` in `backend/` | 88 passed, 0 failed, exit 0 (today). Includes 6 portfolio-scan tests (cold scan, TTL cache, incremental scan, bounded windows, failed scan not stored, rate-limit refusal with no Arc calls) |
+| Backend unit and integration | `npm test` in `backend/` | 89 passed, 0 failed, exit 0 (today). Includes 7 portfolio-scan tests (cold scan, TTL cache, incremental scan, bounded windows, failed scan not stored, rate-limit refusal with no Arc calls, and an address with no contract code refused as `unknown_root` instead of a 500) |
 | Backend lint | `npm run lint` in `backend/` | exit 0 (today) |
 | SDK unit tests | `npm test` in `packages/pqtabs-sdk/` | 61 passed, 0 failed, exit 0 (today). Includes the Circle adapter vectors |
 | MCP unit tests | `npm test` in `packages/pqtabs-mcp/` | 19 passed, 0 failed, exit 0 (today). Includes the local signer boundary |
