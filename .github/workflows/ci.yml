@@ -54,6 +54,8 @@ jobs:
           cache: npm
           cache-dependency-path: packages/package-lock.json
       - run: npm ci
+      # The MCP imports pqtabs-sdk from its built dist/, so build the SDK before the MCP typecheck.
+      - run: npm run build --workspace pqtabs-sdk
       - run: npm run lint --workspaces --if-present
       - run: npm run typecheck --workspaces --if-present
       - run: npm test --workspaces --if-present
