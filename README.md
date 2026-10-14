@@ -83,13 +83,16 @@ sequenceDiagram
 
 Status values returned by the result endpoint: `unpaid`, `result_pending` (receipt matched, no answer yet), and `complete`.
 
+The answer panel keeps the model's sentences. It renders headings, lists, and tables, and turns each cited Arc fact into a link to that fact's official page. A citation the model already linked is not wrapped again. An unknown citation is shown as plain text, and its URL is not used.
+
 ## Mainnet proof
 
-All links open the Arc explorer. The first six receipt statuses were read from `https://rpc.mainnet.arc.io` on 2026-10-12. The 2026-10-14 rows were read from `https://rpc.drpc.mainnet.arc.io` on that day.
+All links open the Arc explorer. The first six receipt statuses were read from `https://rpc.mainnet.arc.io` on 2026-10-12. The 2026-10-14 rows, the RootFactory deployment, the RootFactoryNext deployment, and the Arclight settlement were read again from `https://rpc.drpc.mainnet.arc.io` on 2026-10-14. Each of those nine receipts returned status success.
 
 | Event | Transaction | Block | Status |
 |---|---|---|---|
 | RootFactory deployment | [`0xfade67cb…c916`](https://explorer.arc.io/tx/0xfade67cbf64d0869dbd33f53bd48844f0b3b4399d2c54b68c36a0b07ba30c916) | 24,623,258 | success |
+| RootFactoryNext deployment | [`0x68c7ce22…80f1`](https://explorer.arc.io/tx/0x68c7ce22eb265bdedbeeab2820fe4f17c6c4f8abce44aa457315a09da84080f1) | 25,790,508 | success |
 | Relayed 1-raw USDC transfer | [`0x205114d2…db33d`](https://explorer.arc.io/tx/0x205114d24dcb3c894aa82a394d3709f26c07ffb3ea6dcb40a465546a091db33d) | 24,627,943 | success |
 | Capability opened (root-signed) | [`0xc4a85cd1…b363`](https://explorer.arc.io/tx/0xc4a85cd1ed2bef62694ac83bf57f854a774ebe3795b619e536d8c2b982d6b363) | 24,661,830 | success |
 | Payment from the capability (1 raw) | [`0x0d17b53c…b3b2`](https://explorer.arc.io/tx/0x0d17b53c3d249eb680c8a868c26d5ae8fbf041b034f946ff92bfb61e8b97b3b2) | 24,663,366 | success |
@@ -169,28 +172,25 @@ Known limits, stated plainly:
 
 ## Test totals
 
-Rows marked **today** were run on 2026-10-13 after the verification pass: the Circle known vectors, single-use pairing (commit `215c72b`), and the CI, lint, signer-install, and usage-measurement changes that follow it. Other rows are older runs and say so. GitHub Actions run [38585237591](https://github.com/mohamedwael201193/PQTABS/actions/runs/38585237591) on commit `eef05a8` succeeded on 2026-10-14 for all eight jobs: contracts, signer, backend, sdk-and-mcp, frontend, pqtabs-signer, pins-and-secrets, and slither.
+Counted on 2026-10-14 from the commands in this table. Subset rows are included in the frontend total, not added to it. The published-package smoke was not rerun on this date. GitHub Actions run [38595345174](https://github.com/mohamedwael201193/PQTABS/actions/runs/38595345174) on commit `3cc0db6` succeeded on 2026-10-14. The run for the commit that contains this table is the latest entry on the [ci workflow page](https://github.com/mohamedwael201193/PQTABS/actions/workflows/ci.yml).
 
 | Suite | Command | Result |
 |---|---|---|
-| Backend unit and integration | `npm test` in `backend/` | 96 passed, 0 failed, on 2026-10-13 locally. Includes the exact-settlement checks and the Arclight settle client. |
-| Backend lint | `npm run lint` in `backend/` | exit 0 (today) |
-| SDK unit tests | `npm test` in `packages/pqtabs-sdk/` | 63 passed, 0 failed, exit 0 (today). Includes the Circle adapter vectors and two offline known vectors from the mined Arc spend `0x5358ec04…65b5` (the adapter digest recovers to the agent that Barkeep accepted) |
-| MCP unit tests | `npm test` in `packages/pqtabs-mcp/` | 19 passed, 0 failed, exit 0 (today). Includes the local signer boundary |
-| Local signer (TypeScript) | `npm test` in `packages/pqtabs-signer/` | 43 passed, 0 failed, exit 0 (today). Includes the pairing-message vector and refusal of another agent |
-| SDK, MCP, and signer lint | `npx biome check` in each package | exit 0 (today) |
-| Frontend typecheck | `npx tsc --noEmit` in `frontend/` | 0 errors (today) |
-| Frontend production build | `npx next build` in `frontend/` | compiles, prerenders `/`, `/_not-found`, and `/developers` (today) |
-| Receipt wait | `npm run test:receipt` in `frontend/` | 9 passed, 0 failed, exit 0 (today). A timeout or transient RPC error is pending, never failed |
-| Developer address field | `node --experimental-strip-types --test src/components/pqtabs/developers/agent-address.test.ts` | 3 passed, 0 failed, exit 0 (today). Refuses key-shaped input |
-| Developer pairing and session | `node --experimental-strip-types --test` on `pairing.test.ts` and `developer-session.test.ts` | 6 and 6 passed, 0 failed, exit 0 (today). The pairing vector matches the signer, and a lowercase address pairs as its checksum form |
-| Frontend lint ratchet | `npm run lint:ratchet` in `frontend/` | Passes (today). The 25 existing errors (17 `react-hooks/refs`, 8 `react-hooks/set-state-in-effect`) and 2 generated-file warnings are recorded in `frontend/lint-baseline.json`. The ratchet fails on any new or increased problem. The baseline is not a claim that these are safe; fixing them is open work |
-| Frontend node tests | `npm test` in `frontend/` (runs all 25 `src/**/*.test.ts` files) | 93 passed, 0 failed, exit 0 (today) |
-| Signer (Rust) | `cargo test --manifest-path signer/Cargo.toml` | 8 passed (5 + 3), exit 0 |
-| Contracts (Foundry) | `forge test` | 33 passed, 0 failed, on 2026-10-13 locally (`PQRoot` 17 including the Rust digest check, `Recovery` 15 including the vault round trip, exposure invariant 1). |
-| Pins and secrets | `python scripts/check_pins.py`, `python scripts/secret_scan.py` | pass (today). The secret scan matches env-style assignments only (`NAME=value` at line start), so ordinary code such as `const token = ...` is no longer flagged. 370 tracked files scanned (today, before the release commit) |
-| Published MCP clean-consumer smoke | `packages/scripts/clean-consumer-smoke.mjs` against the npm package `pqtabs-mcp` 0.1.2 | `SMOKE_OK`, including the local-signer step that lists the paid tool and reports `paidResearchEnabled` with no spend (today) |
-| CI | GitHub Actions `ci` | jobs: contracts, signer (Rust), backend (test and lint), sdk-and-mcp (lint, typecheck, test on Ubuntu), frontend (`tsc --noEmit`, lint ratchet, node tests on Ubuntu), pqtabs-signer (lint and test on Windows, isolated key directory), pins-and-secrets, slither. The status of the latest run is on the [ci workflow page](https://github.com/mohamedwael201193/PQTABS/actions/workflows/ci.yml) |
+| Backend unit and integration | `npm test` in `backend/` | 102 passed, 0 failed, on 2026-10-14. Includes the exact-settlement checks and the Arclight settle client. |
+| Backend lint | `npx biome check src test` in `backend/` | exit 0 on 2026-10-14. 43 files. |
+| SDK unit tests | `npm test` in `packages/pqtabs-sdk/` | 65 passed, 0 failed, on 2026-10-14. Includes the Circle adapter vectors, the mined-spend vectors, and the matching-exact-row quote checks. |
+| MCP unit tests | `npm test` in `packages/pqtabs-mcp/` | 19 passed, 0 failed, on 2026-10-14. Includes the local signer boundary. |
+| Local signer (TypeScript) | `npm test` in `packages/pqtabs-signer/` | 43 passed, 0 failed, on 2026-10-14. Includes the pairing-message vector and refusal of another agent. |
+| SDK, MCP, and signer lint | `npx biome check src test` in each package | exit 0 on 2026-10-14. SDK 20 files, MCP 7 files, signer 14 files. |
+| Frontend typecheck | `npx tsc --noEmit` in `frontend/` | 0 errors on 2026-10-14. |
+| Frontend production build | `npx next build` in `frontend/` | compiled on 2026-10-14 and prerendered `/`, `/_not-found`, and `/developers`. |
+| Frontend lint ratchet | `npm run lint:ratchet` in `frontend/` | Passed on 2026-10-14. The baseline is unchanged: 25 errors (17 `react-hooks/refs`, 8 `react-hooks/set-state-in-effect`) and 2 generated-file warnings in `frontend/lint-baseline.json`. The ratchet fails on any new or increased problem. The baseline is not a claim that these are safe. |
+| Frontend node tests | `npm test` in `frontend/` (27 `src/**/*.test.ts` files) | 99 passed, 0 failed, on 2026-10-14. Includes the 9 receipt-wait tests, 3 address-field tests, 6 pairing tests, and 6 developer-session tests. |
+| Signer (Rust) | `cargo test --manifest-path signer/Cargo.toml` | 8 passed (5 + 3), 0 failed, on 2026-10-14. |
+| Contracts (Foundry) | `forge test` | 33 passed, 0 failed, on 2026-10-14 (`PQRoot` 17, `Recovery` 15, exposure invariant 1). |
+| Pins and secrets | `python scripts/check_pins.py`, `python scripts/secret_scan.py` | pass on 2026-10-14. 390 tracked files scanned. |
+| Published MCP clean-consumer smoke | `packages/scripts/clean-consumer-smoke.mjs` against npm `pqtabs-mcp` 0.1.2 | Last recorded `SMOKE_OK` on 2026-10-13. Not rerun on 2026-10-14. |
+| CI | GitHub Actions `ci` | jobs: contracts, signer (Rust), backend (test and lint), sdk-and-mcp (lint, typecheck, test on Ubuntu), frontend (`tsc --noEmit`, lint ratchet, node tests on Ubuntu), pqtabs-signer (lint and test on Windows, isolated key directory), pins-and-secrets, slither. |
 
 ## Quick start
 
@@ -212,7 +212,7 @@ cd frontend
 npm ci
 npx tsc --noEmit
 npm run lint:ratchet   # no new lint problems beyond frontend/lint-baseline.json
-npm test               # 93 node tests
+npm test               # 99 node tests on 2026-10-14
 npx next dev -p 3000   # http://localhost:3000
 cd ..
 

@@ -25,25 +25,25 @@ const STEPS: { num: string; title: string; body: string; icon: Icon3DName }[] = 
   {
     num: "01",
     title: "Authorize the root",
-    body: "Your treasury is controlled by a post-quantum root key. It signs opening a capability, closing one, and rotating that key. It does not sign each payment.",
+    body: "A post-quantum security key signs an open, a close, and a key change. The connected wallet is only the registrar. It does not sign those actions, and it does not sign each payment.",
     icon: "key",
   },
   {
     num: "02",
     title: "Open a capability",
-    body: "Fund a capability with a cap, a per-payment maximum, one payee, and an expiry. You set these values.",
+    body: "Fund a capability with a cap, a per-payment maximum, an allowlist of payees, and an expiry. You set these values.",
     icon: "card",
   },
   {
     num: "03",
     title: "Agents spend within bounds",
-    body: "The agent pays only the quoted payee, within the cap. A payment the backend refuses is never signed or sent.",
+    body: "The agent signs the spend with a separate key and pays only an approved payee, within the cap. The relayer broadcasts it and pays the Arc gas. A payment the backend refuses is never signed or sent.",
     icon: "robot",
   },
   {
     num: "04",
     title: "Expire and reclaim",
-    body: "After expiry the agent can no longer spend. Anyone can then return the remaining USDC to the root.",
+    body: "The security key can close a capability early and return what remains. After expiry the agent can no longer spend, and anyone can return the remaining USDC to the root.",
     icon: "shield",
   },
 ];

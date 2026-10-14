@@ -29,9 +29,67 @@ const FACT_LINKS: Record<string, string> = {
   S11: "https://docs.arc.io/arc/concepts/stablecoin-native-model",
 };
 
-/** Turns each [S#] marker into a link to its official page. A marker with no known page is left as text. */
+/** Readable label for a known fact. The panel shows this, not the marker id. */
+const FACT_TITLES: Record<string, string> = {
+  S1: "RPC endpoints",
+  S2: "Arc chain",
+  S3: "Deterministic finality",
+  S4: "Consensus layer",
+  S5: "Stablecoin-native model",
+  S6: "Contract addresses",
+  S7: "Post-quantum security",
+  S8: "Planned proof-of-stake",
+  S9: "Opt-in privacy",
+  S10: "Future wallet signing",
+  S11: "Other stablecoin gas",
+};
+
+/**
+ * A citation the model may write: a bare [S#], a markdown link, an empty pair of parentheses,
+ * or a parenthesis that never closes. The address inside the parenthesis is not trusted.
+ */
+const CITATION = /\[(S\d+)\](?:\((https?:\/\/[^\s)]*)\)?|\([^)\n]*\))?/g;
+
+/** Pages the answer actually cited, in first-seen order. Unknown markers are omitted. */
+export function citedSources(text: string): { title: string; href: string }[] {
+  const seen = new Set<string>();
+  const sources: { title: string; href: string }[] = [];
+  for (const match of text.matchAll(/\[(S\d+)\]/g)) {
+    const id = match[1] ?? "";
+    const href = FACT_LINKS[id];
+    const title = FACT_TITLES[id];
+    if (!href || !title || seen.has(id)) continue;
+    seen.add(id);
+    sources.push({ title, href });
+  }
+  return sources;
+}
+
+/**
+ * Turns citation markers into titled links to the official page for that fact.
+ * A marker the model already linked is not wrapped a second time. Concatenated markers
+ * become separate links. An unknown id is left as plain text, and its URL is dropped.
+ */
 export function linkCitations(text: string): string {
-  return text.replace(/\[(S\d+)\]/g, (marker, id: string) => (FACT_LINKS[id] ? `[${marker.slice(1, -1)}](${FACT_LINKS[id]})` : marker));
+  const spaced = text.replace(/(https?:\/\/\S+?)(?=https?:\/\/)/g, "$1 ");
+  const linked = spaced.replace(CITATION, (full, id: string, _href: string | undefined, offset: number, source: string) => {
+    const href = FACT_LINKS[id];
+    const title = FACT_TITLES[id];
+    const next = source.slice(offset + full.length);
+    const glue = /^\s*\[S\d+\]/.test(next) ? ", " : "";
+    if (!href || !title) return `${id}${glue}`;
+    return `[${title}](${href})${glue}`;
+  });
+  const deduped = linked.replace(/(\[[^\]]+\]\((https:\/\/[^)\s]+)\))\s+\2/g, "$1");
+  const bare = deduped.replace(/(?<!\]\()https:\/\/docs\.arc\.io\/[^\s)<]+/g, (url) => {
+    const clean = url.replace(/[.,;:]+$/, "");
+    const trail = url.slice(clean.length);
+    const id = Object.entries(FACT_LINKS).find(([, href]) => href === clean)?.[0];
+    const title = id ? FACT_TITLES[id] : undefined;
+    if (!title) return url;
+    return `[${title}](${clean})${trail}`;
+  });
+  return bare.replace(/[ \t]{2,}/g, " ").replace(/ +([.,;:])/g, "$1").trim();
 }
 
 /**
@@ -110,12 +168,13 @@ export function presentAnswer(
   }
   const aboutArc = arcFactQuestion(task) || /\bArc\b/.test(text);
   if (!aboutArc) {
-    return { text, sources: [], replacedStale: false, corrections: [], removed: [] };
+    return { text: linkCitations(text), sources: [], replacedStale: false, corrections: [], removed: [] };
   }
   const cleaned = removeUnsourcedSentences(text);
+  const cited = citedSources(cleaned.text);
   return {
     text: cleaned.text ? linkCitations(cleaned.text) : NO_SOURCED_ANSWER,
-    sources: [...ARC_SOURCES],
+    sources: cited.length > 0 ? cited : [...ARC_SOURCES],
     replacedStale: false,
     corrections: arcCorrections(cleaned.text),
     removed: cleaned.removed,

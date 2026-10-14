@@ -33,11 +33,20 @@ function settled(record: DecisionRecord): boolean {
 }
 
 const markdown = {
+  h1: ({ children }: { children?: ReactNode }) => (
+    <h2 className="font-display text-lg font-medium leading-snug tracking-tight text-foreground">{children}</h2>
+  ),
   h2: ({ children }: { children?: ReactNode }) => (
     <h2 className="font-display text-lg font-medium leading-snug tracking-tight text-foreground">{children}</h2>
   ),
+  h3: ({ children }: { children?: ReactNode }) => (
+    <h3 className="mt-4 font-display text-base font-medium leading-snug text-foreground">{children}</h3>
+  ),
   p: ({ children }: { children?: ReactNode }) => (
     <p className="mt-3 text-[15px] leading-7 text-foreground/90 first:mt-0">{children}</p>
+  ),
+  ul: ({ children }: { children?: ReactNode }) => (
+    <ul className="mt-4 list-disc space-y-2 pl-5 marker:text-gold">{children}</ul>
   ),
   ol: ({ children }: { children?: ReactNode }) => (
     <ol className="mt-4 list-decimal space-y-4 pl-5 marker:font-medium marker:text-gold">{children}</ol>
@@ -62,11 +71,23 @@ const markdown = {
   td: ({ children }: { children?: ReactNode }) => (
     <td className="border-t border-white/[.06] px-3 py-2 align-top text-foreground/90">{children}</td>
   ),
-  a: ({ href, children }: { href?: string; children?: ReactNode }) => (
-    <a href={href} target="_blank" rel="noreferrer" className="underline decoration-white/25 underline-offset-2">
-      {children}
-    </a>
-  ),
+  a: ({ href, children }: { href?: string; children?: ReactNode }) => {
+    let safe: string | undefined;
+    if (href) {
+      try {
+        const url = new URL(href);
+        if (url.protocol === "https:" || url.protocol === "http:") safe = url.href;
+      } catch {
+        safe = undefined;
+      }
+    }
+    if (!safe) return <span>{children}</span>;
+    return (
+      <a href={safe} target="_blank" rel="noreferrer" className="underline decoration-white/25 underline-offset-2">
+        {children}
+      </a>
+    );
+  },
 };
 
 export function PaymentDecision({ record }: { record: DecisionRecord }) {

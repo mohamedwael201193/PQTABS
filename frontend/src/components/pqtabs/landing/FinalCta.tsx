@@ -39,7 +39,7 @@ export default function FinalCta({ onLaunchApp }: { onLaunchApp: () => void }) {
   const reduced = useReducedMotion();
 
   return (
-    <SectionShell index="10" label="Launch">
+    <SectionShell index="11" label="Launch">
       <div className="relative overflow-hidden py-14 text-center md:py-24">
         {/* Atmosphere — radial glow + grid fade, no hard edges */}
         <div

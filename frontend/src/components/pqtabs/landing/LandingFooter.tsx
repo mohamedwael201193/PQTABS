@@ -14,14 +14,18 @@ const PRODUCT_LINKS = [
   { label: "How it works", href: "#how" },
   { label: "Security model", href: "#security" },
   { label: "Technology", href: "#technology" },
+  { label: "Mainnet proofs", href: "#proof" },
+  { label: "Developer setup", href: "/developers" },
+  { label: "GitHub", href: "https://github.com/mohamedwael201193/PQTABS" },
+  { label: "SDK and MCP", href: "https://github.com/mohamedwael201193/PQTABS/tree/main/packages" },
 ];
 
 const STACK = ["Arc", "Barkeep", "USDC", "SLH-DSA"];
 
 const PROTOCOL_NOTES = [
-  "Capabilities opened onchain",
-  "Payments run inside open capabilities",
-  "Tabs expire by default",
+  "Security key signs root actions",
+  "Relayer pays Arc gas",
+  "Barkeep source is not verified",
 ];
 
 export default function LandingFooter() {
@@ -53,6 +57,7 @@ export default function LandingFooter() {
                 <li key={link.href}>
                   <a
                     href={link.href}
+                    {...(link.href.startsWith("http") ? { target: "_blank", rel: "noreferrer" } : {})}
                     className="rounded-sm text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                   >
                     {link.label}

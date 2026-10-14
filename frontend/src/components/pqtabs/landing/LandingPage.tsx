@@ -12,6 +12,7 @@ import WhyArc from "./WhyArc";
 import WhyBarkeep from "./WhyBarkeep";
 import ProductFlow from "./ProductFlow";
 import TechnicalSection from "./TechnicalSection";
+import ProofSection from "./ProofSection";
 import FinalCta from "./FinalCta";
 import LandingFooter from "./LandingFooter";
 
@@ -38,6 +39,7 @@ export default function LandingPage({ onLaunchApp }: { onLaunchApp: () => void }
         <WhyBarkeep />
         <ProductFlow onLaunchApp={onLaunchApp} />
         <TechnicalSection />
+        <ProofSection />
         <FinalCta onLaunchApp={onLaunchApp} />
       </main>
       <LandingFooter />

@@ -32,8 +32,13 @@ const SPEC = [
   },
   {
     key: "SETTLEMENT",
-    title: "USDC",
-    body: "Agents spend a stable, auditable unit. A payment Arc includes is a record you can reconcile.",
+    title: "Arc-native USDC",
+    body: "Gas and the payment are USDC on Arc. The research quote offers a PQTABS authorization and a standard x402 exact row for the same price and payee.",
+  },
+  {
+    key: "AGENT KEY",
+    title: "Separate from the root",
+    body: "Spends use an ECDSA key kept in this browser, or in the Windows local signer. That key cannot open a capability or move root cash.",
   },
   {
     key: "POLICY",
@@ -43,7 +48,7 @@ const SPEC = [
   {
     key: "CUSTODY",
     title: "No operator recovery",
-    body: "This device keeps an encrypted backup. The downloaded file is for a new device. If both are lost, the USDC stays in the root. The backend does not store the root key. Agents cannot rotate the key.",
+    body: "This device keeps an encrypted backup. The downloaded file is for a new device. A new root can schedule a 7-day key change. The live demo root cannot. If the key for that root is lost, the USDC stays there. The backend does not store the root key.",
   },
 ];
 

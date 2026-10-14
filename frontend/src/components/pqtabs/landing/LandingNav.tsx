@@ -25,6 +25,7 @@ const LINKS = [
   { label: "Security", href: "#security" },
   { label: "How it Works", href: "#how" },
   { label: "Technology", href: "#technology" },
+  { label: "Proof", href: "#proof" },
   { label: "Developers", href: "/developers" },
 ] as const;
 

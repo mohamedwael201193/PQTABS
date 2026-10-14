@@ -25,9 +25,9 @@ const CARDS: { icon: Icon3DName; kicker: string; title: string; body: string }[]
   [
     {
       icon: "lock",
-      kicker: "ONE PAYEE",
-      title: "Fixed payee",
-      body: "Payments to any other address are refused before anything is signed.",
+      kicker: "ALLOWLIST",
+      title: "Approved payees",
+      body: "Payments outside the approved list are refused before anything is signed.",
     },
     {
       icon: "hourglass",
@@ -68,7 +68,7 @@ export default function BentoFeatures() {
             <span className="text-gradient-gold">vault</span> with an allowance.
           </>
         }
-        lead="Every capability carries its own cap, per-payment maximum, payee, and expiry."
+        lead="Every capability carries its own cap, per-payment maximum, approved payees, and expiry."
       />
 
       <div className="mt-12 grid grid-cols-1 gap-4 sm:grid-cols-2 md:mt-14 lg:grid-cols-4">

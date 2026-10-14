@@ -1,3 +1,22 @@
+/** A single block that should stay intact: a table, a heading, or a list item. */
+function keepBlock(block: string): boolean {
+  return /\|/.test(block) || /^#{1,6}\s/.test(block) || /^(\d+\.\s|[-*]\s)/.test(block);
+}
+
+/** Split a one-line answer into paragraphs at sentence boundaries. Tables and lists stay as they are. */
+function readableParagraphs(text: string): string {
+  return text
+    .split(/\n{2,}/)
+    .map((block) => {
+      const trimmed = block.trim();
+      if (!trimmed || keepBlock(trimmed)) return trimmed;
+      const sentences = trimmed.split(/(?<=[.!?])\s+(?=[A-Z])/);
+      return sentences.length > 1 ? sentences.join("\n\n") : trimmed;
+    })
+    .filter((block) => block.length > 0)
+    .join("\n\n");
+}
+
 /** Turn a one-line model answer into markdown a person can read. */
 export function answerMarkdown(raw: string): string {
   let text = raw.replace(/\r\n/g, "\n").trim();
@@ -8,7 +27,7 @@ export function answerMarkdown(raw: string): string {
   if (title && title[1].trim().length > 0 && title[1].trim().length < 140) {
     text = `## ${title[1].trim()}\n\n${text.slice(title[0].length).trim()}`;
   }
-  return text;
+  return readableParagraphs(text);
 }
 
 /**

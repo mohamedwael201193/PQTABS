@@ -45,7 +45,8 @@ test("a cited roadmap sentence is kept, and its marker links to the official pag
     "Stablecoin Services will expand payment options [S5]. Arc Privacy Sector is on the roadmap and is not yet available [S9].",
   );
   assert.equal(shown.removed.length, 0);
-  assert.equal(shown.text.includes("[S9](https://docs.arc.io/arc/concepts/opt-in-privacy)"), true);
+  assert.equal(shown.text.includes("[Opt-in privacy](https://docs.arc.io/arc/concepts/opt-in-privacy)"), true);
+  assert.equal(shown.text.includes("[S9]"), false);
 });
 
 test("a sentence without a roadmap name is not removed", () => {
@@ -64,8 +65,62 @@ test("when every sentence is removed, the answer says the sources do not cover i
   assert.equal(shown.removed.length, 1);
 });
 
-test("linkCitations leaves an unknown marker as text", () => {
-  assert.equal(linkCitations("Gas is USDC [S5] and [S99]."), "Gas is USDC [S5](https://docs.arc.io/arc/concepts/stablecoin-native-model) and [S99].");
+test("linkCitations titles a known fact and drops an unknown marker's address", () => {
+  assert.equal(
+    linkCitations("Gas is USDC [S5] and [S99](https://evil.example/phish)."),
+    "Gas is USDC [Stablecoin-native model](https://docs.arc.io/arc/concepts/stablecoin-native-model) and S99.",
+  );
+  assert.equal(linkCitations("Finality [S3](javascript:alert(1)).").includes("javascript:"), false);
+  assert.equal(
+    linkCitations("Finality [S3](https://evil.example/wrong)."),
+    "Finality [Deterministic finality](https://docs.arc.io/arc/concepts/deterministic-finality).",
+  );
+  assert.equal(
+    linkCitations("Finality [S3]() and [S3](https://docs.arc.io/arc/concepts/deterministic-finality"),
+    "Finality [Deterministic finality](https://docs.arc.io/arc/concepts/deterministic-finality) and [Deterministic finality](https://docs.arc.io/arc/concepts/deterministic-finality)",
+  );
+});
+
+/** The answer stored in Chrome for receipt 0x53fc6e7c43b71cd14f98e70f8fbd182d55b55d3bed471f56ac5d0a00a88e6ebc. */
+const CHROME_ANSWER =
+  "Arc mainnet settlement for an agent payment means that the transaction is finalized in under one second with deterministic finality, so once the block is committed it is irreversible and no re\u2011orgs occur [S3](https://docs.arc.io/arc/concepts/deterministic-finality). The payment is processed on an EVM\u2011compatible Layer\u20111 chain (Chain\u202fID\u202f5042) using the Malachite Tendermint\u2011based BFT consensus run by a permissioned Proof\u2011of\u2011Authority validator set [S1](https://docs.arc.io/arc/references/rpc-endpoints)[S2](https://docs.arc.io/arc-chain.md)[S4](https://docs.arc.io/arc/concepts/consensus-layer). Gas fees for the payment are paid in USDC, which serves as the native gas token on Arc [S5](https://docs.arc.io/arc/concepts/stablecoin-native-model).";
+
+test("the Chrome answer keeps its sentences and turns concatenated citations into separate official links", () => {
+  const shown = presentAnswer("Summarize what Arc mainnet settlement means for an agent payment.", CHROME_ANSWER);
+  assert.equal(shown.text.includes("finalized in under one second"), true);
+  assert.equal(shown.text.includes("Malachite"), true);
+  assert.equal(shown.text.includes("native gas token"), true);
+  assert.equal(shown.text.includes("5042"), true);
+  assert.equal(/\[S\d+\]/.test(shown.text), false);
+  assert.equal(shown.text.includes("](") && shown.text.includes(")["), false);
+  assert.equal(shown.text.includes(")(https://"), false);
+  assert.equal(shown.text.includes("[Deterministic finality](https://docs.arc.io/arc/concepts/deterministic-finality)"), true);
+  assert.equal(
+    shown.text.includes(
+      "[RPC endpoints](https://docs.arc.io/arc/references/rpc-endpoints), [Arc chain](https://docs.arc.io/arc-chain.md), [Consensus layer](https://docs.arc.io/arc/concepts/consensus-layer)",
+    ),
+    true,
+  );
+  assert.equal(shown.text.includes("[Stablecoin-native model](https://docs.arc.io/arc/concepts/stablecoin-native-model)"), true);
+  assert.deepEqual(
+    shown.sources.map((source) => source.href),
+    [
+      "https://docs.arc.io/arc/concepts/deterministic-finality",
+      "https://docs.arc.io/arc/references/rpc-endpoints",
+      "https://docs.arc.io/arc-chain.md",
+      "https://docs.arc.io/arc/concepts/consensus-layer",
+      "https://docs.arc.io/arc/concepts/stablecoin-native-model",
+    ],
+  );
+});
+
+test("a glued docs address is split before it is linked", () => {
+  const linked = linkCitations(
+    "See https://docs.arc.io/arc/concepts/deterministic-finalityhttps://docs.arc.io/arc/concepts/consensus-layer.",
+  );
+  assert.equal(linked.includes("finalityhttps://"), false);
+  assert.equal(linked.includes("[Deterministic finality](https://docs.arc.io/arc/concepts/deterministic-finality)"), true);
+  assert.equal(linked.includes("[Consensus layer](https://docs.arc.io/arc/concepts/consensus-layer)"), true);
 });
 
 /** The stored answer for receipt 0x74ce7b557f8e5156af8fca701b40d833651ff1d206442f0a3ef4c801698f1b15, with its table and its two wrong claims. */

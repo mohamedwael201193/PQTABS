@@ -102,8 +102,9 @@ export default function Hero({ onLaunchApp }: { onLaunchApp: () => void }) {
             {...rise(0.52)}
             className="mt-6 max-w-xl text-[15px] leading-relaxed text-muted-foreground md:text-base"
           >
-            Agents get bounded USDC capabilities on Arc: a cap, an expiry, one payee. A
-            post-quantum root keeps the treasury.
+            Agents get bounded USDC capabilities on Arc: a cap, an expiry, and approved
+            payees. A post-quantum security key keeps the treasury. The connected wallet
+            does not sign an open or a close.
           </motion.p>
 
           <motion.div {...rise(0.64)} className="mt-8 flex flex-wrap gap-3">
@@ -130,6 +131,22 @@ export default function Hero({ onLaunchApp }: { onLaunchApp: () => void }) {
               See How It Works
             </a>
           </motion.div>
+          <motion.p {...rise(0.74)} className="mt-5 flex flex-wrap gap-x-4 gap-y-2 text-sm text-muted-foreground">
+            <a href="/developers" className="underline decoration-white/20 underline-offset-2 hover:text-foreground">
+              Developer setup
+            </a>
+            <a href="#proof" className="underline decoration-white/20 underline-offset-2 hover:text-foreground">
+              Mainnet proofs
+            </a>
+            <a
+              href="https://github.com/mohamedwael201193/PQTABS"
+              target="_blank"
+              rel="noreferrer"
+              className="underline decoration-white/20 underline-offset-2 hover:text-foreground"
+            >
+              GitHub
+            </a>
+          </motion.p>
         </div>
       </div>
     </section>
