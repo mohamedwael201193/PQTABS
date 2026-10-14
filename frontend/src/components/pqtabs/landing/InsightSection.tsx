@@ -59,7 +59,9 @@ export default function InsightSection() {
               </div>
               <p className="mt-7 max-w-sm text-[15px] leading-relaxed text-muted-foreground">
                 Rare and deliberate. Signs opening a capability, closing one,
-                and rotating the root key. There is no operator recovery: keep the device backup and export safe. Protected
+                and rotating the root key. The operator cannot recover a lost key.
+                The live demo root cannot schedule a replacement. A new root can,
+                and that change waits 7 days. Keep the device backup safe. Protected
                 by SLH-DSA — a post-quantum signature scheme.
               </p>
               <p className="mt-6 flex items-center gap-2.5 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground/75">
