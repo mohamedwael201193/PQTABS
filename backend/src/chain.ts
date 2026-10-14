@@ -127,9 +127,15 @@ export async function listFactoryRoots(client: PublicClient, factories: readonly
   const roots: Address[] = [];
   const seen = new Set<string>();
   for (const factory of factories) {
-    const count = await client.readContract({ address: factory, abi: factoryAbi, functionName: "rootCount", args: [registrar] });
+    const count = await withRpcRetry(
+      () => client.readContract({ address: factory, abi: factoryAbi, functionName: "rootCount", args: [registrar] }),
+      3,
+    );
     for (let index = 0n; index < count; index++) {
-      const root = await client.readContract({ address: factory, abi: factoryAbi, functionName: "rootAt", args: [registrar, index] });
+      const root = await withRpcRetry(
+        () => client.readContract({ address: factory, abi: factoryAbi, functionName: "rootAt", args: [registrar, index] }),
+        3,
+      );
       const key = root.toLowerCase();
       if (seen.has(key)) continue;
       seen.add(key);
@@ -137,6 +143,13 @@ export async function listFactoryRoots(client: PublicClient, factories: readonly
     }
   }
   return roots;
+}
+
+/** A failed live scan must not hide roots the index already stored, and must not become a generic 500. */
+export function scanFailureRoots(indexed: readonly Address[], error: unknown): Address[] {
+  if (indexed.length > 0) return [...indexed];
+  if (error instanceof RequestError) throw error;
+  throw new RequestError(503, "unavailable", "Arc is temporarily unavailable. Your funds are safe. Try again.");
 }
 
 function knownFactories(clients: Clients): Address[] {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { isTransientRpc, withRpcRetry } from "../src/chain.js";
+import { isTransientRpc, scanFailureRoots, withRpcRetry } from "../src/chain.js";
 import { RequestError } from "../src/validate.js";
 
 test("one rate-limited Arc read becomes a retry sentence", async () => {
@@ -46,6 +46,17 @@ test("a non-transient RPC error is not retried", async () => {
     /execution reverted/,
   );
   assert.equal(calls, 1);
+});
+
+test("a failed live root scan keeps indexed roots and otherwise stays a typed Arc error", () => {
+  const indexed = ["0x44502F6d18DAA9620c2BB3da21b8C3C8033A9787"] as const;
+  assert.deepEqual(scanFailureRoots(indexed, new Error("HTTP request failed. Status: 429")), [...indexed]);
+  assert.throws(
+    () => scanFailureRoots([], new Error("socket hang up")),
+    (error: unknown) => error instanceof RequestError && error.status === 503 && /temporarily unavailable/.test(error.message),
+  );
+  const limited = new RequestError(429, "rate_limited", "Arc is rate limiting reads. Try again in a moment.");
+  assert.throws(() => scanFailureRoots([], limited), (error: unknown) => error === limited);
 });
 
 test("isTransientRpc recognises the -32014 code on an error object and in its cause", () => {

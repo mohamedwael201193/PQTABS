@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { AccountSnapshot } from "@/data/types";
 import { loadAccount, rememberRegistrar } from "@/data/production";
+import { shouldRetryWalletRead } from "@/data/wallet-read";
 import { restoreAgentKeys } from "@/data/spend";
 import { existingAccount, readWalletUsdc, watchChain, watchWallet, walletClient } from "@/data/wallet";
 import { walletSessionPaused } from "@/data/wallet-session";
@@ -147,6 +148,12 @@ export function useAccountData(): {
       .catch((reason: unknown) => {
         if (cancelled) return;
         const message = reason instanceof Error ? reason.message : "Couldn't load this wallet's root.";
+        if (!treasuryShown && shouldRetryWalletRead(attempt, message)) {
+          window.setTimeout(() => {
+            if (!cancelled && stillHere()) setAttempt(attempt + 1);
+          }, 1_500);
+          return;
+        }
         if (treasuryShown) setPortfolioError(message);
         if (!treasuryShown) setSnapshot(null);
         setSettled({ key, error: message });

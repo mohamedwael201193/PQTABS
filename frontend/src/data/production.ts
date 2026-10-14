@@ -119,6 +119,9 @@ type PortfolioEvent = {
 
 function readableError(detail: string | undefined, fallback: string): string {
   if (!detail) return fallback;
+  if (detail === "The request could not be completed." || detail === "internal") {
+    return "Arc is temporarily unavailable. Your funds are safe. Try again.";
+  }
   const busy = busyMessage(detail);
   if (busy) return busy;
   if (detail.includes("rate limit") || detail.includes("429")) {

@@ -1,7 +1,7 @@
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import type { Address, Hex } from "viem";
-import { assertOurRoot, type Clients, listFactoryRoots, loadClients, readPortfolio, relay, rootAbi, tabAbi, usdcAbi, withRpcRetry } from "./chain.js";
+import { assertOurRoot, type Clients, listFactoryRoots, loadClients, readPortfolio, relay, rootAbi, scanFailureRoots, tabAbi, usdcAbi, withRpcRetry } from "./chain.js";
 import { BARKEEP, CHAIN_ID, EXPLORER, MAX_BODY_BYTES, PQROOT_NEXT, USDC, YIELD_VAULT } from "./constants.js";
 import { allowedOrigins, authenticate, createChallenge, createSession, DevAuthError, ensureDevTables, revokeSession, SqlDevStore } from "./dev/session.js";
 import { readRegistrarRoots, readRootState } from "./index/account.js";
@@ -163,7 +163,12 @@ export function createApp(clients: Clients = loadClients(), getIndex?: () => Sql
     const index = getIndex?.() ?? null;
     const factories = [clients.factory, ...(clients.factoryNext ? [clients.factoryNext] : [])];
     const indexed = index ? await readRegistrarRoots(index, clients.public, clients.factory, registrar) : [];
-    const onChain = await listFactoryRoots(clients.public, factories, registrar);
+    let onChain: Address[] = [];
+    try {
+      onChain = await listFactoryRoots(clients.public, factories, registrar);
+    } catch (error) {
+      onChain = scanFailureRoots(indexed, error);
+    }
     const seen = new Set(indexed.map((root) => root.toLowerCase()));
     const roots = [...indexed];
     for (const root of onChain) {
