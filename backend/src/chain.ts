@@ -103,11 +103,79 @@ export function loadClients(env: NodeJS.ProcessEnv = process.env, signal?: Abort
   return { public: publicClient, relayer, relayerAddress: account.address, factory, factoryNext };
 }
 
-export async function fee(client: PublicClient): Promise<{ maxFeePerGas: bigint; maxPriorityFeePerGas: bigint }> {
-  const gasPrice = await client.getGasPrice();
+/** A mined capability open used 636,789 gas. This ceiling is only for a rate-limited estimate. */
+export const RELAY_GAS_CEILING = 1_200_000n;
+
+/** Public Arc endpoints from the RPC reference. Used only after the primary read is rate-limited. */
+export const PUBLIC_RPC_FALLBACKS = [
+  "https://rpc.drpc.mainnet.arc.io",
+  "https://rpc.blockdaemon.mainnet.arc.io",
+  "https://rpc.quicknode.mainnet.arc.io",
+] as const;
+
+export function pricesFrom(gasPrice: bigint): { maxFeePerGas: bigint; maxPriorityFeePerGas: bigint } {
   const maxFeePerGas = gasPrice > MIN_FEE ? gasPrice : MIN_FEE;
   const maxPriorityFeePerGas = maxFeePerGas < 1_000_000_000n ? maxFeePerGas : 1_000_000_000n;
   return { maxFeePerGas, maxPriorityFeePerGas };
+}
+
+export function fallbackRpcUrls(primary: string | undefined): string[] {
+  const current = (primary ?? "").trim().toLowerCase().replace(/\/$/, "");
+  const seen = new Set(current ? [current] : []);
+  const urls: string[] = [];
+  for (const url of PUBLIC_RPC_FALLBACKS) {
+    const key = url.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    urls.push(url);
+  }
+  return urls;
+}
+
+/**
+ * Asks each endpoint twice. A revert is returned immediately. If every endpoint
+ * is rate-limiting the estimate, the caller may still broadcast under RELAY_GAS_CEILING.
+ */
+export async function gasLimitForRelay(readers: readonly (() => Promise<bigint>)[]): Promise<bigint> {
+  let sawLimit = false;
+  for (const read of readers) {
+    try {
+      return await withRpcRetry(read, 2);
+    } catch (error) {
+      if (!isRateLimitError(error)) throw error;
+      sawLimit = true;
+    }
+  }
+  if (sawLimit) return RELAY_GAS_CEILING;
+  throw new RequestError(429, "rate_limited", "Arc is rate limiting reads. Try again in a moment.");
+}
+
+/** Arc drops a transaction under 20 gwei. A busy gas-price read uses that floor. */
+export async function feeOrFloor(
+  readers: readonly (() => Promise<bigint>)[],
+): Promise<{ maxFeePerGas: bigint; maxPriorityFeePerGas: bigint }> {
+  for (const read of readers) {
+    try {
+      return pricesFrom(await withRpcRetry(read, 2));
+    } catch (error) {
+      if (!isRateLimitError(error)) throw error;
+    }
+  }
+  return pricesFrom(MIN_FEE);
+}
+
+export async function fee(client: PublicClient): Promise<{ maxFeePerGas: bigint; maxPriorityFeePerGas: bigint }> {
+  return pricesFrom(await client.getGasPrice());
+}
+
+function clientFor(url: string): PublicClient {
+  return createPublicClient({
+    chain: arc,
+    transport: http(url, {
+      timeout: 10_000,
+      fetchOptions: { headers: { "user-agent": "pqtabs" } },
+    }),
+  });
 }
 
 /**
@@ -192,27 +260,59 @@ export async function relay(
   const account = clients.relayer.account as PrivateKeyAccount;
   const cached = seen.get(data);
   if (cached) return { hash: cached, simulated: true };
+  const primary = process.env.ARC_RPC_URL || RPC_URL;
+  const fallbacks = fallbackRpcUrls(primary);
+  let gas: bigint;
   try {
-    await withRpcRetry(() => clients.public.estimateGas({ account, to, data }));
+    gas = await gasLimitForRelay([
+      () => clients.public.estimateGas({ account, to, data }),
+      ...fallbacks.map((url) => () => clientFor(url).estimateGas({ account, to, data })),
+    ]);
   } catch (error) {
     if (error instanceof RequestError) throw error;
-    const message = errorText(error);
-    if (message.includes("429") || message.toLowerCase().includes("rate limit")) {
-      throw new RequestError(429, "rate_limited", "Arc is rate limiting reads. Try again in a moment.");
-    }
-    throw new RequestError(400, "simulation_failed", message.slice(0, 300));
+    throw new RequestError(400, "simulation_failed", errorText(error).slice(0, 300));
   }
-  const prices = await fee(clients.public);
-  const hash = await clients.relayer.sendTransaction({
-    account,
-    chain: arc,
-    to,
-    data,
-    maxFeePerGas: prices.maxFeePerGas,
-    maxPriorityFeePerGas: prices.maxPriorityFeePerGas,
-  });
+  const prices = await feeOrFloor([
+    () => clients.public.getGasPrice(),
+    ...fallbacks.map((url) => () => clientFor(url).getGasPrice()),
+  ]);
+  const hash = await broadcast(account, to, data, gas, prices, [primary, ...fallbacks]);
   seen.set(data, hash);
   return { hash, simulated: true };
+}
+
+async function broadcast(
+  account: PrivateKeyAccount,
+  to: Address,
+  data: Hex,
+  gas: bigint,
+  prices: { maxFeePerGas: bigint; maxPriorityFeePerGas: bigint },
+  urls: readonly string[],
+): Promise<Hex> {
+  let sawLimit = false;
+  for (const url of urls) {
+    const wallet = createWalletClient({
+      account,
+      chain: arc,
+      transport: http(url, { timeout: 10_000, fetchOptions: { headers: { "user-agent": "pqtabs" } } }),
+    });
+    try {
+      return await wallet.sendTransaction({
+        account,
+        chain: arc,
+        to,
+        data,
+        gas,
+        maxFeePerGas: prices.maxFeePerGas,
+        maxPriorityFeePerGas: prices.maxPriorityFeePerGas,
+      });
+    } catch (error) {
+      if (!isRateLimitError(error)) throw error;
+      sawLimit = true;
+    }
+  }
+  if (sawLimit) throw new RequestError(429, "rate_limited", "Arc is rate limiting reads. Try again in a moment.");
+  throw new RequestError(503, "rpc_unavailable", "Arc did not accept the transaction. Nothing was broadcast.");
 }
 
 const openedEvent = parseAbiItem(
@@ -365,9 +465,9 @@ export const portfolioClock = { now: (): number => Date.now() };
 const portfolioCache = new Map<string, { at: number; value: PortfolioRead }>();
 const portfolioScans = new Map<string, PortfolioScan>();
 
-function isRateLimitError(error: unknown): boolean {
+export function isRateLimitError(error: unknown): boolean {
   if (error instanceof RequestError && error.status === 429) return true;
-  const message = error instanceof Error ? error.message : String(error);
+  const message = errorText(error);
   return message.includes("429") || message.toLowerCase().includes("rate limit");
 }
 

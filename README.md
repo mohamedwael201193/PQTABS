@@ -146,7 +146,7 @@ Arclight (`https://x402.arclight.finance`) verified and settled an EIP-3009 auth
 
 ## Idle treasury
 
-`PQRootNext` can deposit and withdraw idle USDC through the Galaxy USDC vault `0x8E357432CC12ff425c36432F312968aEb16112AF`. On 2026-10-13 that contract's `asset()` was Arc USDC, its name was Galaxy USDC, and `maxDeposit` was 0, so a deposit reverts until the vault takes more assets. The vault source is not on Sourcify. No USDC has been deposited. Existing roots cannot call these functions. Open-capability funds stay inside the capability and are not deposited.
+`PQRootNext` can deposit and withdraw idle USDC through the Galaxy USDC vault `0x8E357432CC12ff425c36432F312968aEb16112AF`. On 2026-10-13 that contract's `asset()` was Arc USDC and its name was Galaxy USDC. `maxDeposit` was 0 then, and a read on 2026-10-14 was still 0, so a deposit reverts until the vault takes more assets. The vault source is not on Sourcify. No USDC has been deposited. Existing roots cannot call these functions. Open-capability funds stay inside the capability and are not deposited.
 
 ## Circle signing
 
@@ -345,7 +345,7 @@ Only items marked **Live** run in production today.
 | Services beyond Arc research | Not built | This repository has one paid service |
 | Delayed PQ recovery (`PQRootNext`) | Live for new roots | Factory `0x909AF4dFeEcDf8B72eaf918f185Cd89d460b0E63`. Existing roots stay on the original factory |
 | Standard x402 `exact` settlement | Live on the research quote | Arclight settlement `0x9598e26d…73db` for 360 raw USDC |
-| Idle-treasury yield | Wired on `PQRootNext` only | Galaxy vault `maxDeposit` was 0 on 2026-10-13. No deposit has been sent |
+| Idle-treasury yield | Wired on `PQRootNext` only | Galaxy vault `maxDeposit` was 0 on 2026-10-14. No deposit has been sent |
 
 ## Repository layout
 

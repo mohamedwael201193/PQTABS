@@ -3,6 +3,7 @@ import { busyMessage, indexingPause } from "./limits";
 import { priceCheckFailure } from "./price-check-failure";
 import { rootSignatureBlock } from "./root-sign-check";
 import { spendKind } from "./spend-kind";
+import { shouldRetrySameSignature } from "./wallet-read";
 import { usd } from "./formatters";
 import { presentAnswer } from "./research-answer";
 import { awaitReceipt, ReceiptPendingError } from "./receipt";
@@ -484,20 +485,29 @@ export function totalsFrom(account: UserAccount, tabs: Tab[]): TreasuryTotals {
 }
 
 async function relay(path: string, body: unknown): Promise<{ hash: string }> {
-  const response = await fetch(`${BACKEND_URL}${path}`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const payload = (await readBody(response)) as { hash?: string; error?: string; detail?: string };
-  if (!response.ok || !payload.hash) {
-    throw new Error(readableError(payload.detail || payload.error, "the chain did not accept this action"));
+  let last = "the chain did not accept this action";
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const response = await fetch(`${BACKEND_URL}${path}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const payload = (await readBody(response)) as { hash?: string; error?: string; detail?: string };
+    if (response.ok && payload.hash) {
+      const receipt = await waitForReceipt(payload.hash);
+      if (receipt.status !== "success") {
+        throw new Error("the transaction reverted");
+      }
+      return { hash: payload.hash };
+    }
+    last = readableError(payload.detail || payload.error, "the chain did not accept this action");
+    if (attempt === 0 && shouldRetrySameSignature(last)) {
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      continue;
+    }
+    throw new Error(last);
   }
-  const receipt = await waitForReceipt(payload.hash);
-  if (receipt.status !== "success") {
-    throw new Error("the transaction reverted");
-  }
-  return { hash: payload.hash };
+  throw new Error(last);
 }
 
 async function waitForReceipt(hash: string): Promise<{ status: string }> {

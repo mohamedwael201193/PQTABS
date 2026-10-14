@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { isTransientRpc, scanFailureRoots, withRpcRetry } from "../src/chain.js";
+import { fallbackRpcUrls, feeOrFloor, gasLimitForRelay, isTransientRpc, RELAY_GAS_CEILING, scanFailureRoots, withRpcRetry } from "../src/chain.js";
 import { RequestError } from "../src/validate.js";
 
 test("one rate-limited Arc read becomes a retry sentence", async () => {
@@ -65,4 +65,42 @@ test("isTransientRpc recognises the -32014 code on an error object and in its ca
   assert.equal(isTransientRpc(new Error("Details: -32014")), true);
   assert.equal(isTransientRpc(Object.assign(new Error("x"), { code: -32012 })), false);
   assert.equal(isTransientRpc(new Error("execution reverted")), false);
+});
+
+test("a rate-limited gas estimate uses the next Arc endpoint, and a revert is not sent", async () => {
+  assert.deepEqual(fallbackRpcUrls("https://rpc.drpc.mainnet.arc.io/"), [
+    "https://rpc.blockdaemon.mainnet.arc.io",
+    "https://rpc.quicknode.mainnet.arc.io",
+  ]);
+  let primary = 0;
+  const gas = await gasLimitForRelay([
+    async () => {
+      primary += 1;
+      throw new RequestError(429, "rate_limited", "Arc is rate limiting reads. Try again in a moment.");
+    },
+    async () => 636_789n,
+  ]);
+  assert.equal(gas, 636_789n);
+  assert.equal(primary, 2);
+  await assert.rejects(
+    () => gasLimitForRelay([async () => {
+      throw new Error("execution reverted");
+    }]),
+    (error: unknown) => error instanceof Error && error.message === "execution reverted",
+  );
+});
+
+test("every rate-limited estimate uses the measured gas ceiling and the 20 gwei floor", async () => {
+  const gas = await gasLimitForRelay([
+    async () => {
+      throw new RequestError(429, "rate_limited", "HTTP 429");
+    },
+  ]);
+  assert.equal(gas, RELAY_GAS_CEILING);
+  const prices = await feeOrFloor([
+    async () => {
+      throw new RequestError(429, "rate_limited", "HTTP 429");
+    },
+  ]);
+  assert.equal(prices.maxFeePerGas, 20_000_000_000n);
 });

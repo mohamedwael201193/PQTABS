@@ -40,6 +40,7 @@ import { initials, relFuture, usd } from "@/data/formatters";
 import { confirmRootSignature, loadSnapshot, prepareOpen, requestServicePrice, submitPrepared, type PreparedAction } from "@/data/production";
 import { payeeLabel } from "@/data/x402-pay";
 import { servicePayee } from "@/data/x402-pay";
+import { shouldRetrySameSignature } from "@/data/wallet-read";
 import { browserHoldsAgentKey, createAgentKey } from "@/data/spend";
 import type { Recipient, Tab } from "@/data/types";
 import { useAgents, useDashboardUi, usePqtabsData, useRecipients, useTotals } from "@/lib/store";
@@ -172,6 +173,7 @@ function CreateFlow() {
   const [discardOpen, setDiscardOpen] = useState(false);
 
   const agentRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const signedRef = useRef<string | null>(null);
   const budgetSliderRef = useRef<HTMLDivElement | null>(null);
   const perCallSliderRef = useRef<HTMLDivElement | null>(null);
 
@@ -436,10 +438,12 @@ function CreateFlow() {
       ? "Unlock the security key for this session. It signs the capability. The wallet does not."
       : phase === "confirming"
         ? "Waiting for the transaction receipt."
-        : phase === "error"
+          : phase === "error"
           ? failure.includes("Arc accepted")
             ? "The receipt is on Arc. Refresh the portfolio before opening another capability."
-            : "This page did not mark the capability open."
+            : shouldRetrySameSignature(failure)
+              ? "Nothing was broadcast. Try again sends the same signature."
+              : "This page did not mark the capability open."
           : STEP_META[step - 1].sub;
 
   return (
@@ -1123,7 +1127,16 @@ function CreateFlow() {
                   Cancel
                 </Button>
                 {!failure.includes("Arc included") && (
-                  <Button className={BTN_GOLD} onClick={startCreation}>
+                  <Button
+                    className={BTN_GOLD}
+                    onClick={() => {
+                      if (signedRef.current && prepared && shouldRetrySameSignature(failure)) {
+                        submitCreation(signedRef.current);
+                        return;
+                      }
+                      startCreation();
+                    }}
+                  >
                     Try again
                   </Button>
                 )}
@@ -1185,7 +1198,10 @@ function CreateFlow() {
                   setAuthorizing(true);
                   void confirmRootSignature(prepared, verifyingKey(live.registrar))
                     .then(() => signRootDigest(live.registrar, prepared.digest))
-                    .then((signed) => submitCreation(signed))
+                    .then((signed) => {
+                      signedRef.current = signed;
+                      submitCreation(signed);
+                    })
                     .catch((reason: unknown) => {
                       const message = reason instanceof Error ? reason.message : "The security key could not authorize this.";
                       if (message.includes("older security key")) {
