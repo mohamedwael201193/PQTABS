@@ -1,6 +1,6 @@
 # PQTABS
 
-**Give agents a bounded spending capability on Arc, with a post-quantum root that never has to be online to spend.**
+**Give agents a bounded spending capability on Arc. The post-quantum root authorizes that capability. It does not sign each payment.**
 
 [![ci](https://github.com/mohamedwael201193/PQTABS/actions/workflows/ci.yml/badge.svg)](https://github.com/mohamedwael201193/PQTABS/actions/workflows/ci.yml)
 [![chain](https://img.shields.io/badge/Arc%20mainnet-5042-2b2b2b)](https://docs.arc.io/arc/references/rpc-endpoints)
@@ -57,7 +57,7 @@ flowchart LR
 
 ## Payment sequence
 
-The research endpoint is an HTTP 402 flow with PQTABS's own scheme name, `pqtabs-barkeep`. It is not the standard x402 `exact` scheme.
+The research quote's first accept is PQTABS's scheme, `pqtabs-barkeep`. The same quote also lists a matching standard x402 `exact` row for the same price and payee. The app pays the Barkeep row. A stock x402 client can pay the exact row.
 
 ```mermaid
 sequenceDiagram

@@ -171,7 +171,7 @@ export default function ProductFlow({ onLaunchApp }: { onLaunchApp: () => void }
               <blockquote className="mt-5 flex-1 border-l-2 border-gold/60 pl-4">
                 <p className="text-sm leading-relaxed text-foreground/90">
                   This gives the agent you choose a cap, a per-payment limit,
-                  one payee, and an expiry. You set each value.
+                  approved payees, and an expiry. You set each value.
                 </p>
               </blockquote>
 

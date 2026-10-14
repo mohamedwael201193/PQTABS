@@ -28,7 +28,7 @@ const SPEC = [
   {
     key: "CAPABILITIES",
     title: "Barkeep tabs",
-    body: "Bounded spending objects: funded cap, per-payment maximum, one payee, expiry.",
+    body: "Bounded spending objects: funded cap, per-payment maximum, approved payees, and an expiry.",
   },
   {
     key: "SETTLEMENT",
@@ -42,8 +42,8 @@ const SPEC = [
   },
   {
     key: "POLICY",
-    title: "Onchain enforcement",
-    body: "The interface shows the policy. The backend refuses an out-of-policy spend before anything is signed.",
+    title: "Refused before signing",
+    body: "The interface shows the policy. The backend refuses an out-of-policy spend before anything is signed. Barkeep also checks the spend on chain. That bytecode is not source-verified.",
   },
   {
     key: "CUSTODY",
