@@ -441,9 +441,11 @@ function CreateFlow() {
           : phase === "error"
           ? failure.includes("Arc accepted")
             ? "The receipt is on Arc. Refresh the portfolio before opening another capability."
-            : shouldRetrySameSignature(failure)
-              ? "Nothing was broadcast. Try again sends the same signature."
-              : "This page did not mark the capability open."
+            : failure.includes("cannot pay the gas")
+              ? "Nothing was broadcast. The relayer does not have enough gas."
+              : shouldRetrySameSignature(failure)
+                ? "Nothing was broadcast. Try again sends the same signature."
+                : "This page did not mark the capability open."
           : STEP_META[step - 1].sub;
 
   return (

@@ -125,6 +125,9 @@ function readableError(detail: string | undefined, fallback: string): string {
   }
   const busy = busyMessage(detail);
   if (busy) return busy;
+  if (/insufficient funds|cannot pay the gas/i.test(detail)) {
+    return "The relayer cannot pay the gas for this action. Nothing was broadcast.";
+  }
   if (detail.includes("rate limit") || detail.includes("429")) {
     return "Network reads are busy. Your last confirmed state is still safe.";
   }

@@ -276,6 +276,11 @@ export function indexedNonceDecision(submitted: bigint, indexed: bigint | null):
   return "send";
 }
 
+/** Arc checks gas limit times max fee before it accepts a transaction. */
+export function relayerCanCover(balance: bigint, gas: bigint, maxFeePerGas: bigint): boolean {
+  return balance >= gas * maxFeePerGas;
+}
+
 export async function rootNonce(clients: Clients, root: Address): Promise<bigint> {
   return readOnArc(
     () => clients.public.readContract({ address: root, abi: rootAbi, functionName: "nextNonce" }),
@@ -319,9 +324,30 @@ export async function relay(
           ...fallbacks.map((url) => () => clientFor(url).getGasPrice()),
         ])
       : pricesFrom(MIN_FEE);
+  await assertRelayerCanCover(clients, gas, prices.maxFeePerGas);
   const hash = await broadcast(account, to, data, gas, prices, urls);
   seen.set(data, hash);
   return { hash, simulated: true };
+}
+
+async function assertRelayerCanCover(clients: Clients, gas: bigint, maxFeePerGas: bigint): Promise<void> {
+  if (!clients.relayerAddress) return;
+  const address = clients.relayerAddress;
+  let balance: bigint;
+  try {
+    balance = await readOnArc(
+      () => clients.public.getBalance({ address }),
+      (client) => client.getBalance({ address }),
+      1,
+    );
+  } catch (error) {
+    if (error instanceof RequestError && (isRateLimitError(error) || error.status === 503)) return;
+    if (error instanceof RequestError) throw error;
+    return;
+  }
+  if (!relayerCanCover(balance, gas, maxFeePerGas)) {
+    throw new RequestError(503, "relayer_short", "The relayer cannot pay the gas for this action. Nothing was broadcast.");
+  }
 }
 
 async function broadcast(
@@ -350,6 +376,9 @@ async function broadcast(
         maxPriorityFeePerGas: prices.maxPriorityFeePerGas,
       });
     } catch (error) {
+      if (/insufficient funds/i.test(errorText(error))) {
+        throw new RequestError(503, "relayer_short", "The relayer cannot pay the gas for this action. Nothing was broadcast.");
+      }
       if (!isRateLimitError(error)) throw error;
       sawLimit = true;
     }
