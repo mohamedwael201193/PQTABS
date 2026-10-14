@@ -38,6 +38,8 @@ import { lockRoot, rootUnlocked, signRootDigest, verifyingKey } from "@/data/pq-
 import { SecurityKeyUnlock } from "@/components/pqtabs/dashboard/SecurityKeyUnlock";
 import { initials, relFuture, usd } from "@/data/formatters";
 import { confirmRootSignature, loadSnapshot, prepareOpen, requestServicePrice, submitPrepared, type PreparedAction } from "@/data/production";
+import { publishSnapshot } from "@/data/root-cash";
+import { TxResult } from "@/components/pqtabs/dashboard/TxResult";
 import { payeeLabel } from "@/data/x402-pay";
 import { servicePayee } from "@/data/x402-pay";
 import { shouldRetrySameSignature } from "@/data/wallet-read";
@@ -338,7 +340,7 @@ function CreateFlow() {
         if (!tab) {
           throw new Error(`Arc included ${hash}. The portfolio has not listed that capability yet. Refresh before opening another one.`);
         }
-        usePqtabsData.getState().acceptPortfolio(current);
+        await publishSnapshot(registrar, current);
         setCreatedTab(tab);
         setStage(4);
       })
@@ -445,8 +447,11 @@ function CreateFlow() {
               ? "Nothing was broadcast. The relayer does not have enough gas."
               : shouldRetrySameSignature(failure)
                 ? "Nothing was broadcast. Try again sends the same signature."
-                : "This page did not mark the capability open."
+                : failure.includes("Transaction 0x")
+                  ? "Arc included a transaction and it reverted."
+                  : "This page did not mark the capability open."
           : STEP_META[step - 1].sub;
+  const revertHash = /Transaction (0x[a-fA-F0-9]{64})/.exec(failure)?.[1];
 
   return (
     <>
@@ -1124,6 +1129,11 @@ function CreateFlow() {
                 <CircleAlert className="size-6" />
               </div>
               <p className="mt-5 max-w-xs text-sm leading-relaxed text-muted-foreground">{failure}</p>
+              {revertHash ? (
+                <div className="mt-4 w-full max-w-xs">
+                  <TxResult hash={revertHash} label="Arc" status="Failed" />
+                </div>
+              ) : null}
               <div className="mt-6 flex items-center gap-2">
                 <Button variant="ghost" className={BTN_GHOST} onClick={finishClose}>
                   Cancel

@@ -10,8 +10,10 @@ import { parseUsdcRaw } from "@/data/actions";
 import { fundBar } from "@/data/fund-bar";
 import { usd } from "@/data/formatters";
 import { loadSnapshot } from "@/data/production";
-import { awaitReceipt } from "@/data/receipt";
+import { publishSnapshot, syncRootCash } from "@/data/root-cash";
+import { awaitReceipt, ReceiptPendingError } from "@/data/receipt";
 import { arcClient, fundRoot } from "@/data/wallet";
+import { depositPhaseLabel, type DepositPhase } from "@/data/deposit-state";
 import { useWalletUsdc } from "@/hooks/use-account-data";
 import { useActivity, useDashboardUi, usePqtabsData, useTabs, useTotals } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -28,13 +30,16 @@ function FundNotice() {
   const root = usePqtabsData((s) => s.snapshot.account.rootAddress);
   const registrar = usePqtabsData((s) => s.registrar);
   const walletUsdc = useWalletUsdc(registrar);
-  const acceptPortfolio = usePqtabsData((s) => s.acceptPortfolio);
+  const bumpWallet = usePqtabsData((s) => s.bumpWallet);
+  const treasuryUsd = usePqtabsData((s) => s.snapshot.account.treasuryTotalUsd);
   const [amount, setAmount] = useState("0.01");
   const [busy, setBusy] = useState(false);
+  const [phase, setPhase] = useState<DepositPhase>("idle");
   const [message, setMessage] = useState<string | null>(null);
   const [depositHash, setDepositHash] = useState<string | null>(null);
 
   if (!root) return null;
+  const targetRoot = root;
   let sendable = false;
   try {
     const parsed = parseUsdcRaw(amount);
@@ -46,41 +51,62 @@ function FundNotice() {
 
   async function deposit() {
     setBusy(true);
-    setMessage(null);
+    setPhase("pending");
+    setMessage("Pending. Waiting for the Arc receipt.");
+    setDepositHash(null);
+    const started = registrar;
+    const target = targetRoot;
     try {
       const live = usePqtabsData.getState();
-      if (live.registrar.toLowerCase() !== registrar.toLowerCase() || !live.snapshot.account.rootAddress) {
+      if (live.registrar.toLowerCase() !== started.toLowerCase() || live.snapshot.account.rootAddress?.toLowerCase() !== target.toLowerCase()) {
         throw new Error("The wallet changed. The deposit was not sent.");
       }
-      const hash = await fundRoot(live.snapshot.account.rootAddress as `0x${string}`, parseUsdcRaw(amount));
+      const hash = await fundRoot(target as `0x${string}`, parseUsdcRaw(amount));
       setDepositHash(hash);
-      // A transient or missing receipt is pending, not a failed deposit. It stays pending until Arc reports a status.
       const receipt = await awaitReceipt(arcClient(), hash);
-      if (receipt.status !== "success") throw new Error("The deposit reverted.");
       const after = usePqtabsData.getState();
-      if (after.registrar.toLowerCase() !== registrar.toLowerCase()) {
+      if (after.registrar.toLowerCase() !== started.toLowerCase() || after.snapshot.account.rootAddress?.toLowerCase() !== target.toLowerCase()) {
+        setPhase("failed");
         setMessage("The wallet changed. The deposit receipt belongs to the previous wallet.");
         return;
       }
-      try {
-        acceptPortfolio(await loadSnapshot(after.registrar));
-      } catch (reason: unknown) {
-        const detail = reason instanceof Error ? reason.message : "The balance refresh did not finish.";
-        setMessage(`Arc included the deposit. ${detail}`);
+      if (receipt.status !== "success") {
+        setPhase("failed");
+        setMessage("The deposit reverted.");
         return;
       }
-      setMessage("Confirmed. Root cash is the onchain USDC balance of the root.");
+      setPhase("confirmed");
+      bumpWallet();
+      const raw = await syncRootCash(target);
+      if (usePqtabsData.getState().registrar.toLowerCase() !== started.toLowerCase()) return;
+      if (raw == null) {
+        setMessage("Confirmed. The balance read did not finish. Root cash stays unchanged until Arc can be read.");
+      } else {
+        setMessage("Confirmed. Root cash is the onchain USDC balance of the root.");
+      }
+      void loadSnapshot(started, { waitForIndex: false })
+        .then((snapshot) => publishSnapshot(started, snapshot))
+        .catch(() => undefined);
     } catch (reason: unknown) {
+      if (reason instanceof ReceiptPendingError) {
+        setPhase("pending");
+        setDepositHash(reason.hash);
+        setMessage(reason.message);
+        return;
+      }
+      setPhase("failed");
       setMessage(reason instanceof Error ? reason.message : "The deposit was not confirmed.");
     } finally {
       setBusy(false);
     }
   }
 
+  const phaseLabel = depositPhaseLabel(phase);
+
   return (
     <section className="rounded-xl border border-white/[.08] bg-[#0e1013] p-5">
       <h2 className="font-display text-lg font-semibold">Your root is ready</h2>
-      <p className="mt-1 text-sm text-foreground">Root cash: 0 USDC</p>
+      <p className="mt-1 text-sm text-foreground">Root cash: {usd(treasuryUsd)}</p>
       <p className="mt-1 text-sm text-foreground">Your wallet: {walletUsdc == null ? "—" : usd(walletUsdc, { decimals: 6 })}</p>
       <p className="mt-1 text-sm text-muted-foreground">Fund your root to give agents a spending budget. Wallet funds stay in the wallet until you deposit them.</p>
       <p className="mt-3 break-all font-mono text-[11px] text-muted-foreground">Deposit address {root}</p>
@@ -109,12 +135,17 @@ function FundNotice() {
           aria-label="Deposit amount in USDC"
           className="h-9 w-32 rounded-lg border border-white/10 bg-transparent px-3 text-sm outline-none"
         />
-        <Button onClick={deposit} disabled={busy || !sendable} className="bg-gold text-[#171204] hover:bg-[#eec95e]">
-          {busy ? "Waiting for Arc" : "Deposit"}
+        <Button onClick={deposit} disabled={busy || phase === "pending" || phase === "confirmed" || !sendable} className="bg-gold text-[#171204] hover:bg-[#eec95e]">
+          {phase === "pending" ? "Pending" : busy ? "Waiting for Arc" : "Deposit"}
         </Button>
+        {phaseLabel ? (
+          <p className={cn("font-mono text-[10px] uppercase tracking-[0.14em]", phase === "failed" ? "text-danger" : phase === "confirmed" ? "text-success" : "text-muted-foreground")}>
+            {phaseLabel}
+          </p>
+        ) : null}
       </div>
       {message && <p className="mt-3 text-xs text-muted-foreground">{message}</p>}
-      <TxResult hash={depositHash ?? undefined} label="Deposit" amount={`${amount} USDC`} status="Included on Arc" />
+      <TxResult hash={depositHash ?? undefined} label="Deposit" amount={`${amount} USDC`} status={phaseLabel ?? undefined} />
     </section>
   );
 }

@@ -1,4 +1,4 @@
-import { digestFor, encodeClose, encodeOpen, signatureBytes } from "./actions";
+import { digestFor, domainForFactory, encodeClose, encodeOpen, signatureBytes } from "./actions";
 import { busyMessage, indexingPause } from "./limits";
 import { priceCheckFailure } from "./price-check-failure";
 import { rootSignatureBlock } from "./root-sign-check";
@@ -8,8 +8,9 @@ import { usd } from "./formatters";
 import { presentAnswer } from "./research-answer";
 import { awaitReceipt, ReceiptPendingError } from "./receipt";
 import { paymentSignatureHeader, payeeLabel, quoteIdOf, quotedCharge, receiptSettlesSpend, serviceAnswer, settlementFailure, transactionFromPaymentResponse, type SpendAuthorization } from "./x402-pay";
-import { arcClient } from "./wallet";
-import type { Hex } from "viem";
+import { broadcastRevertMessage, capabilityRevertMessage, revertPayload } from "./revert-reason";
+import { arcClient, readRootFactory } from "./wallet";
+import type { Address, Hex } from "viem";
 import type {
   AccountSnapshot,
   ActivityKind,
@@ -210,7 +211,7 @@ export async function loadAccount(
   return mapSnapshot(registrar, state, portfolio.tabs, portfolio.activity, config, portfolio.asOf, portfolio);
 }
 
-export async function loadSnapshot(registrar: string): Promise<AccountSnapshot> {
+export async function loadSnapshot(registrar: string, options?: { waitForIndex?: boolean }): Promise<AccountSnapshot> {
   const config = await loadConfig();
   const listed = await getJson<{ roots: string[] }>(`/v1/registrars/${registrar}/roots`);
   const preferred = currentRoot();
@@ -218,10 +219,11 @@ export async function loadSnapshot(registrar: string): Promise<AccountSnapshot> 
   if (!root) {
     return emptySnapshot(registrar, config);
   }
-  const [state, portfolio] = await Promise.all([
-    getJson<RootJson>(`/v1/roots/${root}`),
-    waitForPortfolio(root),
-  ]);
+  const portfolioPromise =
+    options?.waitForIndex === false
+      ? getJson<PortfolioJson>(`/v1/roots/${root}/portfolio`)
+      : waitForPortfolio(root);
+  const [state, portfolio] = await Promise.all([getJson<RootJson>(`/v1/roots/${root}`), portfolioPromise]);
   return mapSnapshot(registrar, state, portfolio.tabs, portfolio.activity, config, portfolio.asOf, portfolio);
 }
 
@@ -499,7 +501,12 @@ async function relay(path: string, body: unknown): Promise<{ hash: string }> {
     if (response.ok && payload.hash) {
       const receipt = await waitForReceipt(payload.hash);
       if (receipt.status !== "success") {
-        throw new Error("the transaction reverted");
+        const data = await revertData(payload.hash);
+        const message =
+          path === "/v1/relay/execute"
+            ? capabilityRevertMessage(data, payload.hash)
+            : broadcastRevertMessage(data, payload.hash);
+        throw new Error(message);
       }
       return { hash: payload.hash };
     }
@@ -516,6 +523,37 @@ async function relay(path: string, body: unknown): Promise<{ hash: string }> {
 async function waitForReceipt(hash: string): Promise<{ status: string }> {
   const receipt = await receiptOrPending(hash);
   return { status: receipt.status };
+}
+
+async function revertData(hash: string): Promise<string | null> {
+  try {
+    const client = arcClient();
+    const tx = await client.getTransaction({ hash: hash as Hex });
+    const receipt = await client.getTransactionReceipt({ hash: hash as Hex });
+    const blockNumber = receipt.blockNumber > BigInt(0) ? receipt.blockNumber - BigInt(1) : receipt.blockNumber;
+    await client.call({
+      to: tx.to ?? undefined,
+      data: tx.input,
+      account: tx.from,
+      blockNumber,
+    });
+    return null;
+  } catch (error: unknown) {
+    return revertPayload(error);
+  }
+}
+
+async function signingDomain(root: string): Promise<Hex> {
+  try {
+    return domainForFactory(await readRootFactory(root as Address));
+  } catch (error: unknown) {
+    if (error instanceof Error && error.message.includes("Nothing was signed.")) throw error;
+    const message = error instanceof Error ? error.message : "";
+    if (/429|rate limit|too many requests/i.test(message)) {
+      throw new Error("Network reads are busy. Your last confirmed state is still safe.");
+    }
+    throw new Error("The root factory could not be read. Nothing was signed.");
+  }
 }
 
 /**
@@ -563,7 +601,11 @@ export async function prepareOpen(input: {
   maxPerCallRaw: bigint;
   hours: number;
 }): Promise<PreparedAction> {
-  const [state, now] = await Promise.all([getJson<RootJson>(`/v1/roots/${input.root}`), chainNow()]);
+  const [state, now, domain] = await Promise.all([
+    getJson<RootJson>(`/v1/roots/${input.root}`),
+    chainNow(),
+    signingDomain(input.root),
+  ]);
   const nonce = BigInt(state.nextNonce);
   const deadline = now + BigInt(3600);
   const expiry = now + BigInt(input.hours) * BigInt(3600);
@@ -573,7 +615,7 @@ export async function prepareOpen(input: {
     action,
     nonce: nonce.toString(),
     deadline: deadline.toString(),
-    digest: digestFor(input.root, nonce, deadline, action),
+    digest: digestFor(input.root, nonce, deadline, action, domain),
     expiry: expiry.toString(),
   };
 }
@@ -601,10 +643,11 @@ export async function confirmRootSignature(prepared: PreparedAction, unlockedVk:
 }
 
 export async function prepareClose(root: string, tab: string): Promise<PreparedAction> {
-  const [state, now, tabState] = await Promise.all([
+  const [state, now, tabState, domain] = await Promise.all([
     getJson<RootJson>(`/v1/roots/${root}`),
     chainNow(),
     getJson<TabStateJson>(`/v1/roots/${root}/tabs/${tab}`),
+    signingDomain(root),
   ]);
   const expiry = capabilityExpiry(tabState);
   const nonce = BigInt(state.nextNonce);
@@ -616,7 +659,7 @@ export async function prepareClose(root: string, tab: string): Promise<PreparedA
     action,
     nonce: nonce.toString(),
     deadline: deadline.toString(),
-    digest: digestFor(root, nonce, deadline, action),
+    digest: digestFor(root, nonce, deadline, action, domain),
     expiry,
   };
 }

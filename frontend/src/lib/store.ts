@@ -4,6 +4,7 @@ import { create } from "zustand";
 import type { AccountSnapshot, ActivityRecord, Agent, Tab } from "@/data/types";
 import { labelsFor, presentedAgent, saveAgentLabel, type AgentLabel } from "@/data/agent-labels";
 import { lockRoot } from "@/data/pq-vault";
+import { overlayChainCash, shouldApplyBalanceRead, type ChainCash } from "@/data/deposit-state";
 import { totalsFrom } from "@/data/production";
 import { forgetAgentKeys } from "@/data/spend";
 
@@ -66,6 +67,12 @@ interface PqtabsDataState {
   setPortfolioReady: (ready: boolean) => void;
   setPortfolioError: (message: string | null) => void;
   setIndexNote: (note: string | null) => void;
+  walletEpoch: number;
+  bumpWallet: () => void;
+  balanceRead: number;
+  chainCash: ChainCash | null;
+  beginBalanceRead: () => number;
+  setRootCash: (root: string, raw: bigint, readId: number) => void;
   addLocalAgent: (agent: Agent) => void;
   replaceSnapshot: (snapshot: AccountSnapshot) => void;
   acceptPortfolio: (snapshot: AccountSnapshot) => void;
@@ -79,7 +86,7 @@ interface PqtabsDataState {
 const SIGNATURE_REQUIRED =
   "This action needs a signature from the root PQ key. The server cannot sign it, and this screen will not mark it successful.";
 
-export const usePqtabsData = create<PqtabsDataState>((set) => ({
+export const usePqtabsData = create<PqtabsDataState>((set, get) => ({
   snapshot: EMPTY_SNAPSHOT,
   registrar: "",
   chainId: null,
@@ -110,12 +117,35 @@ export const usePqtabsData = create<PqtabsDataState>((set) => ({
         portfolioError: same ? state.portfolioError : null,
         indexNote: same ? state.indexNote : null,
         accountReady: same ? state.accountReady : false,
+        chainCash: same ? state.chainCash : null,
+        balanceRead: same ? state.balanceRead : 0,
       };
     }),
   setChainId: (chainId) => set({ chainId }),
   setPortfolioReady: (ready) => set({ portfolioReady: ready }),
   setPortfolioError: (message) => set({ portfolioError: message }),
   setIndexNote: (note) => set({ indexNote: note }),
+  walletEpoch: 0,
+  bumpWallet: () => set((state) => ({ walletEpoch: state.walletEpoch + 1 })),
+  balanceRead: 0,
+  chainCash: null,
+  beginBalanceRead: () => {
+    const readId = get().balanceRead + 1;
+    set({ balanceRead: readId });
+    return readId;
+  },
+  setRootCash: (root, raw, readId) =>
+    set((state) => {
+      if (!shouldApplyBalanceRead(state.chainCash?.readId ?? 0, readId)) return state;
+      const current = state.snapshot.account.rootAddress;
+      if (!current || current.toLowerCase() !== root.toLowerCase()) return state;
+      const chainCash = { root, raw: raw.toString(), readId };
+      const snapshot = overlayChainCash(state.snapshot, chainCash);
+      return {
+        chainCash,
+        snapshot: { ...snapshot, totals: totalsFrom(snapshot.account, snapshot.tabs) },
+      };
+    }),
   addLocalAgent: (agent) =>
     set((state) => {
       const label = { name: agent.name, purpose: agent.role, address: agent.address };
@@ -132,9 +162,10 @@ export const usePqtabsData = create<PqtabsDataState>((set) => ({
       const owner = snapshot.account.registrar?.toLowerCase() ?? "";
       const current = state.registrar.toLowerCase();
       if (!current || !owner || owner !== current) return state;
+      const next = overlayChainCash(snapshot, state.chainCash);
       return {
         accountReady: true,
-        snapshot: { ...snapshot, totals: totalsFrom(snapshot.account, snapshot.tabs) },
+        snapshot: { ...next, totals: totalsFrom(next.account, next.tabs) },
       };
     }),
   acceptPortfolio: (snapshot) =>
@@ -142,12 +173,13 @@ export const usePqtabsData = create<PqtabsDataState>((set) => ({
       const owner = snapshot.account.registrar?.toLowerCase() ?? "";
       const current = state.registrar.toLowerCase();
       if (!current || !owner || owner !== current) return state;
+      const next = overlayChainCash(snapshot, state.chainCash);
       return {
         accountReady: true,
         portfolioReady: true,
         portfolioError: null,
         indexNote: null,
-        snapshot: { ...snapshot, totals: totalsFrom(snapshot.account, snapshot.tabs) },
+        snapshot: { ...next, totals: totalsFrom(next.account, next.tabs) },
       };
     }),
   createCapability: () => {

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState, StatusChip } from "@/components/pqtabs/shared";
 import { relTime, usd } from "@/data/formatters";
 import { describeReturn, loadSnapshot, productionProvider } from "@/data/production";
+import { publishSnapshot } from "@/data/root-cash";
 import type { Tab } from "@/data/types";
 import { useAgents, useActivity, useDashboardUi, usePqtabsData, useTabs } from "@/lib/store";
 import { TabCard } from "./shared/TabCard";
@@ -64,7 +65,7 @@ export default function TabsView() {
         throw new Error("The wallet changed. The receipt belongs to the previous wallet.");
       }
       if (!outcome.settled) throw new Error(outcome.message);
-      usePqtabsData.getState().acceptPortfolio(snapshot);
+      await publishSnapshot(store.registrar, snapshot);
       if (outcome.leftover) toast.message(outcome.message);
       else toast.success(outcome.message);
     } catch (error) {

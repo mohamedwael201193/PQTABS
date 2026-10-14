@@ -134,7 +134,7 @@ The live root `0x2d0F…6b95` is a 45-byte clone of the matched PQRoot implement
 
 PQTABS enforces the post-quantum authorization, the nonce, the deadline, the exposure ceiling, and the open and close accounting. Those rules are in the Sourcify-matched `PQRoot` source.
 
-Barkeep enforces the capability's agent, payee list, per-call maximum, expiry, and the check that a spend signature recovers to that agent. That bytecode is on mainnet and is not source-verified. The tests use a mock of it. The deployed `PQRoot` does not read `agent()`, `payees()`, or `maxPerCall()` back after opening. New roots from `RootFactoryNext` use `PQRootNext`, which does. Existing clones stay on `PQRoot`.
+Barkeep enforces the capability's agent, payee list, per-call maximum, expiry, and the check that a spend signature recovers to that agent. That bytecode is on mainnet and is not source-verified. The tests use a mock of it. The deployed `PQRoot` does not read `agent()`, `payees()`, or `maxPerCall()` back after opening. New roots from `RootFactoryNext` use `PQRootNext`, which does. Existing clones stay on `PQRoot`. `PQRoot` signs `PQTABS_V2`. `PQRootNext` signs `PQTABS_V3`. The page reads `factory()` and uses that domain. A signature from the other domain is rejected on chain and does not open a capability.
 
 ## If the post-quantum key is lost
 
@@ -172,7 +172,7 @@ Known limits, stated plainly:
 
 ## Test totals
 
-Counted on 2026-10-14 from the commands in this table. Subset rows are included in the frontend total, not added to it. The published-package smoke was not rerun on this date. GitHub Actions run [38595345174](https://github.com/mohamedwael201193/PQTABS/actions/runs/38595345174) on commit `3cc0db6` succeeded on 2026-10-14. The run for the commit that contains this table is the latest entry on the [ci workflow page](https://github.com/mohamedwael201193/PQTABS/actions/workflows/ci.yml).
+Counted on 2026-10-14 from the commands in this table. The frontend node tests, typecheck, lint ratchet, production build, and Foundry suite were run again after the deposit-refresh and next-root signature fixes. Subset rows are included in the frontend total, not added to it. The published-package smoke was not rerun on this date. GitHub Actions run [38595345174](https://github.com/mohamedwael201193/PQTABS/actions/runs/38595345174) on commit `3cc0db6` succeeded on 2026-10-14. The run for the commit that contains this table is the latest entry on the [ci workflow page](https://github.com/mohamedwael201193/PQTABS/actions/workflows/ci.yml).
 
 | Suite | Command | Result |
 |---|---|---|
@@ -185,9 +185,9 @@ Counted on 2026-10-14 from the commands in this table. Subset rows are included 
 | Frontend typecheck | `npx tsc --noEmit` in `frontend/` | 0 errors on 2026-10-14. |
 | Frontend production build | `npx next build` in `frontend/` | compiled on 2026-10-14 and prerendered `/`, `/_not-found`, and `/developers`. |
 | Frontend lint ratchet | `npm run lint:ratchet` in `frontend/` | Passed on 2026-10-14. The baseline is unchanged: 25 errors (17 `react-hooks/refs`, 8 `react-hooks/set-state-in-effect`) and 2 generated-file warnings in `frontend/lint-baseline.json`. The ratchet fails on any new or increased problem. The baseline is not a claim that these are safe. |
-| Frontend node tests | `npm test` in `frontend/` (27 `src/**/*.test.ts` files) | 99 passed, 0 failed, on 2026-10-14. Includes the 9 receipt-wait tests, 3 address-field tests, 6 pairing tests, and 6 developer-session tests. |
+| Frontend node tests | `npm test` in `frontend/` (30 `src/**/*.test.ts` files) | 105 passed, 0 failed, on 2026-10-14. Includes the 9 receipt-wait tests, 3 address-field tests, 6 pairing tests, and 6 developer-session tests. |
 | Signer (Rust) | `cargo test --manifest-path signer/Cargo.toml` | 8 passed (5 + 3), 0 failed, on 2026-10-14. |
-| Contracts (Foundry) | `forge test` | 33 passed, 0 failed, on 2026-10-14 (`PQRoot` 17, `Recovery` 15, exposure invariant 1). |
+| Contracts (Foundry) | `forge test` | 35 passed, 0 failed, on 2026-10-14 (`PQRoot` 17, `Recovery` 17, exposure invariant 1). |
 | Pins and secrets | `python scripts/check_pins.py`, `python scripts/secret_scan.py` | pass on 2026-10-14. 390 tracked files scanned. |
 | Published MCP clean-consumer smoke | `packages/scripts/clean-consumer-smoke.mjs` against npm `pqtabs-mcp` 0.1.2 | Last recorded `SMOKE_OK` on 2026-10-13. Not rerun on 2026-10-14. |
 | CI | GitHub Actions `ci` | jobs: contracts, signer (Rust), backend (test and lint), sdk-and-mcp (lint, typecheck, test on Ubuntu), frontend (`tsc --noEmit`, lint ratchet, node tests on Ubuntu), pqtabs-signer (lint and test on Windows, isolated key directory), pins-and-secrets, slither. |
@@ -212,7 +212,7 @@ cd frontend
 npm ci
 npx tsc --noEmit
 npm run lint:ratchet   # no new lint problems beyond frontend/lint-baseline.json
-npm test               # 99 node tests on 2026-10-14
+npm test               # 105 node tests on 2026-10-14
 npx next dev -p 3000   # http://localhost:3000
 cd ..
 

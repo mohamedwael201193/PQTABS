@@ -3,6 +3,7 @@
 import { Copy } from "lucide-react";
 import { EXPLORER_URL } from "@/data/production";
 import { explorerTxUrl } from "@/data/task-phase";
+import { cn } from "@/lib/utils";
 
 export function TxResult({
   hash,
@@ -41,7 +42,12 @@ export function TxResult({
       </button>
       {amount ? <p className="ml-auto shrink-0 font-mono text-[11px] tabular text-foreground">{amount}</p> : null}
       {status ? (
-        <p className="shrink-0 font-mono text-[10px] uppercase tracking-[0.12em] text-success">
+        <p
+          className={cn(
+            "shrink-0 font-mono text-[10px] uppercase tracking-[0.12em]",
+            status === "Failed" ? "text-danger" : status === "Pending" ? "text-muted-foreground" : "text-success",
+          )}
+        >
           {status === "success" || status === "0x1" ? "Confirmed" : status}
         </p>
       ) : null}

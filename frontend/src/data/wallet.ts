@@ -203,6 +203,25 @@ const registrarAbi = [
   },
 ] as const;
 
+const factoryViewAbi = [
+  {
+    type: "function",
+    name: "factory",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "address" }],
+  },
+] as const;
+
+/** The factory that created this root. The signature domain depends on it. */
+export async function readRootFactory(root: Address): Promise<Address> {
+  return arcClient().readContract({
+    address: root,
+    abi: factoryViewAbi,
+    functionName: "factory",
+  });
+}
+
 export async function fundRoot(root: Address, amountRaw: bigint): Promise<Hex> {
   const account = await existingAccount();
   if (!account) throw new Error("Connect a wallet before depositing.");
@@ -262,5 +281,15 @@ export async function readWalletUsdc(account: Address): Promise<bigint> {
     abi: usdcAbi,
     functionName: "balanceOf",
     args: [account],
+  });
+}
+
+/** USDC held by the root. This is the figure the deposit screen shows after a receipt. */
+export async function readRootUsdc(root: Address): Promise<bigint> {
+  return arcClient().readContract({
+    address: USDC,
+    abi: usdcAbi,
+    functionName: "balanceOf",
+    args: [root],
   });
 }

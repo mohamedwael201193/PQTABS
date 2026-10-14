@@ -17,6 +17,7 @@ import { RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { initials } from "@/data/formatters";
 import { loadSnapshot } from "@/data/production";
+import { publishSnapshot } from "@/data/root-cash";
 import { useDashboardUi, usePqtabsData } from "@/lib/store";
 import { Kbd } from "@/components/pqtabs/shared";
 
@@ -79,7 +80,7 @@ export default function SettingsView() {
     if (usePqtabsData.getState().registrar.toLowerCase() !== registrar.toLowerCase()) {
       throw new Error("The wallet changed. This screen was not updated.");
     }
-    usePqtabsData.getState().acceptPortfolio(snapshot);
+    await publishSnapshot(registrar, snapshot);
   };
 
   return (

@@ -32,6 +32,7 @@ import { loadDecisions, saveDecision } from "@/data/decision-store";
 import { ChargeConfirm, readAttempt, reconcileAttempt, writeAttempt } from "@/data/paid-attempt";
 import { savedPaymentRecord } from "@/data/saved-payment";
 import { arcClock, BACKEND_URL, confirmRootSignature, describeReturn, decideServicePrice, loadSnapshot, prepareClose, productionProvider, requestServicePrice, settleResearch, SettlementPending, submitPrepared, type PreparedAction, type ServiceDecision } from "@/data/production";
+import { publishSnapshot } from "@/data/root-cash";
 import { probeAmount, probePayment, probeRefusal, replayRefusal, spentAuthorization, UNAVAILABLE_SERVICE_URL, unavailableServiceRefusal, capabilityPayment, expiredRefusal, expiryStillOpen, type ProbeName } from "@/data/refusal-probe";
 import { agentAddress, authorizationBlob, recallAgentKey, USDC } from "@/data/spend";
 import { arcClient } from "@/data/wallet";
@@ -122,7 +123,7 @@ export default function TabDrawer() {
       .then((snapshot) => {
         if (cancel) return;
         if (usePqtabsData.getState().registrar.toLowerCase() !== registrar.toLowerCase()) return;
-        usePqtabsData.getState().acceptPortfolio(snapshot);
+        void publishSnapshot(registrar, snapshot);
       })
       .catch(() => undefined);
     return () => {
@@ -162,7 +163,7 @@ export default function TabDrawer() {
       if (!row || row.status !== "closed") {
         throw new Error("Arc did not show this capability as closed.");
       }
-      now.acceptPortfolio(snapshot);
+      await publishSnapshot(registrar, snapshot);
       setActionReceipt({ hash, label: "Capability close" });
       if (row.needsSweep || row.balanceUsd > 0) {
         toast.message("The capability is closed. USDC is still on it until Return funds succeeds.");
@@ -194,7 +195,7 @@ export default function TabDrawer() {
         throw new Error("The wallet changed. The receipt belongs to the previous wallet.");
       }
       if (!outcome.settled) throw new Error(outcome.message);
-      usePqtabsData.getState().acceptPortfolio(snapshot);
+      await publishSnapshot(store.registrar, snapshot);
       setActionReceipt({ hash, label: "Capability reclaim" });
       if (outcome.leftover) toast.message(outcome.message);
       else toast.success(outcome.message);
@@ -1101,11 +1102,11 @@ function TabDrawerBody({
                 throw new Error(`Payment blocked. ${reason}`);
               };
               void loadSnapshot(registrar)
-                .then((fresh) => {
+                .then(async (fresh) => {
                   if (usePqtabsData.getState().registrar.toLowerCase() !== registrar.toLowerCase()) {
                     throw new Error("The wallet changed. Nothing was signed.");
                   }
-                  usePqtabsData.getState().acceptPortfolio(fresh);
+                  await publishSnapshot(registrar, fresh);
                   const current = fresh.tabs.find((item) => item.id.toLowerCase() === tab.id.toLowerCase());
                   if (!current || current.status !== "active") {
                     throw new Error(`Payment blocked. ${closedCapabilityMessage()}`);
@@ -1231,7 +1232,7 @@ function TabDrawerBody({
                   try {
                     const fresh = await loadSnapshot(registrar);
                     if (usePqtabsData.getState().registrar.toLowerCase() === registrar.toLowerCase()) {
-                      usePqtabsData.getState().acceptPortfolio(fresh);
+                      await publishSnapshot(registrar, fresh);
                     }
                   } catch {
                     /* The receipt is already on screen. */

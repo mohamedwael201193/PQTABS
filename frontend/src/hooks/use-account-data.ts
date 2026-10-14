@@ -6,6 +6,7 @@ import { loadAccount, rememberRegistrar } from "@/data/production";
 import { shouldRetryWalletRead } from "@/data/wallet-read";
 import { restoreAgentKeys } from "@/data/spend";
 import { existingAccount, readWalletUsdc, watchChain, watchWallet, walletClient } from "@/data/wallet";
+import { syncRootCash } from "@/data/root-cash";
 import { walletSessionPaused } from "@/data/wallet-session";
 import { usePqtabsData } from "@/lib/store";
 
@@ -124,8 +125,11 @@ export function useAccountData(): {
       replaceSnapshot(treasury);
       setSnapshot(treasury);
       setSettled({ key, error: null });
+      if (treasury.account.rootAddress) void syncRootCash(treasury.account.rootAddress);
     }, gate)
-      .then((data) => {
+      .then(async (data) => {
+        if (cancelled || !stillHere()) return;
+        if (data.account.rootAddress) await syncRootCash(data.account.rootAddress);
         if (cancelled || !stillHere()) return;
         if (data.indexFreshness === "indexing" && data.tabs.length === 0) return;
         usePqtabsData.getState().acceptPortfolio(data);
@@ -179,6 +183,7 @@ export function switchRegistrar(address: string): void {
 
 /** The connected wallet's USDC, in whole units. Null until the read returns. */
 export function useWalletUsdc(address: string): number | null {
+  const epoch = usePqtabsData((state) => state.walletEpoch);
   const [value, setValue] = useState<number | null>(null);
   useEffect(() => {
     if (!address) {
@@ -197,6 +202,6 @@ export function useWalletUsdc(address: string): number | null {
     return () => {
       cancelled = true;
     };
-  }, [address]);
+  }, [address, epoch]);
   return value;
 }

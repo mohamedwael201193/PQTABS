@@ -151,6 +151,72 @@ contract RecoveryTest is Test {
         assertEq(root.openExposure(), 0);
     }
 
+    function test_legacy_domain_does_not_open_and_the_next_domain_does() public {
+        PQRootNext root = _root(bytes32(0));
+        MockUSDC(USDC).mint(address(root), 360);
+        uint64 expiry = uint64(block.timestamp + 3 days);
+        bytes memory action = abi.encode(uint8(1), agent, _one(payee), uint256(360), expiry, uint256(360));
+        uint64 deadline = _soon();
+        bytes32 legacy = keccak256(
+            abi.encode(keccak256("PQTABS_V2"), block.chainid, address(root), uint64(0), deadline, keccak256(action))
+        );
+        bytes memory wrongDomain = _sig(root.pqVk(), legacy, true);
+        vm.expectRevert(PQRootNext.InvalidSignature.selector);
+        root.execute(action, 0, deadline, wrongDomain);
+        assertEq(root.nextNonce(), 0);
+        assertEq(root.openExposure(), 0);
+        assertEq(MockUSDC(USDC).balanceOf(address(root)), 360);
+
+        bytes memory opened = _sig(root.pqVk(), root.digestFor(action, 0, deadline), true);
+        root.execute(action, 0, deadline, opened);
+        assertEq(root.nextNonce(), 1);
+        assertEq(root.openExposure(), 360);
+        assertEq(MockUSDC(USDC).balanceOf(address(root)), 0);
+    }
+
+    function test_refused_opens_leave_nonce_exposure_and_balance() public {
+        PQRootNext root = _root(bytes32(0));
+        MockUSDC(USDC).mint(address(root), 100);
+        uint64 expiry = uint64(block.timestamp + 1 days);
+        uint64 deadline = _soon();
+        bytes memory action = abi.encode(uint8(1), agent, _one(payee), uint256(50), expiry, uint256(100));
+
+        bytes memory staleNonce = _sig(root.pqVk(), root.digestFor(action, 1, deadline), true);
+        vm.expectRevert(PQRootNext.BadNonce.selector);
+        root.execute(action, 1, deadline, staleNonce);
+
+        vm.warp(block.timestamp + 2 hours);
+        bytes memory expired = _sig(root.pqVk(), root.digestFor(action, 0, deadline), true);
+        vm.expectRevert(PQRootNext.Expired.selector);
+        root.execute(action, 0, deadline, expired);
+        vm.warp(block.timestamp - 2 hours);
+
+        bytes memory over = abi.encode(uint8(1), agent, _one(payee), uint256(50), expiry, uint256(5_000_001));
+        bytes memory overSig = _sig(root.pqVk(), root.digestFor(over, 0, deadline), true);
+        vm.expectRevert(PQRootNext.ExposureExceeded.selector);
+        root.execute(over, 0, deadline, overSig);
+
+        bytes memory broke = abi.encode(uint8(1), agent, _one(payee), uint256(50), expiry, uint256(200));
+        bytes memory brokeSig = _sig(root.pqVk(), root.digestFor(broke, 0, deadline), true);
+        vm.expectRevert(bytes("fund"));
+        root.execute(broke, 0, deadline, brokeSig);
+
+        address[] memory none = new address[](0);
+        bytes memory emptyPayees = abi.encode(uint8(1), agent, none, uint256(50), expiry, uint256(100));
+        bytes memory emptySig = _sig(root.pqVk(), root.digestFor(emptyPayees, 0, deadline), true);
+        vm.expectRevert(PQRootNext.BadPayeeCount.selector);
+        root.execute(emptyPayees, 0, deadline, emptySig);
+
+        bytes memory zeroAgent = abi.encode(uint8(1), address(0), _one(payee), uint256(50), expiry, uint256(100));
+        bytes memory zeroSig = _sig(root.pqVk(), root.digestFor(zeroAgent, 0, deadline), true);
+        vm.expectRevert(PQRootNext.ZeroAddress.selector);
+        root.execute(zeroAgent, 0, deadline, zeroSig);
+
+        assertEq(root.nextNonce(), 0);
+        assertEq(root.openExposure(), 0);
+        assertEq(MockUSDC(USDC).balanceOf(address(root)), 100);
+    }
+
     function test_reclaim_still_works_while_recovery_is_pending() public {
         PQRootNext root = _root(bytes32(0));
         MockUSDC(USDC).mint(address(root), 1_000_000);
