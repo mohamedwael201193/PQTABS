@@ -2,7 +2,7 @@ import { type Address, decodeEventLog, type Hex, type PublicClient, parseAbiItem
 import { withRpcRetry } from "../chain.js";
 import { FACTORY_BLOCK, RPC_URL, USDC } from "../constants.js";
 import { applyEvents, type IndexEvent, readCursor } from "./apply.js";
-import { headSocketOpen, startHeadFeed } from "./heads.js";
+import { headFeedFresh, startHeadFeed } from "./heads.js";
 import { indexHealth, ingestRead, noteIndexCursor, noteIndexError, noteIndexHead } from "./lane.js";
 import { reconcileVolatile } from "./portfolio.js";
 import type { Sql } from "./sql.js";
@@ -36,6 +36,8 @@ export function startIngest(sql: Sql, client: PublicClient, factories: readonly 
   const times = new Map<string, string>();
   let waitingForNextHead = false;
   startHeadFeed(process.env.ARC_RPC_URL || RPC_URL, (number, timestamp) => {
+    const known = indexHealth();
+    if (known.chainHead != null && number < known.chainHead) return;
     noteIndexHead(number, timestamp);
     if (waitingForNextHead) wakeWait?.();
   });
@@ -43,7 +45,7 @@ export function startIngest(sql: Sql, client: PublicClient, factories: readonly 
     while (true) {
       try {
         const known = indexHealth();
-        const subscribed = headSocketOpen() && known.chainHead != null;
+        const subscribed = headFeedFresh() && known.chainHead != null;
         let headNumber = known.chainHead;
         let headTime = known.chainTime;
         if (!subscribed || headNumber == null) {

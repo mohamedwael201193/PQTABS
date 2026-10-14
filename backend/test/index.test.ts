@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import type { Address, Hex, PublicClient } from "viem";
 import { readRegistrarRoots, readRootState } from "../src/index/account.js";
 import { applyEvents, type IndexEvent, readCursor, resetIndex, writeEvents } from "../src/index/apply.js";
-import { headFromSubscription, httpToWebSocket } from "../src/index/heads.js";
+import { headFeedIsFresh, headFromSubscription, httpToWebSocket } from "../src/index/heads.js";
 import { indexCoversHead, noteIndexCursor, noteIndexHead, noteRateLimit } from "../src/index/lane.js";
 import { readIndexedPortfolio, tabFromStored } from "../src/index/portfolio.js";
 import { openMemory, type Sql } from "../src/index/sql.js";
@@ -243,6 +243,10 @@ describe("derived index", () => {
     assert.equal(head?.number, 24782476n);
     assert.equal(head?.timestamp, "1791402524");
     assert.equal(headFromSubscription("not-json"), null);
+    assert.equal(headFeedIsFresh({ connected: true, lastHeadAt: 1_000, now: 10_000 }), true);
+    assert.equal(headFeedIsFresh({ connected: true, lastHeadAt: 1_000, now: 20_000 }), false);
+    assert.equal(headFeedIsFresh({ connected: false, lastHeadAt: 19_000, now: 20_000 }), false);
+    assert.equal(headFeedIsFresh({ connected: true, lastHeadAt: 0, now: 20_000 }), false);
   });
 
   it("reads a stored portfolio without asking Arc", async () => {

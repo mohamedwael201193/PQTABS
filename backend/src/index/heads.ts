@@ -20,9 +20,24 @@ export function headFromSubscription(payload: string): { number: bigint; timesta
 }
 
 let connected = false;
+let lastHeadAt = 0;
 
 export function headSocketOpen(): boolean {
   return connected;
+}
+
+/** A quiet socket is not a live head. Ingest must read the block number itself. */
+export function headFeedIsFresh(input: { connected: boolean; lastHeadAt: number; now: number; maxSilenceMs?: number }): boolean {
+  const maxSilenceMs = input.maxSilenceMs ?? 15_000;
+  return input.connected && input.lastHeadAt > 0 && input.now - input.lastHeadAt <= maxSilenceMs;
+}
+
+export function noteHeadSeen(now = Date.now()): void {
+  lastHeadAt = now;
+}
+
+export function headFeedFresh(now = Date.now()): boolean {
+  return headFeedIsFresh({ connected, lastHeadAt, now });
 }
 
 /** Subscribes to Arc newHeads. The ingest loop remains the only log reader. */
@@ -51,7 +66,9 @@ export function startHeadFeed(rpc: string, onHead: (number: bigint, timestamp: s
     });
     socket.addEventListener("message", (event) => {
       const head = headFromSubscription(String(event.data));
-      if (head) onHead(head.number, head.timestamp);
+      if (!head) return;
+      noteHeadSeen();
+      onHead(head.number, head.timestamp);
     });
     socket.addEventListener("close", schedule);
     socket.addEventListener("error", () => socket.close());
