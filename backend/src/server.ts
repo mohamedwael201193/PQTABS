@@ -1,7 +1,7 @@
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import type { Address, Hex } from "viem";
-import { assertOurRoot, type Clients, listFactoryRoots, loadClients, readPortfolio, relay, rootAbi, scanFailureRoots, tabAbi, usdcAbi, withRpcRetry } from "./chain.js";
+import { assertOurRoot, type Clients, listFactoryRoots, loadClients, readPortfolio, relay, rootAbi, rootNonce, scanFailureRoots, tabAbi, usdcAbi, withRpcRetry } from "./chain.js";
 import { BARKEEP, CHAIN_ID, EXPLORER, MAX_BODY_BYTES, PQROOT_NEXT, USDC, YIELD_VAULT } from "./constants.js";
 import { allowedOrigins, authenticate, createChallenge, createSession, DevAuthError, ensureDevTables, revokeSession, SqlDevStore } from "./dev/session.js";
 import { readRegistrarRoots, readRootState } from "./index/account.js";
@@ -260,9 +260,9 @@ export function createApp(clients: Clients = loadClients(), getIndex?: () => Sql
   app.post("/v1/relay/execute", async (c) => {
     const body = await readBody(c);
     const root = asAddress(body.root, "root");
-    await assertOurRoot(clients, root);
+    await assertOurRoot(clients, root, 2);
     const data = encodeExecute(asHex(body.action, "action"), asUint(body.nonce, "nonce"), asUint(body.deadline, "deadline"), asHex(body.signature, "signature"));
-    const current = await withRpcRetry(() => clients.public.readContract({ address: root, abi: rootAbi, functionName: "nextNonce" }));
+    const current = await rootNonce(clients, root);
     const nonce = asUint(body.nonce, "nonce");
     if (nonce < current) throw new RequestError(409, "nonce_consumed", "that nonce is already used");
     if (nonce !== current) throw new RequestError(409, "bad_nonce", "nonce does not match the root");

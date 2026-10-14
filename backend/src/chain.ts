@@ -178,6 +178,30 @@ function clientFor(url: string): PublicClient {
   });
 }
 
+/** Primary read first. A rate limit or a lagging node tries the other public Arc endpoints once each. */
+export async function readOnArc<T>(
+  primary: () => Promise<T>,
+  fallback: (client: PublicClient) => Promise<T>,
+  attempts = 2,
+): Promise<T> {
+  try {
+    return await withRpcRetry(primary, attempts);
+  } catch (error) {
+    if (!isRateLimitError(error) && !isTransientRpc(error)) throw error;
+  }
+  let last: unknown = null;
+  for (const url of fallbackRpcUrls(process.env.ARC_RPC_URL || RPC_URL)) {
+    try {
+      return await withRpcRetry(() => fallback(clientFor(url)), 1);
+    } catch (error) {
+      if (!isRateLimitError(error) && !isTransientRpc(error)) throw error;
+      last = error;
+    }
+  }
+  if (last instanceof RequestError) throw last;
+  throw new RequestError(429, "rate_limited", "Arc is rate limiting reads. Try again in a moment.");
+}
+
 /**
  * True when a read came back with no data. That is what an address without contract code returns, so it means
  * "not a root", not an RPC failure. Transient and rate-limit errors are not matched here and keep their retry path.
@@ -225,27 +249,32 @@ function knownFactories(clients: Clients): Address[] {
   return next ? [clients.factory, next] : [clients.factory];
 }
 
-export async function assertOurRoot(clients: Clients, root: Address, attempts = 8): Promise<void> {
-  const home = await withRpcRetry(
-    () =>
-      clients.public
-        .readContract({ address: root, abi: rootAbi, functionName: "factory" })
-        .catch((error: unknown) => {
-          if (isNoCodeRead(error)) return null;
-          throw error;
-        }),
-    attempts,
-  );
+export async function assertOurRoot(clients: Clients, root: Address, attempts = 2): Promise<void> {
+  const readFactory = (client: PublicClient) =>
+    client.readContract({ address: root, abi: rootAbi, functionName: "factory" }).catch((error: unknown) => {
+      if (isNoCodeRead(error)) return null;
+      throw error;
+    });
+  const home = await readOnArc(() => readFactory(clients.public), readFactory, attempts);
   const recorded = typeof home === "string" ? home : null;
   const factory = recorded && knownFactories(clients).find((item) => item.toLowerCase() === recorded.toLowerCase());
   if (!factory) throw new RequestError(400, "unknown_root", "that address is not a root of this factory");
-  const registrar = await withRpcRetry(
+  const registrar = await readOnArc(
     () => clients.public.readContract({ address: factory, abi: factoryAbi, functionName: "registrarOf", args: [root] }),
+    (client) => client.readContract({ address: factory, abi: factoryAbi, functionName: "registrarOf", args: [root] }),
     attempts,
   );
   if (registrar === "0x0000000000000000000000000000000000000000") {
     throw new RequestError(400, "unknown_root", "that address is not a root of this factory");
   }
+}
+
+export async function rootNonce(clients: Clients, root: Address): Promise<bigint> {
+  return readOnArc(
+    () => clients.public.readContract({ address: root, abi: rootAbi, functionName: "nextNonce" }),
+    (client) => client.readContract({ address: root, abi: rootAbi, functionName: "nextNonce" }),
+    2,
+  );
 }
 
 export async function relay(

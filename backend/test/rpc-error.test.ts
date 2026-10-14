@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { fallbackRpcUrls, feeOrFloor, gasLimitForRelay, isTransientRpc, RELAY_GAS_CEILING, scanFailureRoots, withRpcRetry } from "../src/chain.js";
+import { fallbackRpcUrls, feeOrFloor, gasLimitForRelay, isTransientRpc, RELAY_GAS_CEILING, readOnArc, scanFailureRoots, withRpcRetry } from "../src/chain.js";
 import { RequestError } from "../src/validate.js";
 
 test("one rate-limited Arc read becomes a retry sentence", async () => {
@@ -86,6 +86,26 @@ test("a rate-limited gas estimate uses the next Arc endpoint, and a revert is no
     () => gasLimitForRelay([async () => {
       throw new Error("execution reverted");
     }]),
+    (error: unknown) => error instanceof Error && error.message === "execution reverted",
+  );
+});
+
+test("a rate-limited root read uses the next public endpoint and a revert does not", async () => {
+  let primary = 0;
+  const value = await readOnArc(
+    async () => {
+      primary += 1;
+      throw new RequestError(429, "rate_limited", "Arc is rate limiting reads. Try again in a moment.");
+    },
+    async () => "ok",
+    1,
+  );
+  assert.equal(value, "ok");
+  assert.equal(primary, 1);
+  await assert.rejects(
+    () => readOnArc(async () => {
+      throw new Error("execution reverted");
+    }, async () => "ok", 1),
     (error: unknown) => error instanceof Error && error.message === "execution reverted",
   );
 });
