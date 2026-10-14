@@ -31,6 +31,52 @@ test("a zero-price quote is refused", () => {
   assert.throws(() => parseBarkeepQuote(paymentRequired("0"), MAX), (error: unknown) => error instanceof PqtabsError && error.code === "quote_invalid");
 });
 
+test("a matching exact row beside the Arc Research price still parses the research price", () => {
+  const base = paymentRequired("360");
+  const research = base.accepts[0];
+  if (!research) throw new Error("fixture missing");
+  const withExact = {
+    ...base,
+    accepts: [
+      research,
+      {
+        scheme: "exact",
+        network: research.network,
+        asset: research.asset,
+        amount: research.amount,
+        payTo: research.payTo,
+        maxTimeoutSeconds: 600,
+        extra: { name: "USDC", version: "2", quoteId: research.extra.quoteId, bodyHash: research.extra.bodyHash, assetTransferMethod: "eip3009" },
+      },
+    ],
+  };
+  const quote = parseBarkeepQuote(withExact, MAX);
+  assert.equal(quote.price, 360n);
+  assert.equal(quote.payee, research.payTo);
+});
+
+test("an exact row with a different price is refused", () => {
+  const base = paymentRequired("360");
+  const research = base.accepts[0];
+  if (!research) throw new Error("fixture missing");
+  const mismatched = {
+    ...base,
+    accepts: [
+      research,
+      {
+        scheme: "exact",
+        network: research.network,
+        asset: research.asset,
+        amount: "361",
+        payTo: research.payTo,
+        maxTimeoutSeconds: 600,
+        extra: { name: "USDC", version: "2", quoteId: research.extra.quoteId, bodyHash: research.extra.bodyHash, assetTransferMethod: "eip3009" },
+      },
+    ],
+  };
+  assert.throws(() => parseBarkeepQuote(mismatched, MAX), (error: unknown) => error instanceof PqtabsError && error.code === "quote_invalid");
+});
+
 test("a quote that is not the Barkeep scheme (for example an exact row) is refused", () => {
   const exact = { ...paymentRequired("360"), scheme: "exact", standardExact: true };
   assert.throws(() => parseBarkeepQuote(exact, MAX), (error: unknown) => error instanceof PqtabsError && error.code === "quote_invalid");

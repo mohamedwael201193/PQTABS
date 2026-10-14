@@ -32,12 +32,17 @@ export function parseBarkeepQuote(input: unknown, maxPrice: bigint): ParsedQuote
     });
   }
   const quote = parsed.data;
-  const accept = quote.accepts[0];
-  if (quote.accepts.length !== 1 || !accept) {
+  const barkeep = quote.accepts.filter((row) => row.scheme === SCHEME);
+  const extras = quote.accepts.filter((row) => row.scheme !== SCHEME);
+  const accept = barkeep[0];
+  if (barkeep.length !== 1 || !accept || extras.some((row) => row.scheme !== "exact")) {
     throw new PqtabsError("quote_invalid", "The quote must contain exactly one Arc Research price. Nothing was signed.");
   }
-  if (accept.scheme !== SCHEME || accept.network !== ARC_NETWORK) {
+  if (accept.network !== ARC_NETWORK) {
     throw new PqtabsError("quote_invalid", "The quote is not on the Arc network. Nothing was signed.");
+  }
+  if (extras.some((row) => row.network !== accept.network || row.amount !== accept.amount || row.payTo.toLowerCase() !== accept.payTo.toLowerCase())) {
+    throw new PqtabsError("quote_invalid", "The exact row does not match the Arc Research price. Nothing was signed.");
   }
   if (accept.asset.toLowerCase() !== USDC_ADDRESS.toLowerCase()) {
     throw new PqtabsError("quote_invalid", "The quote does not price in Arc USDC. Nothing was signed.");
