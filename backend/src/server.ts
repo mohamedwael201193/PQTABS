@@ -1,7 +1,7 @@
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import type { Address, Hex } from "viem";
-import { assertOurRoot, type Clients, listFactoryRoots, loadClients, readPortfolio, relay, rootAbi, rootNonce, scanFailureRoots, tabAbi, usdcAbi, withRpcRetry } from "./chain.js";
+import { assertOurRoot, type Clients, indexedNonceDecision, isRateLimitError, listFactoryRoots, loadClients, RELAY_GAS_CEILING, readPortfolio, relay, rootAbi, rootNonce, scanFailureRoots, tabAbi, usdcAbi, withRpcRetry } from "./chain.js";
 import { BARKEEP, CHAIN_ID, EXPLORER, MAX_BODY_BYTES, PQROOT_NEXT, USDC, YIELD_VAULT } from "./constants.js";
 import { allowedOrigins, authenticate, createChallenge, createSession, DevAuthError, ensureDevTables, revokeSession, SqlDevStore } from "./dev/session.js";
 import { readRegistrarRoots, readRootState } from "./index/account.js";
@@ -22,6 +22,14 @@ import { asAddress, asHex, asUint, encodeExecute, encodeReclaim, encodeRetrySwee
 
 const seen = new Map<string, Hex>();
 const limits = new RateLimiter();
+
+async function indexedNonce(sql: Sql | null, root: Address): Promise<bigint | null> {
+  if (!sql) return null;
+  const rows = await sql.query<{ next_nonce: string | null }>("SELECT next_nonce FROM roots WHERE lower(address) = lower($1)", [root]);
+  const value = rows[0]?.next_nonce;
+  if (!value || !/^[0-9]+$/.test(value)) return null;
+  return BigInt(value);
+}
 /** Index handles whose developer-session tables already exist. Keyed by the handle, so each store is migrated once. */
 const devTablesReady = new WeakSet<object>();
 
@@ -260,13 +268,24 @@ export function createApp(clients: Clients = loadClients(), getIndex?: () => Sql
   app.post("/v1/relay/execute", async (c) => {
     const body = await readBody(c);
     const root = asAddress(body.root, "root");
-    await assertOurRoot(clients, root, 2);
     const data = encodeExecute(asHex(body.action, "action"), asUint(body.nonce, "nonce"), asUint(body.deadline, "deadline"), asHex(body.signature, "signature"));
-    const current = await rootNonce(clients, root);
     const nonce = asUint(body.nonce, "nonce");
-    if (nonce < current) throw new RequestError(409, "nonce_consumed", "that nonce is already used");
-    if (nonce !== current) throw new RequestError(409, "bad_nonce", "nonce does not match the root");
-    const result = await relay(clients, root, data, seen);
+    let presetGas: bigint | undefined;
+    try {
+      await assertOurRoot(clients, root, 2);
+      const current = await rootNonce(clients, root);
+      if (nonce < current) throw new RequestError(409, "nonce_consumed", "that nonce is already used");
+      if (nonce !== current) throw new RequestError(409, "bad_nonce", "nonce does not match the root");
+    } catch (error) {
+      if (!(error instanceof RequestError) || !isRateLimitError(error)) throw error;
+      const indexed = await indexedNonce(getIndex?.() ?? null, root);
+      const decision = indexedNonceDecision(nonce, indexed);
+      if (decision === "consumed") throw new RequestError(409, "nonce_consumed", "that nonce is already used");
+      if (decision === "mismatch") throw new RequestError(409, "bad_nonce", "nonce does not match the root");
+      if (decision === "unknown") throw error;
+      presetGas = RELAY_GAS_CEILING;
+    }
+    const result = await relay(clients, root, data, seen, presetGas);
     log({ route: "/v1/relay/execute", root, nonce: body.nonce, tx: result.hash });
     return c.json(result);
   });

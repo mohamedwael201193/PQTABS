@@ -269,6 +269,13 @@ export async function assertOurRoot(clients: Clients, root: Address, attempts = 
   }
 }
 
+export function indexedNonceDecision(submitted: bigint, indexed: bigint | null): "send" | "consumed" | "mismatch" | "unknown" {
+  if (indexed === null) return "unknown";
+  if (submitted < indexed) return "consumed";
+  if (submitted !== indexed) return "mismatch";
+  return "send";
+}
+
 export async function rootNonce(clients: Clients, root: Address): Promise<bigint> {
   return readOnArc(
     () => clients.public.readContract({ address: root, abi: rootAbi, functionName: "nextNonce" }),
@@ -282,6 +289,7 @@ export async function relay(
   to: Address,
   data: Hex,
   seen: Map<string, Hex>,
+  presetGas?: bigint,
 ): Promise<{ hash: Hex; simulated: true }> {
   if (!clients.relayer || !clients.relayerAddress) {
     throw new RequestError(503, "relayer_unconfigured", "relay is not configured");
@@ -291,21 +299,27 @@ export async function relay(
   if (cached) return { hash: cached, simulated: true };
   const primary = process.env.ARC_RPC_URL || RPC_URL;
   const fallbacks = fallbackRpcUrls(primary);
-  let gas: bigint;
-  try {
-    gas = await gasLimitForRelay([
-      () => clients.public.estimateGas({ account, to, data }),
-      ...fallbacks.map((url) => () => clientFor(url).estimateGas({ account, to, data })),
-    ]);
-  } catch (error) {
-    if (error instanceof RequestError) throw error;
-    throw new RequestError(400, "simulation_failed", errorText(error).slice(0, 300));
+  const urls = [primary, ...fallbacks];
+  let gas = presetGas;
+  if (gas === undefined) {
+    try {
+      gas = await gasLimitForRelay([
+        () => clients.public.estimateGas({ account, to, data }),
+        ...fallbacks.map((url) => () => clientFor(url).estimateGas({ account, to, data })),
+      ]);
+    } catch (error) {
+      if (error instanceof RequestError) throw error;
+      throw new RequestError(400, "simulation_failed", errorText(error).slice(0, 300));
+    }
   }
-  const prices = await feeOrFloor([
-    () => clients.public.getGasPrice(),
-    ...fallbacks.map((url) => () => clientFor(url).getGasPrice()),
-  ]);
-  const hash = await broadcast(account, to, data, gas, prices, [primary, ...fallbacks]);
+  const prices =
+    presetGas === undefined
+      ? await feeOrFloor([
+          () => clients.public.getGasPrice(),
+          ...fallbacks.map((url) => () => clientFor(url).getGasPrice()),
+        ])
+      : pricesFrom(MIN_FEE);
+  const hash = await broadcast(account, to, data, gas, prices, urls);
   seen.set(data, hash);
   return { hash, simulated: true };
 }

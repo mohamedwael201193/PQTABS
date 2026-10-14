@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { fallbackRpcUrls, feeOrFloor, gasLimitForRelay, isTransientRpc, RELAY_GAS_CEILING, readOnArc, scanFailureRoots, withRpcRetry } from "../src/chain.js";
+import { fallbackRpcUrls, feeOrFloor, gasLimitForRelay, indexedNonceDecision, isTransientRpc, RELAY_GAS_CEILING, readOnArc, scanFailureRoots, withRpcRetry } from "../src/chain.js";
 import { RequestError } from "../src/validate.js";
 
 test("one rate-limited Arc read becomes a retry sentence", async () => {
@@ -88,6 +88,13 @@ test("a rate-limited gas estimate uses the next Arc endpoint, and a revert is no
     }]),
     (error: unknown) => error instanceof Error && error.message === "execution reverted",
   );
+});
+
+test("an indexed nonce sends only when it matches the signature", () => {
+  assert.equal(indexedNonceDecision(10n, 10n), "send");
+  assert.equal(indexedNonceDecision(9n, 10n), "consumed");
+  assert.equal(indexedNonceDecision(11n, 10n), "mismatch");
+  assert.equal(indexedNonceDecision(10n, null), "unknown");
 });
 
 test("a rate-limited root read uses the next public endpoint and a revert does not", async () => {
