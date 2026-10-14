@@ -85,7 +85,7 @@ Status values returned by the result endpoint: `unpaid`, `result_pending` (recei
 
 ## Mainnet proof
 
-All links open the Arc explorer. The receipt statuses below were read from `https://rpc.mainnet.arc.io` on 2026-10-12.
+All links open the Arc explorer. The first six receipt statuses were read from `https://rpc.mainnet.arc.io` on 2026-10-12. The 2026-10-14 rows were read from `https://rpc.drpc.mainnet.arc.io` on that day.
 
 | Event | Transaction | Block | Status |
 |---|---|---|---|
@@ -95,6 +95,9 @@ All links open the Arc explorer. The receipt statuses below were read from `http
 | Payment from the capability (1 raw) | [`0x0d17b53c…b3b2`](https://explorer.arc.io/tx/0x0d17b53c3d249eb680c8a868c26d5ae8fbf041b034f946ff92bfb61e8b97b3b2) | 24,663,366 | success |
 | Capability closed | [`0x365405cf…f746`](https://explorer.arc.io/tx/0x365405cfb63e70eec08cafd046d474ed901ff12d568811affd53619c7b66f746) | 24,663,813 | success |
 | Research payment, answered | [`0x41496d26…76ae`](https://explorer.arc.io/tx/0x41496d2663c553f4948680b24f9de159026c2e2212514b44ffb60eda237076ae) | 25,534,892 | success |
+| Capability opened, 360 raw, 24 hours (2026-10-14) | [`0xf1711679…250c`](https://explorer.arc.io/tx/0xf1711679b2256b6fe3050fc2f89b01d489f3619d096b4d943b115369f97f250c) | 25,942,787 | success |
+| Research payment, 360 raw, answered (2026-10-14) | [`0x53fc6e7c…6ebc`](https://explorer.arc.io/tx/0x53fc6e7c43b71cd14f98e70f8fbd182d55b55d3bed471f56ac5d0a00a88e6ebc) | 25,942,948 | success |
+| That capability closed (2026-10-14) | [`0x8b6ba50c…312c`](https://explorer.arc.io/tx/0x8b6ba50cf54bf13534c168088f1db533327c19606c8ddc86385a0cd771e5312c) | 25,943,103 | success |
 
 Deployed contracts, read on 2026-10-13. Hashes and the compiler settings are in [CONTRACT-VERIFICATION.md](CONTRACT-VERIFICATION.md).
 
@@ -156,14 +159,14 @@ Known limits, stated plainly:
 
 - Arc's public RPC rate-limits reads. The backend retries rate-limited calls. A `429` from `/v1/x402/decide` is usually a read limit, not a refusal of the payment.
 - Closing a capability needs the root's security-key unlock in the browser.
-- `pqtabs-mcp` 0.1.2 on npm starts the local signer when `PQTABS_SIGNER_CLI` and `PQTABS_SIGNER_AGENT` are set, so the MCP process never holds the key. Versions 0.1.1 and earlier read `PQTABS_AGENT_PRIVATE_KEY` from their environment, which puts the key in the server process. The signer itself is Windows-only (DPAPI) and is not published to npm. Install and check it with `packages/pqtabs-signer/scripts/install-windows.ps1`. macOS and Linux fail closed: no key is stored there. The signer README lists what a store for another platform must provide. The MCP configuration points at the built CLI.
+- `pqtabs-mcp` 0.1.2 on npm starts the local signer when `PQTABS_SIGNER_CLI` and `PQTABS_SIGNER_AGENT` are set, so the MCP process never holds the key. Its quote schema accepts only the `pqtabs-barkeep` row. Production quotes also include `exact`, so a policy check on 0.1.2 stops with a schema error and signs nothing. The SDK in this repository accepts both rows. Versions 0.1.1 and earlier read `PQTABS_AGENT_PRIVATE_KEY` from their environment, which puts the key in the server process. The signer itself is Windows-only (DPAPI) and is not published to npm. Install and check it with `packages/pqtabs-signer/scripts/install-windows.ps1`. macOS and Linux fail closed: no key is stored there. The signer README lists what a store for another platform must provide. The MCP configuration points at the built CLI.
 - A receipt that Arc has not returned yet is shown as pending, not failed. The frontend waits up to 90 seconds with bounded backoff on `-32014`, then tells you to check the explorer before you retry. Only a `success` or `reverted` receipt is treated as a result.
 - Portfolio reads scan each root only from the last scanned block, not from the factory deploy block. A fresh read is cached for 10 seconds, and a live scan is refused with `503` while the RPC is rate-limiting.
 - A capability with a zero balance still counts its cap toward open exposure until it is closed. `PQRoot` adds the cap to `openExposure` on open and subtracts it only on close. Closing needs a root-signed close, or, after the capability's expiry, anyone can call `reclaim(tab)`, which is permissionless and costs gas. On the mainnet root `0x2d0F…6b95`, `maxOpenExposure` is 10,000 raw USDC (0.01 USDC), so one 360-raw capability uses 3.6% of the ceiling until it is closed. The ceiling is a root setting and changing it needs a root action.
 
 ## Test totals
 
-Rows marked **today** were run on 2026-10-13 after the verification pass: the Circle known vectors, single-use pairing (commit `215c72b`), and the CI, lint, signer-install, and usage-measurement changes that follow it. Other rows are older runs and say so.
+Rows marked **today** were run on 2026-10-13 after the verification pass: the Circle known vectors, single-use pairing (commit `215c72b`), and the CI, lint, signer-install, and usage-measurement changes that follow it. Other rows are older runs and say so. GitHub Actions run [38585237591](https://github.com/mohamedwael201193/PQTABS/actions/runs/38585237591) on commit `eef05a8` succeeded on 2026-10-14 for all eight jobs: contracts, signer, backend, sdk-and-mcp, frontend, pqtabs-signer, pins-and-secrets, and slither.
 
 | Suite | Command | Result |
 |---|---|---|

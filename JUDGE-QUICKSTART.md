@@ -11,9 +11,11 @@ curl -s https://rpc.mainnet.arc.io \
   -d '{"jsonrpc":"2.0","id":1,"method":"eth_getTransactionReceipt","params":["0x41496d2663c553f4948680b24f9de159026c2e2212514b44ffb60eda237076ae"]}'
 ```
 
-Expect `"status":"0x1"`. The USDC log (`address` `0x3600000000000000000000000000000000000000`, topic0 `0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef`) has `data` `0x0168`, which is 360 raw, 0.00036 USDC. Ignore the 18-decimal log from `0xffffFFFfFFffffffffffffffFfFFFfffFFFfFFfE`.
+Expect `"status":"0x1"`. The USDC log (`address` `0x3600000000000000000000000000000000000000`, topic0 `0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef`) decodes to `0x0168`, which is 360 raw, 0.00036 USDC. Ignore the 18-decimal log from `0xffffFFFfFFffffffffffffffFfFFFfffFFFfFFfE`.
 
 Explorer: https://explorer.arc.io/tx/0x41496d2663c553f4948680b24f9de159026c2e2212514b44ffb60eda237076ae
+
+The same check on 2026-10-14 uses receipt `0x53fc6e7c43b71cd14f98e70f8fbd182d55b55d3bed471f56ac5d0a00a88e6ebc` (block 25,942,948). Status is success. The USDC transfer is 360 raw from capability `0xaf6b27486B8429D68Bef65674cB420141Fe1aF96` to `0xf76e6B0920e9332fF4410f6dD53F01722AbC71a3`. That capability was opened by the security key in `0xf1711679b2256b6fe3050fc2f89b01d489f3619d096b4d943b115369f97f250c` and closed in `0x8b6ba50cf54bf13534c168088f1db533327c19606c8ddc86385a0cd771e5312c`. It is closed. The wallet did not sign the open or the close. The relayer broadcast all three.
 
 ## 2. The contracts
 
@@ -37,3 +39,7 @@ npx -y pqtabs-mcp@0.1.2
 ```
 
 Call `pqtabs_status`. Expect `backendOk` true, `sdkRpcChainId` 5042, and `onArc` true. Do not set a signer. That configuration does not list a paid tool.
+
+`pqtabs-mcp@0.1.2` accepts only a `pqtabs-barkeep` row in a quote. Production quotes also include an `exact` row, so `pqtabs_check_spend_policy` on that published package stops with a schema error and signs nothing. The SDK in this repository accepts both rows. A direct `POST /v1/x402/decide` for the closed capability above returns `REFUSE` with `capability_inactive` and `balance`. The same quote with amount 361 and payee `0x0000000000000000000000000000000000000001` also returns `wrong_payee` and `max_per_call`. Those calls do not broadcast.
+
+The local signer address is `0x2c0e47e0950e7fE6C62D5F4E70d8C0b51d8B4865`. Its exported backup must not be reused, so no capability was opened for it. The 360-raw payment above was signed by browser agent `0x1b12403A79dE64Ff628D92c05620136AA5CE501d`.
